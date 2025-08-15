@@ -1,0 +1,16 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: colorlight-terminal
+
+dubbo:
+  application:
+    name: colorlight-terminal
+  registry:
+    address: nacos://127.0.0.1:8848
+  protocol:
+    name: dubbo
+    port: -1
+    serialization: hessian2

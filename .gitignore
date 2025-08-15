@@ -1,0 +1,61 @@
+# IDE和编辑器
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.settings/
+.project
+.classpath
+
+# Claude Code配置
+.claude/
+
+# Maven构建
+target/
+dependency-reduced-pom.xml
+.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/maven-wrapper.properties
+
+# Java编译文件
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.swp
+*.swo
+*~
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 运行时配置
+application-local.yml
+application-dev.yml
+application-prod.yml
+
+# 测试报告
+surefire-reports/
+failsafe-reports/
+
+# Node.js (如果有前端组件)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Spring Boot DevTools
+.spring-boot-devtools.properties
+
+# 本地环境变量
+.env
+.env.local
