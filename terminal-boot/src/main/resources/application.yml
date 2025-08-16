@@ -4,3 +4,19 @@ server:
 spring:
   application:
     name: terminal-service
+
+# Terminal WebSocket配置
+terminal:
+  netty:
+    enabled: true
+    server:
+      host: 0.0.0.0
+      port: 8843
+      path: /ColorWebSocket/websocket/chat
+      boss-threads: 1
+      worker-threads: 0  # 0=CPU核心数*2
+      keep-alive: true
+      tcp-no-delay: true
+      so-reuse-addr: true
+    heartbeat:
+      interval: 55            # 设备心跳间隔(秒)

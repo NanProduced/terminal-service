@@ -14,7 +14,6 @@ import lombok.Getter;
  * 
  * @author Nan
  * @version 1.0.0
- * @since 2024-12-15
  */
 @Getter
 public enum CommonErrorCode implements ErrorCode {
