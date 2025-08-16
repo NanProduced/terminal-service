@@ -7,33 +7,45 @@
     <artifactId>colorlight-terminal</artifactId>
     <version>1.0.0-SNAPSHOT</version>
   </parent>
-  <artifactId>terminal-application</artifactId>
-  <name>terminal-application</name>
-  <description>应用编排与领域服务</description>
+  <artifactId>terminal-commons</artifactId>
+  <name>terminal-commons</name>
+  <description>通用工具包和常量定义</description>
+  
   <dependencies>
-    <!-- 应用层最小依赖原则 - 只保留必要的框架支持 -->
+    <!-- JSON处理 -->
     <dependency>
-      <groupId>com.colorlight.terminal</groupId>
-      <artifactId>terminal-commons</artifactId>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
     </dependency>
     
-    <!-- Spring Context注解支持 (provided scope) -->
     <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-context</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <!-- Spring事务注解支持 -->
-    <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-tx</artifactId>
-      <scope>provided</scope>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
     </dependency>
     
     <!-- 参数验证 -->
     <dependency>
       <groupId>jakarta.validation</groupId>
       <artifactId>jakarta.validation-api</artifactId>
+    </dependency>
+    
+    <!-- 工具库 -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-lang3</artifactId>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-collections4</artifactId>
+      <version>4.4</version>
+    </dependency>
+    
+    <!-- 加密工具 -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-crypto</artifactId>
+      <scope>provided</scope>
     </dependency>
     
     <!-- 编译时工具 -->
@@ -43,17 +55,17 @@
       <optional>true</optional>
     </dependency>
     
-    <!-- 数据转换 -->
+    <!-- 测试依赖 -->
     <dependency>
-      <groupId>org.mapstruct</groupId>
-      <artifactId>mapstruct</artifactId>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
     </dependency>
     
-    <!-- 时间处理 -->
     <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-annotations</artifactId>
-      <scope>provided</scope>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
     </dependency>
   </dependencies>
   
@@ -66,19 +78,9 @@
           <release>${maven.compiler.release}</release>
           <annotationProcessorPaths>
             <path>
-              <groupId>org.mapstruct</groupId>
-              <artifactId>mapstruct-processor</artifactId>
-              <version>${org.mapstruct.version}</version>
-            </path>
-            <path>
               <groupId>org.projectlombok</groupId>
               <artifactId>lombok</artifactId>
               <version>${lombok.version}</version>
-            </path>
-            <path>
-              <groupId>org.projectlombok</groupId>
-              <artifactId>lombok-mapstruct-binding</artifactId>
-              <version>${lombok-mapstruct-binding.version}</version>
             </path>
           </annotationProcessorPaths>
         </configuration>

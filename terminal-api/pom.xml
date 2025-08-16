@@ -11,19 +11,35 @@
   <name>terminal-api</name>
   <description>设备 REST API 定义与 DTO</description>
   <dependencies>
-    <dependency>
-      <groupId>com.colorlight.terminal</groupId>
-      <artifactId>terminal-rpc-api</artifactId>
-      <version>${project.version}</version>
-    </dependency>
+    <!-- HTTP API协议定义 - 仅允许Spring Web依赖 -->
     <dependency>
       <groupId>org.springframework</groupId>
       <artifactId>spring-web</artifactId>
     </dependency>
+    
+    <!-- Swagger注解支持 -->
+    <dependency>
+      <groupId>io.swagger.core.v3</groupId>
+      <artifactId>swagger-annotations-jakarta</artifactId>
+    </dependency>
+    
+    <!-- JSON序列化支持 -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-annotations</artifactId>
+    </dependency>
+    
+    <!-- 编译时工具 -->
     <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
       <optional>true</optional>
+    </dependency>
+    
+    <!-- 参数验证 -->
+    <dependency>
+      <groupId>jakarta.validation</groupId>
+      <artifactId>jakarta.validation-api</artifactId>
     </dependency>
   </dependencies>
 </project>
