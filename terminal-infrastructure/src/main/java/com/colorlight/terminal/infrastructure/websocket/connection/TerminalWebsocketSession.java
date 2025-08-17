@@ -2,6 +2,7 @@ package com.colorlight.terminal.infrastructure.websocket.connection;
 
 
 import io.netty.channel.Channel;
+import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import lombok.Builder;
 import lombok.Data;
 
@@ -102,6 +103,66 @@ public class TerminalWebsocketSession {
             return Long.MAX_VALUE;
         }
         return System.currentTimeMillis() - lastHeartbeatTime;
+    }
+
+    /**
+     * 通过WebSocket发送消息到设备
+     * 
+     * @param message 消息内容 (JSON字符串)
+     * @return 是否发送成功
+     */
+    public boolean sendMessage(String message) {
+        if (!isConnected()) {
+            return false;
+        }
+        
+        try {
+            // 通过Netty Channel发送文本消息
+            TextWebSocketFrame frame = new TextWebSocketFrame(message);
+            
+            // 异步写入并刷新
+            nettyChannel.writeAndFlush(frame);
+            
+            // 增加发送计数
+            sentMessageCount.incrementAndGet();
+            
+            return true;
+            
+        } catch (Exception e) {
+            // 增加错误计数
+            errorCount.incrementAndGet();
+            return false;
+        }
+    }
+
+    /**
+     * 关闭WebSocket连接
+     */
+    public void close() {
+        if (nettyChannel != null && nettyChannel.isActive()) {
+            nettyChannel.close();
+        }
+    }
+
+    /**
+     * 更新心跳时间
+     */
+    public void updateHeartbeat() {
+        this.lastHeartbeatTime = System.currentTimeMillis();
+    }
+
+    /**
+     * 增加接收消息计数
+     */
+    public void incrementReceivedCount() {
+        receivedMessageCount.incrementAndGet();
+    }
+
+    /**
+     * 增加重连计数
+     */
+    public void incrementReconnectCount() {
+        reconnectCount.incrementAndGet();
     }
 
 }

@@ -9,6 +9,8 @@ import com.colorlight.terminal.infrastructure.persistence.mysql.mapper.TerminalA
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+
 @Repository
 @RequiredArgsConstructor
 public class MysqlTerminalAccountRepository implements TerminalAccountRepository {
@@ -26,5 +28,30 @@ public class MysqlTerminalAccountRepository implements TerminalAccountRepository
     @Override
     public TerminalAccount findTerminalAccountById(Long deviceId) {
         return terminalAccountConverter.toDomain(terminalAccountMapper.selectById(deviceId));
+    }
+
+    @Override
+    public boolean ifExistTerminalAccount(String accountName) {
+        return terminalAccountMapper.exists(new LambdaQueryWrapper<TerminalAccountDO>()
+                .eq(TerminalAccountDO::getAccount, accountName));
+    }
+
+    @Override
+    public TerminalAccount save(TerminalAccount terminalAccount) {
+        LocalDateTime now = LocalDateTime.now();
+        TerminalAccountDO terminalAccountDO = terminalAccountConverter.toDO(terminalAccount);
+
+        if (terminalAccountDO.getDeviceId() == null) {
+            // 新增
+            terminalAccountDO.setCreateTime(now);
+            terminalAccountDO.setUpdateTime(now);
+            terminalAccountMapper.insert(terminalAccountDO);
+        } else {
+            // 更新
+            terminalAccountDO.setUpdateTime(now);
+            terminalAccountMapper.updateById(terminalAccountDO);
+        }
+        
+        return terminalAccountConverter.toDomain(terminalAccountDO);
     }
 }

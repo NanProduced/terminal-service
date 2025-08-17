@@ -80,8 +80,14 @@ public enum CommonErrorCode implements ErrorCode {
     /**
      * 认证失败
      */
-    AUTHENTICATION_FAILED("TM1004", "认证失败", ErrorLevel.WARN, HttpStatusCode.UNAUTHORIZED);
+    AUTHENTICATION_FAILED("TM1004", "认证失败", ErrorLevel.WARN, HttpStatusCode.UNAUTHORIZED),
 
+    /*======================= 终端/设备管理 TM20XX =======================*/
+
+    /**
+     * 账号名已存在
+     */
+    TERMINAL_ACCOUNT_EXIST("TM2001", "账号名称已存在", ErrorLevel.WARN, HttpStatusCode.BAD_REQUEST);
 
     /*======================= 枚举属性 =======================*/
     

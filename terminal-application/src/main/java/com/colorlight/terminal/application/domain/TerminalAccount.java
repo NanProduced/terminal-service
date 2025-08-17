@@ -1,11 +1,13 @@
 package com.colorlight.terminal.application.domain;
 
 import com.colorlight.terminal.application.enums.TerminalAccountStatus;
+import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
 @Data
+@Builder
 public class TerminalAccount {
 
     /**
