@@ -15,25 +15,21 @@
     <dependency>
       <groupId>com.colorlight.terminal</groupId>
       <artifactId>terminal-commons</artifactId>
-      <version>${project.version}</version>
     </dependency>
     
     <dependency>
       <groupId>com.colorlight.terminal</groupId>
       <artifactId>terminal-api</artifactId>
-      <version>${project.version}</version>
     </dependency>
     
     <dependency>
       <groupId>com.colorlight.terminal</groupId>
       <artifactId>terminal-application</artifactId>
-      <version>${project.version}</version>
     </dependency>
     
     <dependency>
       <groupId>com.colorlight.terminal</groupId>
       <artifactId>terminal-infrastructure</artifactId>
-      <version>${project.version}</version>
     </dependency>
     
     <!-- Spring Boot Web -->
@@ -47,8 +43,6 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
     </dependency>
-    
-    <!-- WebSocket功能由Netty在Infrastructure层实现 -->
     
     <!-- 监控和健康检查 -->
     <dependency>
@@ -101,43 +95,10 @@
       <scope>runtime</scope>
       <optional>true</optional>
     </dependency>
-    
-    <!-- 测试依赖 -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
-      <scope>test</scope>
-    </dependency>
-    
-    <dependency>
-      <groupId>org.springframework.security</groupId>
-      <artifactId>spring-security-test</artifactId>
-      <scope>test</scope>
-    </dependency>
-    
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-testcontainers</artifactId>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
+
   <build>
     <plugins>
-      <!-- Spring Boot打包插件 -->
-      <plugin>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-maven-plugin</artifactId>
-        <configuration>
-          <excludes>
-            <exclude>
-              <groupId>org.projectlombok</groupId>
-              <artifactId>lombok</artifactId>
-            </exclude>
-          </excludes>
-          <mainClass>com.colorlight.terminal.boot.TerminalApplication</mainClass>
-        </configuration>
-      </plugin>
-      
       <!-- 编译插件 -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -169,10 +130,19 @@
         </configuration>
       </plugin>
       
-      <!-- Docker镜像构建 -->
+      <!-- Spring Boot打包插件 (合并打包和Docker构建) -->
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <excludes>
+            <exclude>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+            </exclude>
+          </excludes>
+          <mainClass>com.colorlight.terminal.boot.TerminalApplication</mainClass>
+        </configuration>
         <executions>
           <execution>
             <goals>

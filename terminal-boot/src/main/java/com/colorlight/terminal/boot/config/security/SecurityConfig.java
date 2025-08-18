@@ -35,8 +35,8 @@ import org.springframework.security.web.authentication.www.BasicAuthenticationEn
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain springSecurityFilterChain(HttpSecurity http,
-                                                         TerminalBasicAuthFilter terminalBasicAuthFilter) throws Exception {
+    public SecurityFilterChain terminalSecurityFilterChain(HttpSecurity http,
+                                                           TerminalBasicAuthFilter terminalBasicAuthFilter) throws Exception {
 
         http
             // 终端设备无需CSRF保护
@@ -73,7 +73,7 @@ public class SecurityConfig {
             .addFilterBefore(terminalBasicAuthFilter, UsernamePasswordAuthenticationFilter.class)
             // Basic Auth配置
             .httpBasic(basic -> basic
-                    .authenticationEntryPoint(new BasicAuthenticationEntryPoint())
+                    .authenticationEntryPoint(basicAuthenticationEntryPoint())
             );
 
         return http.build();

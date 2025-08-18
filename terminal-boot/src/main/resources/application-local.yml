@@ -1,0 +1,145 @@
+server:
+  port: 8088
+
+spring:
+  application:
+    name: terminal-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.1.185:8848
+        service: terminal-service
+        namespace: 9bc919e2-0ba2-40ed-9ad9-67c85d4cd5e0
+        group: DEFAULT_GROUP
+        username: Nan
+        password: Nan12091209
+        access-key: nan_nacos
+        secret-key: nanproduced
+        register-enabled: true
+        # 类似长连接监听服务端信息变化的功能
+        watch:
+          enabled: true
+        heart-beat-interval: 5000
+        heart-beat-timeout: 15000
+      config:
+        import-check:
+          enabled: false  # 本地开发时禁用Nacos配置检查
+
+  datasource:
+     username: root
+     password: Nan12091209
+     url: jdbc:mysql://192.168.1.185:3306/terminal?zeroDateTimeBehavior=convertToNull&characterEncoding=utf-8&allowPublicKeyRetrieval=true
+     driver-class-name: com.mysql.cj.jdbc.Driver
+     hikari:
+       maximum-pool-size: 10
+       minimum-idle: 2
+       connection-timeout: 10000
+       idle-timeout: 180000
+       max-lifetime: 600000
+
+  data:
+    redis:
+      host: 192.168.1.185
+      port: 6379
+      database: 2
+      password: Nan12091209
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 10
+          min-idle: 2
+          max-wait: 1000ms
+
+    mongodb:
+      host: 192.168.1.185
+      port: 27017
+      database: terminal
+      username: root
+      password: Nan12091209
+      authentication-database: admin
+      auto-index-creation: true
+
+dubbo:
+  application:
+    name: terminal-service
+  registry:
+    address: nacos://192.168.1.185:8848?namespace=9bc919e2-0ba2-40ed-9ad9-67c85d4cd5e0&username=Nan&password=Nan12091209
+    group: DEFAULT_GROUP
+  protocol:
+    name: dubbo
+    port: 20880
+    threads: 100
+    serialization: hessian2  # 兼容JDK11和JDK17
+  consumer:
+    timeout: 3000
+    retries: 0
+  provider:
+    timeout: 3000
+    retries: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+  # Zipkin Reporter 的专属配置
+  zipkin:
+    tracing:
+      # 默认 auto-config 会把 span 发到这个端点
+      endpoint: http://192.168.1.185:9411/api/v2/spans
+  endpoint:
+    health:
+      show-details: always
+    metrics:
+      enabled: true
+
+# 本地环境日志配置 - 更详细的日志便于调试
+logging:
+  level:
+    root: INFO
+    com.colorlight.terminal: DEBUG
+    org.springframework: WARN
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.mybatis: DEBUG
+    io.netty: DEBUG
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+
+# Terminal Service项目配置
+terminal:
+  # netty服务器配置
+  netty:
+    enabled: true
+    server:
+      host: 0.0.0.0
+      port: 8843
+      path: /ColorWebSocket/websocket/chat
+      boss-threads: 1
+      worker-threads: 0  # 0=CPU核心数*2
+      keep-alive: true
+      tcp-no-delay: true
+      so-reuse-addr: true
+    heartbeat:
+      interval: 55            # 设备心跳间隔(秒)
+
+  # 终端指令配置 - 支持Nacos动态刷新
+  command:
+    expire:
+      hours: 24                     # 指令过期时间(小时)
+      auto-clean-enabled: true      # 是否启用自动清理
+      clean-interval-minutes: 60    # 清理间隔(分钟)
+    cache:
+      ttl-hours: 24                 # Redis TTL时间(小时) 要与expire.hours一致
+      max-commands-per-device: 1000 # 每设备最大缓存数
+      deduplication-enabled: true   # 是否启用去重
+
+

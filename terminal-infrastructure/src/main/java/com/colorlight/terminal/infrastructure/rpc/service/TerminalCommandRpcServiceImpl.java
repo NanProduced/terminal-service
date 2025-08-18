@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@DubboService(version = "1.0.0", group = "terminal", timeout = 3000, retries = 0)
+@DubboService(version = "1.0.0", group = "terminal", timeout = 3000, retries = 0, serialization = "hessian2")
 @RequiredArgsConstructor
 public class TerminalCommandRpcServiceImpl implements TerminalCommandRpcService {
 

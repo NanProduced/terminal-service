@@ -17,13 +17,6 @@
   
   <dependencies>
     <!-- RPC接口定义最小化依赖 - 纯JDK11实现，无Lombok -->
-    
-    <!-- 测试依赖 -->
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
   
   <build>
@@ -51,8 +44,8 @@
             <configuration>
               <rules>
                 <requireJavaVersion>
-                  <version>[11,12)</version>
-                  <message>RPC API模块必须使用JDK 11编译以保证兼容性</message>
+                  <version>[11,18)</version>
+                  <message>兼容jdk11-jdk17</message>
                 </requireJavaVersion>
               </rules>
             </configuration>
