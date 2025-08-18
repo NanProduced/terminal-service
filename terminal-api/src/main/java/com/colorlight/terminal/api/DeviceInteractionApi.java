@@ -2,6 +2,8 @@ package com.colorlight.terminal.api;
 
 import com.colorlight.terminal.dto.command.DeviceApiCommand;
 import com.colorlight.terminal.dto.command.DeviceApiCommandConfirm;
+import com.colorlight.terminal.dto.media.DeviceApiMedia;
+import com.colorlight.terminal.dto.program.DeviceApiProgram;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,5 +26,12 @@ public interface DeviceInteractionApi {
     @PostMapping("/wp-json/wp/v2/comments")
     void confirmCommand(@RequestParam("post") Integer post,
                         @RequestBody DeviceApiCommandConfirm commandConfirm);
+
+    @GetMapping("/wp-json/wp/v2/programs")
+    List<DeviceApiProgram> getPrograms(@RequestParam(value = "clt_type", defaultValue = "terminal") String clt_type);
+
+    @GetMapping("/wp-json/wp/v2/media")
+    List<DeviceApiMedia> getMedia(@RequestParam(value = "parent") Integer parent);
+
 
 }

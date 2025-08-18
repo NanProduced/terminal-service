@@ -67,6 +67,8 @@ public class SecurityConfig {
                     .requestMatchers("/rpc/**").permitAll()
                     // 终端Http请求需要认证
                     .requestMatchers("/wp-json/**").authenticated()
+                    // todo:测试接口，记得关闭
+                    .requestMatchers("/test/**").permitAll()
                     .anyRequest().authenticated()
             )
             // 使用自定义Basic Auth认证过滤

@@ -8,6 +8,8 @@ import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
 import com.colorlight.terminal.dto.command.DeviceApiCommand;
 import com.colorlight.terminal.dto.command.DeviceApiCommandConfirm;
+import com.colorlight.terminal.dto.media.DeviceApiMedia;
+import com.colorlight.terminal.dto.program.DeviceApiProgram;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,7 +43,9 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     )
     @Override
     public void reportTerminalStatus(String report) {
+        TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         // TODO: 实现设备状态处理逻辑
+        log.info("DeviceReport - 收到上报消息: deviceId={}, report={}", principal.getDeviceId(), report);
     }
 
     @Operation(
@@ -76,14 +80,14 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     )
     @Override
     public void confirmCommand(Integer post, DeviceApiCommandConfirm commandConfirm) {
-        log.info("设备确认指令执行, deviceId: {}, confirmId: {}, content: {}", 
-                post, commandConfirm.getParent(), commandConfirm.getContent());
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Long deviceId = principal.getDeviceId();
+        log.info("DeviceCommandConfirm - 设备确认指令执行, deviceId: {}, confirmId: {}, content: {}",
+                deviceId, commandConfirm.getParent(), commandConfirm.getContent());
         try {
             // 参数验证
             if (commandConfirm.getParent() == null) {
-                log.warn("指令确认参数无效, commandId = null");
+                log.warn("DeviceCommandConfirm - 指令确认参数无效, commandId = null");
                 throw new DeviceResponseException(CommonErrorCode.PARAMETER_MISSING);
             }
             
@@ -94,12 +98,37 @@ public class DeviceInteractionController implements DeviceInteractionApi {
                     commandConfirm.getContent()
             );
             
-            log.info("指令确认处理完成, deviceId: {}, confirmId: {}", deviceId, commandConfirm.getParent());
+            log.info("DeviceCommandConfirm - 指令确认处理完成, deviceId: {}, confirmId: {}", deviceId, commandConfirm.getParent());
             
         } catch (Exception e) {
-            log.error("指令确认异常, deviceId: {}, confirmId: {}", deviceId, commandConfirm.getParent(), e);
+            log.error("DeviceCommandConfirm - 指令确认异常, deviceId: {}, confirmId: {}", deviceId, commandConfirm.getParent(), e);
             throw new DeviceResponseException(CommonErrorCode.SYSTEM_ERROR);
         }
     }
 
+    @Operation(
+            summary = "终端获取节目",
+            description = "终端通过HTTP接口获取节目信息",
+            tags = {"终端节目"}
+    )
+    @Override
+    public List<DeviceApiProgram> getPrograms(String clt_type) {
+        TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        log.info("DeviceProgram - 终端 {} 获取节目", principal.getDeviceId());
+        // todo：实现获取节目接口
+        return List.of();
+    }
+
+    @Operation(
+            summary = "终端获取素材",
+            description = "终端通过HTTP接口获取素材信息",
+            tags = {"终端节目"}
+    )
+    @Override
+    public List<DeviceApiMedia> getMedia(Integer parent) {
+        TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        log.info("DeviceMedia - 终端 {} 获取素材", principal.getDeviceId());
+        // todo：实现获取素材接口
+        return List.of();
+    }
 }

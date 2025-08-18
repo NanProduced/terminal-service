@@ -35,7 +35,7 @@ public interface TerminalAccountConverter {
      */
     @Mapping(source = "accountName", target = "account")
     @Mapping(source = "status", target = "accountStatus", qualifiedByName = "statusToByte")
-    @Mapping(target = "password", ignore = true)
+    @Mapping(source = "passwordHash", target = "password")
     @Mapping(target = "createTime", ignore = true)
     @Mapping(target = "updateTime", ignore = true)
     @Mapping(target = "version", ignore = true)

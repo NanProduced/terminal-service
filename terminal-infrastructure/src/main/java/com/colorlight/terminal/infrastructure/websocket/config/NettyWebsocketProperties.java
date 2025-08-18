@@ -11,11 +11,11 @@ public class NettyWebsocketProperties {
 
     private boolean enabled = true;
 
-    private Server server;
+    private Server server = new Server();
 
-    private Message message;
+    private Message message = new Message();
     
-    private Heartbeat heartbeat;
+    private Heartbeat heartbeat = new Heartbeat();
 
     /**
      * netty websocket Server配置
