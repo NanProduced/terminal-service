@@ -5,8 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-
 /**
  * 设备在线状态领域实体
  * 
@@ -56,46 +54,57 @@ public class DeviceOnlineStatus {
     /**
      * 创建在线状态
      */
-    public static DeviceOnlineStatus createOnline(Long deviceId, ReportSource source, String clientIp) {
+    public static DeviceOnlineStatus createGoLive(Long deviceId, ReportSource source, String clientIp) {
+        long currentTime = System.currentTimeMillis();
+        return DeviceOnlineStatus.builder()
+                .deviceId(deviceId)
+                .lastReportTime(currentTime)
+                .lastReportSource(source)
+                .status(OnlineStatus.GO_LIVE)
+                .statusChangeTime(currentTime)
+                .onlineStartTime(currentTime)
+                .clientIp(clientIp)
+                .build();
+    }
+
+    /**
+     * 刷新在线状态
+     * @param deviceId
+     * @param source
+     * @param clientIp
+     * @return
+     */
+    public static DeviceOnlineStatus refreshOnline(Long deviceId, ReportSource source, String clientIp) {
         long currentTime = System.currentTimeMillis();
         return DeviceOnlineStatus.builder()
                 .deviceId(deviceId)
                 .lastReportTime(currentTime)
                 .lastReportSource(source)
                 .status(OnlineStatus.ONLINE)
+                .clientIp(clientIp)
+                .build();
+    }
+
+    /**
+     * 创建重连状态
+     * @param currentStatus
+     * @param source
+     * @param clientIp
+     * @return
+     */
+    public static DeviceOnlineStatus createReconnect(DeviceOnlineStatus currentStatus, ReportSource source, String clientIp) {
+        long currentTime = System.currentTimeMillis();
+        return DeviceOnlineStatus.builder()
+                .deviceId(currentStatus.deviceId)
+                .lastReportTime(currentTime)
+                .lastReportSource(source)
+                .status(OnlineStatus.RECONNECT)
                 .statusChangeTime(currentTime)
                 .onlineStartTime(currentTime)
                 .clientIp(clientIp)
                 .build();
     }
-    
-    /**
-     * 创建离线状态
-     */
-    public static DeviceOnlineStatus createOffline(Long deviceId) {
-        long currentTime = System.currentTimeMillis();
-        return DeviceOnlineStatus.builder()
-                .deviceId(deviceId)
-                .lastReportTime(currentTime)
-                .status(OnlineStatus.OFFLINE)
-                .statusChangeTime(currentTime)
-                .build();
-    }
-    
-    /**
-     * 更新上报时间
-     */
-    public void updateReportTime(ReportSource source) {
-        this.lastReportTime = System.currentTimeMillis();
-        this.lastReportSource = source;
-        
-        // 如果从离线变为在线，记录上线开始时间
-        if (this.status == OnlineStatus.OFFLINE) {
-            this.status = OnlineStatus.ONLINE;
-            this.onlineStartTime = this.lastReportTime;
-            this.statusChangeTime = this.lastReportTime;
-        }
-    }
+
     
     /**
      * 标记为离线
@@ -113,21 +122,66 @@ public class DeviceOnlineStatus {
     }
     
     /**
-     * 检查是否在线（基于70秒超时）
+     * 检查是否在线（基于配置的超时阈值）
+     * 注意：此方法需要外部传入配置，建议优先使用应用服务层的isDeviceOnline方法
      */
     public boolean isOnline() {
         if (this.lastReportTime == null) {
             return false;
         }
-        long expireThreshold = System.currentTimeMillis() - 70_000; // 70秒
-        return this.lastReportTime > expireThreshold;
+        
+        // 首先检查状态语义 - 离线状态直接返回false
+        if (this.status == OnlineStatus.OFFLINE) {
+            return false;
+        }
+        
+        // 对于在线相关状态，检查时间阈值
+        if (this.status == OnlineStatus.GO_LIVE || 
+            this.status == OnlineStatus.ONLINE || 
+            this.status == OnlineStatus.RECONNECT) {
+            // 使用默认70秒，但建议调用方使用带配置的重载方法
+            long expireThreshold = System.currentTimeMillis() - 70_000; 
+            return this.lastReportTime > expireThreshold;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * 检查是否在线（使用配置的超时阈值）
+     * @param timeoutThreshold 超时阈值(毫秒)
+     * @return 是否在线
+     */
+    public boolean isOnline(long timeoutThreshold) {
+        if (this.lastReportTime == null) {
+            return false;
+        }
+        
+        // 首先检查状态语义 - 离线状态直接返回false
+        if (this.status == OnlineStatus.OFFLINE) {
+            return false;
+        }
+        
+        // 对于在线相关状态，检查时间阈值
+        if (this.status == OnlineStatus.GO_LIVE || 
+            this.status == OnlineStatus.ONLINE || 
+            this.status == OnlineStatus.RECONNECT) {
+            long expireThreshold = System.currentTimeMillis() - timeoutThreshold;
+            return this.lastReportTime > expireThreshold;
+        }
+        
+        return false;
     }
     
     /**
      * 获取当前在线时长(毫秒)
      */
     public long getCurrentOnlineDuration() {
-        if (this.status == OnlineStatus.ONLINE && this.onlineStartTime != null) {
+        // 扩展到所有在线相关状态
+        if ((this.status == OnlineStatus.GO_LIVE || 
+             this.status == OnlineStatus.ONLINE || 
+             this.status == OnlineStatus.RECONNECT) && 
+            this.onlineStartTime != null) {
             return System.currentTimeMillis() - this.onlineStartTime;
         }
         return 0L;

@@ -1,6 +1,9 @@
 package com.colorlight.terminal.application.port.inbound.websocket;
 
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
+import com.colorlight.terminal.application.domain.connection.WebSocketSession;
+
+import java.util.List;
 
 /**
  * WebSocket消息处理用例接口
@@ -33,7 +36,7 @@ public interface WebsocketMessageUseCase {
      * @param session 技术会话对象
      * @return 终端连接对象
      */
-    TerminalConnection handleConnectionEstablished(Long deviceId, Object session);
+    TerminalConnection handleConnectionEstablished(Long deviceId, WebSocketSession session);
     
     /**
      * 处理连接断开
@@ -42,4 +45,23 @@ public interface WebsocketMessageUseCase {
      * @return 是否处理成功
      */
     boolean handleConnectionClosed(Long deviceId);
+    
+    /**
+     * 发送消息给指定设备
+     * 
+     * @param deviceId 设备ID
+     * @param message 消息内容
+     * @return 是否发送成功
+     */
+    boolean sendMessage(Long deviceId, String message);
+    
+    /**
+     * 批量发送消息给多个设备
+     * 
+     * @param deviceIds 设备ID列表
+     * @param message 消息内容
+     * @return 发送成功的设备ID列表
+     */
+    List<Long> broadcastMessage(List<Long> deviceIds, String message);
+
 }

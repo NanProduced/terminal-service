@@ -23,7 +23,6 @@ public class DeviceConfigAdapter implements DeviceConfigPort {
     
     @Override
     public DeviceProperties getDeviceConfig() {
-        log.debug("DeviceConfigAdapter - 获取设备配置");
         
         DeviceProperties domainConfig = new DeviceProperties();
         
@@ -39,6 +38,9 @@ public class DeviceConfigAdapter implements DeviceConfigPort {
         // 复制过期监听器配置
         copyExpirationListenerConfig(configProperties.getExpirationListener(),
                                     domainConfig.getExpirationListener());
+
+        // 复制缓存清理配置
+        copyStartupCleanup(configProperties.getStartupCleanup(), domainConfig.getStartupCleanup());
         
         return domainConfig;
     }
@@ -115,5 +117,16 @@ public class DeviceConfigAdapter implements DeviceConfigPort {
         target.setAutoFreshEnabled(source.isAutoFreshEnabled());
         target.setTtlRefreshIntervalHours(source.getTtlRefreshIntervalHours());
         target.setStreamQueryThreshold(source.getStreamQueryThreshold());
+    }
+
+    /**
+     * 复制缓存清理配置
+     */
+    private void copyStartupCleanup(DeviceConfigProperties.StartupCleanup source,
+                                    DeviceProperties.StartupCleanup target) {
+        target.setEnabled(source.isEnabled());
+        target.setStrategy(source.getStrategy());
+        target.setRequired(source.isRequired());
+        target.setBufferSeconds(source.getBufferSeconds());
     }
 }

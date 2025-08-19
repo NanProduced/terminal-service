@@ -254,9 +254,9 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
         }
         
         try {
-            // 使用现有的Redis服务批量保存状态
+            // 使用现有的Redis服务批量更新状态
             for (DeviceOnlineStatus status : batch) {
-                deviceOnlineStatusPort.saveDeviceStatus(status);
+                deviceOnlineStatusPort.smartDetermined(status);
             }
             
             log.debug("AsyncDeviceStatusUpdate - 批处理完成: batchSize={}", batch.size());
@@ -278,7 +278,7 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
         
         BufferPoolStatus status = getBufferPoolStatus();
         
-        log.info("AsyncDeviceStatusUpdate - 统计信息: {}", JsonUtils.toJsonPretty(status));
+        log.info("AsyncDeviceStatusUpdate - 统计信息:\n{}", JsonUtils.toJsonPretty(status));
         
         // 如果缓冲池长期保持高使用率，记录警告
         if (status.utilizationRate() > 0.7) {

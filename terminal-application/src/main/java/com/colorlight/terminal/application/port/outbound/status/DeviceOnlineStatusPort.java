@@ -13,13 +13,25 @@ import java.util.Set;
  * @author Nan
  */
 public interface DeviceOnlineStatusPort {
-    
+
     /**
-     * 保存或更新设备状态
+     * 根据类型推断保存还是更新
+     * @param status
+     */
+    void smartDetermined(DeviceOnlineStatus status);
+
+    /**
+     * 保存设备状态（新上线）
      * 
-     * @param status 设备状态
+     * @param status 完整的设备状态
      */
     void saveDeviceStatus(DeviceOnlineStatus status);
+
+    /**
+     * 更新设备状态（部分覆盖）
+     * @param status 部分设备状态字段
+     */
+    void updateDeviceStatus(DeviceOnlineStatus status);
     
     /**
      * 获取设备状态
@@ -36,13 +48,26 @@ public interface DeviceOnlineStatusPort {
      * @return 设备状态映射
      */
     Map<Long, DeviceOnlineStatus> batchGetDeviceStatus(List<Long> deviceIds);
-    
+
+    /**
+     * 获取设备最后上报时间
+     * @param deviceId 设备ID
+     * @return 设备最后上报时间时间戳
+     */
+    Long getDeviceLastReportTime(Long deviceId);
+
     /**
      * 删除设备状态
      * 
      * @param deviceId 设备ID
      */
     void removeDeviceStatus(Long deviceId);
+
+    /**
+     * 删除设备状态索引
+     * @param deviceId
+     */
+    void removeDeviceIndex(Long deviceId);
     
     /**
      * 获取所有设备状态的key
@@ -74,4 +99,10 @@ public interface DeviceOnlineStatusPort {
      * @return 在线设备数
      */
     int getOnlineDeviceCount();
+
+    /**
+     * 重置在线设备数量
+     * @param onlineDeviceCount 在线设备数
+     */
+    void setOnlineDeviceCount(int onlineDeviceCount);
 }

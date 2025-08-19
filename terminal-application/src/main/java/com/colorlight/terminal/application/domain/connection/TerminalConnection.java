@@ -16,7 +16,7 @@ public class TerminalConnection {
     /**
      * Websocket会话
      */
-    private Object session;
+    private WebSocketSession session;
 
     /**
      * 连接建立时间
@@ -44,46 +44,22 @@ public class TerminalConnection {
     private ConnectionStatus status;
 
     /**
-     * 发送消息计数
-     */
-    private long sentMessageCount;
-
-    /**
-     * 接收消息计数
-     */
-    private long receivedMessageCount;
-
-    /**
-     * 错误计数
-     */
-    private long errorCount;
-
-    /**
      * 创建设备连接
      * @param deviceId 设备Id
-     * @param session 会话Id
+     * @param session WebSocket会话
      * @return
      */
-    public static TerminalConnection create(Long deviceId, Object session) {
+    public static TerminalConnection create(Long deviceId, WebSocketSession session) {
         LocalDateTime now = LocalDateTime.now();
         TerminalConnection connection = new TerminalConnection();
         connection.setDeviceId(deviceId);
         connection.setSession(session);
-        connection.setClientIp(extractClientIp(session));
+        connection.setClientIp(session != null ? session.getClientIp() : "unknown");
         connection.setLastActiveTime(now);
         connection.setLastHeartbeatTime(now);
         connection.setConnectTime(now);
         connection.setStatus(ConnectionStatus.CONNECTED);
-        connection.setSentMessageCount(0);
-        connection.setReceivedMessageCount(0);
         return connection;
-    }
-
-    public static String extractClientIp(Object session) {
-        if (session instanceof TerminalConnection connection) {
-            return connection.getClientIp();
-        }
-        return "unknown";
     }
 
     public void updateActiveTime() {
@@ -97,33 +73,51 @@ public class TerminalConnection {
     }
 
     /**
-     * 增加发送消息计数
+     * 获取发送消息计数（委托给session）
+     */
+    public long getSentMessageCount() {
+        return session != null ? session.getSentMessageCount() : 0;
+    }
+
+    /**
+     * 获取接收消息计数（委托给session）
+     */
+    public long getReceivedMessageCount() {
+        return session != null ? session.getReceivedMessageCount() : 0;
+    }
+
+    /**
+     * 获取错误计数（委托给session）
+     */
+    public long getErrorCount() {
+        return session != null ? session.getErrorCount() : 0;
+    }
+    
+    /**
+     * 增加发送消息计数（更新活跃时间）
      */
     public void incrementSentMessageCount() {
-        this.sentMessageCount++;
         updateActiveTime();
     }
 
     /**
-     * 增加接收消息计数
+     * 增加接收消息计数（更新活跃时间）
      */
     public void incrementReceivedMessageCount() {
-        this.receivedMessageCount++;
         updateActiveTime();
     }
 
     /**
-     * 增加错误计数
+     * 增加错误计数（更新活跃时间）
      */
     public void incrementErrorCount() {
-        this.errorCount++;
         updateActiveTime();
     }
 
     /**
      * 获取WebSocket会话
      */
-    public Object getWebSocketSession() {
+    public WebSocketSession getWebSocketSession() {
         return session;
     }
 
@@ -159,6 +153,28 @@ public class TerminalConnection {
             return 0;
         }
         return Duration.between(lastActiveTime, LocalDateTime.now()).getSeconds();
+    }
+
+    /**
+     * 检查连接是否活跃
+     */
+    public boolean isActive() {
+        if (session == null) {
+            return false;
+        }
+        
+        return session.isConnected();
+    }
+    
+    /**
+     * 发送消息
+     */
+    public boolean sendMessage(String message) {
+        if (session == null) {
+            return false;
+        }
+        
+        return session.sendMessage(message);
     }
 
     /**

@@ -44,36 +44,39 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
             
             // 获取当前状态
             Optional<DeviceOnlineStatus> currentStatusOpt = deviceOnlineStatusPort.getDeviceStatus(deviceId);
-            
+
+            /*
+              终端状态缓存还存在，两种情况：
+              1.终端持续在线，仅刷新最后上报时间
+              2.终端被定时任务标记为离线，但是状态缓存还未过期，重新上报（短时间内重连）
+             */
             if (currentStatusOpt.isPresent()) {
-                // 更新现有状态
+                // 当前状态
                 DeviceOnlineStatus currentStatus = currentStatusOpt.get();
-                boolean wasOffline = currentStatus.getStatus() == OnlineStatus.OFFLINE;
-                
-                currentStatus.updateReportTime(source);
-                
-                // 根据配置选择同步或异步处理
-                saveDeviceStatusWithMode(currentStatus);
-                
+
+                DeviceOnlineStatus updateStatus = determinedUpdateStatus(currentStatus, source, clientIp);
+
+                updateDeviceStatusWithMode(updateStatus);
+
                 // 如果从离线变为在线，发布上线事件（这里应该是短暂的掉线后重连）
-                if (wasOffline) {
-                    DeviceStatusEvent event = DeviceStatusEvent.createOnlineEvent(deviceId, source, clientIp);
+                if (updateStatus.getStatus() == OnlineStatus.RECONNECT) {
+                    // 创建“重连”事件，记录这段时间为异常，但是不刷新上线时间（在线时间将覆盖这段短暂的“离线”）
+                    DeviceStatusEvent event = DeviceStatusEvent.createReconnectEvent(deviceId, source, clientIp);
                     deviceStatusEventPort.publishStatusEvent(event);
                     log.info("ApplicationService - 设备上线（网络波动、超时重连）: deviceId={}, source={}", deviceId, source);
                 } else {
-                    // 发布状态更新事件
-                    DeviceStatusEvent event = DeviceStatusEvent.createUpdateEvent(deviceId, source);
+                    // 发布维持在线状态事件
+                    DeviceStatusEvent event = DeviceStatusEvent.createHeartbeatEvent(deviceId, source);
                     deviceStatusEventPort.publishStatusEvent(event);
                 }
             } else {
                 // 创建新状态
-                DeviceOnlineStatus newStatus = DeviceOnlineStatus.createOnline(deviceId, source, clientIp);
-                
-                // 根据配置选择同步或异步处理
-                saveDeviceStatusWithMode(newStatus);
+                DeviceOnlineStatus newStatus = DeviceOnlineStatus.createGoLive(deviceId, source, clientIp);
+
+                updateDeviceStatusWithMode(newStatus);
                 
                 // 发布上线事件
-                DeviceStatusEvent event = DeviceStatusEvent.createOnlineEvent(deviceId, source, clientIp);
+                DeviceStatusEvent event = DeviceStatusEvent.createGoLiveEvent(deviceId, source, clientIp);
                 deviceStatusEventPort.publishStatusEvent(event);
                 log.info("ApplicationService - 设备上线: deviceId={}, source={}", deviceId, source);
             }
@@ -84,11 +87,11 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
     }
     
     /**
-     * 根据配置选择同步或异步方式保存设备状态
+     * 根据配置选择同步或异步方式更新设备状态
      * 
      * @param status 设备状态
      */
-    private void saveDeviceStatusWithMode(DeviceOnlineStatus status) {
+    private void updateDeviceStatusWithMode(DeviceOnlineStatus status) {
         // 检查是否启用异步模式且异步服务可用
         boolean useAsync = deviceConfigPort.isAsyncStatusUpdateEnabled() 
                 && asyncDeviceStatusUpdatePort != null;
@@ -102,21 +105,71 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
             } catch (Exception e) {
                 log.warn("ApplicationService - 异步提交失败，降级到同步模式: deviceId={}", status.getDeviceId(), e);
                 // 降级到同步模式
-                deviceOnlineStatusPort.saveDeviceStatus(status);
+                deviceOnlineStatusPort.smartDetermined(status);
             }
         } else {
             // 同步模式：直接保存
-            deviceOnlineStatusPort.saveDeviceStatus(status);
+            deviceOnlineStatusPort.smartDetermined(status);
             log.debug("ApplicationService - 同步保存状态更新: deviceId={}", status.getDeviceId());
         }
+    }
+
+    /**
+     * 推断状态更新类型（智能优化版本）
+     * @param currentStatus 当前的状态缓存
+     * @param source 上报来源
+     * @param clientIp 客户端Ip
+     * @return
+     */
+    private DeviceOnlineStatus determinedUpdateStatus(DeviceOnlineStatus currentStatus, ReportSource source, String clientIp) {
+        OnlineStatus currentState = currentStatus.getStatus();
+        long currentTime = System.currentTimeMillis();
+        
+        // 离线 → 重连
+        if (currentState == OnlineStatus.OFFLINE) {
+            return DeviceOnlineStatus.createReconnect(currentStatus, source, clientIp);
+        }
+        
+        // GO_LIVE/RECONNECT → ONLINE (第一次转为稳定在线状态)
+        if (currentState == OnlineStatus.GO_LIVE || currentState == OnlineStatus.RECONNECT) {
+            return DeviceOnlineStatus.builder()
+                .deviceId(currentStatus.getDeviceId())
+                .lastReportTime(currentTime)
+                .lastReportSource(source)
+                .status(OnlineStatus.ONLINE)  // ✅ 状态转换
+                .statusChangeTime(currentTime)
+                .onlineStartTime(currentStatus.getOnlineStartTime()) // 保持原有上线时间
+                .clientIp(clientIp)
+                .build();
+        }
+        
+        // ONLINE → 心跳维持 (只更新时间，不更新状态)
+        if (currentState == OnlineStatus.ONLINE) {
+            return DeviceOnlineStatus.builder()
+                .deviceId(currentStatus.getDeviceId())
+                .lastReportTime(currentTime)
+                .lastReportSource(source)
+                .clientIp(clientIp)
+                // ✅ 不设置status，convertToRedisMap会跳过null字段
+                .build();
+        }
+        
+        // 默认情况：刷新在线
+        return DeviceOnlineStatus.refreshOnline(currentStatus.getDeviceId(), source, clientIp);
     }
     
     @Override
     public boolean isDeviceOnline(Long deviceId) {
         try {
             Optional<DeviceOnlineStatus> statusOpt = deviceOnlineStatusPort.getDeviceStatus(deviceId);
-
-            return statusOpt.map(DeviceOnlineStatus::isOnline).orElse(false);
+            
+            if (statusOpt.isPresent()) {
+                // 使用配置化的超时阈值
+                long timeoutThreshold = deviceConfigPort.getOfflineTimeoutThreshold();
+                return statusOpt.get().isOnline(timeoutThreshold);
+            }
+            
+            return false;
 
         } catch (Exception e) {
             log.error("ApplicationService - 查询设备在线状态失败: deviceId={}", deviceId, e);
@@ -145,13 +198,14 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
             log.debug("ApplicationService - 批量检查设备在线状态: count={}", deviceIds.size());
             
             Map<Long, DeviceOnlineStatus> statusMap = deviceOnlineStatusPort.batchGetDeviceStatus(deviceIds);
+            long timeoutThreshold = deviceConfigPort.getOfflineTimeoutThreshold();
             
             return deviceIds.stream()
                     .collect(Collectors.toMap(
                             deviceId -> deviceId,
                             deviceId -> {
                                 DeviceOnlineStatus status = statusMap.get(deviceId);
-                                return status != null && status.isOnline();
+                                return status != null && status.isOnline(timeoutThreshold);
                             }
                     ));
                     
@@ -184,8 +238,10 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
             Map<Long, DeviceOnlineStatus> statusMap = deviceOnlineStatusPort.batchGetDeviceStatus(
                     new ArrayList<>(allDeviceIds));
             
+            long timeoutThreshold = deviceConfigPort.getOfflineTimeoutThreshold();
+            
             return statusMap.values().stream()
-                    .filter(DeviceOnlineStatus::isOnline)
+                    .filter(status -> status.isOnline(timeoutThreshold))
                     .map(DeviceOnlineStatus::getDeviceId)
                     .collect(Collectors.toSet());
                     
@@ -209,7 +265,7 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
     public int processOfflineDevices() {
         try {
             long startTime = System.currentTimeMillis();
-            long expireThreshold = startTime - 70_000; // 70秒超时
+            long expireThreshold = startTime - deviceConfigPort.getOfflineTimeoutThreshold(); // 使用配置的超时阈值
             
             log.debug("ApplicationService - 开始检查离线设备: expireThreshold={}", expireThreshold);
             
@@ -220,21 +276,46 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
                 log.debug("ApplicationService - 无离线设备");
                 return 0;
             }
-            
-            log.info("ApplicationService - 发现离线设备: count={}", expiredDeviceIds.size());
+
+            long firstSize = expiredDeviceIds.size();
+            log.info("ApplicationService - 发现离线设备: device={}", expiredDeviceIds);
             
             // 获取这些设备的详细状态，计算在线时长
             Map<Long, DeviceOnlineStatus> statusMap = deviceOnlineStatusPort.batchGetDeviceStatus(expiredDeviceIds);
             List<DeviceStatusEvent> offlineEvents = new ArrayList<>();
+
+            // 二次过滤 - 重新检查状态，过滤掉已经更新的设备
+            expiredDeviceIds = statusMap.values().stream()
+                    .filter(status -> {
+                        OnlineStatus currentStatus = status.getStatus();
+                        // 包含所有在线相关状态
+                        boolean isOnlineStatus = (currentStatus == OnlineStatus.ONLINE || 
+                                                 currentStatus == OnlineStatus.GO_LIVE || 
+                                                 currentStatus == OnlineStatus.RECONNECT);
+                        return isOnlineStatus && status.getLastReportTime() < expireThreshold;
+                    })
+                    .map(DeviceOnlineStatus::getDeviceId)
+                    .collect(Collectors.toList());
+
+            if (expiredDeviceIds.size() != firstSize) {
+                log.info("expiredDeviceIds - 二次过滤成功，过滤后离线设备: count={}", expiredDeviceIds.size());
+            }
+
             
             for (Long deviceId : expiredDeviceIds) {
                 DeviceOnlineStatus status = statusMap.get(deviceId);
-                if (status != null && status.getStatus() == OnlineStatus.ONLINE) {
-                    long onlineDurationMs = status.markOffline();
-                    
-                    // 创建离线事件
-                    DeviceStatusEvent event = DeviceStatusEvent.createOfflineEvent(deviceId, onlineDurationMs);
-                    offlineEvents.add(event);
+                if (status != null) {
+                    OnlineStatus currentStatus = status.getStatus();
+                    // 检查是否为在线相关状态
+                    if (currentStatus == OnlineStatus.ONLINE || 
+                        currentStatus == OnlineStatus.GO_LIVE || 
+                        currentStatus == OnlineStatus.RECONNECT) {
+                        long onlineDurationMs = status.markOffline();
+                        
+                        // 创建离线事件
+                        DeviceStatusEvent event = DeviceStatusEvent.createDetectedOfflineEvent(deviceId, onlineDurationMs);
+                        offlineEvents.add(event);
+                    }
                 }
             }
             

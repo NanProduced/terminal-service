@@ -2,6 +2,7 @@ package com.colorlight.terminal.infrastructure.websocket.handler;
 
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
 import com.colorlight.terminal.application.port.inbound.websocket.WebsocketMessageUseCase;
+import com.colorlight.terminal.application.port.outbound.connection.ConnectionManagerPort;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
 import com.colorlight.terminal.infrastructure.websocket.auth.NettyWebsocketAuthHandler;
 import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebsocketSession;
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Component;
 public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebSocketFrame> {
 
     private final WebsocketMessageUseCase webSocketMessageUseCase;
+    private final ConnectionManagerPort connectionManagerPort;
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
@@ -54,6 +56,8 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
             ctx.close();
             return;
         }
+
+        log.debug("NettyWebsocketFrameHandler - 收到WebSocket帧: deviceId={}, frameType={}", deviceId, frame.getClass().getSimpleName());
 
         try {
             if (frame instanceof TextWebSocketFrame textFrame) {
@@ -137,6 +141,9 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
     private void handleTextFrame(Long deviceId, String message) {
         log.debug("收到文本消息: deviceId={}, message={}", deviceId, message);
         
+        // 更新接收计数
+        updateReceivedMessageCount(deviceId);
+        
         // 简单的心跳检测
         if ("ping".equalsIgnoreCase(message.trim())) {
             handleHeartbeat(deviceId);
@@ -151,6 +158,9 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
      */
     private void handleHeartbeat(Long deviceId) {
         try {
+            // 更新心跳时间
+            updateHeartbeatTime(deviceId);
+            
             // 获取连接对象并处理心跳
             TerminalConnection connection = getConnectionByDeviceId(deviceId);
             if (connection != null) {
@@ -181,6 +191,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
      */
     private void handlePingFrame(ChannelHandlerContext ctx, Long deviceId) {
         ctx.writeAndFlush(new PongWebSocketFrame());
+        updateReceivedMessageCount(deviceId);
         handleHeartbeat(deviceId);
         log.debug("响应Ping帧: deviceId={}", deviceId);
     }
@@ -189,6 +200,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
      * 处理Pong帧
      */
     private void handlePongFrame(Long deviceId) {
+        updateReceivedMessageCount(deviceId);
         handleHeartbeat(deviceId);
         log.debug("收到Pong帧: deviceId={}", deviceId);
     }
@@ -237,11 +249,38 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
 
     /**
      * 根据设备ID获取连接对象
-     * TODO: 需要在ConnectionManagerPort接口中添加此方法
      */
     private TerminalConnection getConnectionByDeviceId(Long deviceId) {
-        // 临时实现 - 需要扩展ConnectionManagerPort接口
-        // return connectionManagerPort.getConnection(deviceId).orElse(null);
-        return null; // 暂时返回null，待接口扩展后实现
+        TerminalConnection connection = connectionManagerPort.getConnection(deviceId).orElse(null);
+        log.debug("NettyWebsocketFrameHandler - 获取连接对象: deviceId={}, connection={}", deviceId, connection != null ? "found" : "null");
+        return connection;
+    }
+    
+    /**
+     * 更新接收消息计数
+     */
+    private void updateReceivedMessageCount(Long deviceId) {
+        try {
+            TerminalConnection connection = getConnectionByDeviceId(deviceId);
+            if (connection != null && connection.getWebSocketSession() instanceof TerminalWebsocketSession session) {
+                session.incrementReceivedCount();
+            }
+        } catch (Exception e) {
+            log.warn("NettyWebsocketFrameHandler - 更新接收计数失败: deviceId={}", deviceId, e);
+        }
+    }
+    
+    /**
+     * 更新心跳时间
+     */
+    private void updateHeartbeatTime(Long deviceId) {
+        try {
+            TerminalConnection connection = getConnectionByDeviceId(deviceId);
+            if (connection != null && connection.getWebSocketSession() instanceof TerminalWebsocketSession session) {
+                session.updateHeartbeat();
+            }
+        } catch (Exception e) {
+            log.warn("NettyWebsocketFrameHandler - 更新心跳时间失败: deviceId={}", deviceId, e);
+        }
     }
 }

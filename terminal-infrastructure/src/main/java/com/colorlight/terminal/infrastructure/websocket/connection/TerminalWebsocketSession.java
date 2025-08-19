@@ -1,6 +1,6 @@
 package com.colorlight.terminal.infrastructure.websocket.connection;
 
-
+import com.colorlight.terminal.application.domain.connection.WebSocketSession;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import lombok.Builder;
@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @Data
 @Builder
-public class TerminalWebsocketSession {
+public class TerminalWebsocketSession implements WebSocketSession {
 
     /**
      * Websocket会话ID
@@ -111,8 +111,10 @@ public class TerminalWebsocketSession {
      * @param message 消息内容 (JSON字符串)
      * @return 是否发送成功
      */
+    @Override
     public boolean sendMessage(String message) {
         if (!isConnected()) {
+            errorCount.incrementAndGet();
             return false;
         }
         
@@ -138,6 +140,7 @@ public class TerminalWebsocketSession {
     /**
      * 关闭WebSocket连接
      */
+    @Override
     public void close() {
         if (nettyChannel != null && nettyChannel.isActive()) {
             nettyChannel.close();
@@ -163,6 +166,23 @@ public class TerminalWebsocketSession {
      */
     public void incrementReconnectCount() {
         reconnectCount.incrementAndGet();
+    }
+    
+    // 实现WebSocketSession接口的getter方法
+    
+    @Override
+    public long getSentMessageCount() {
+        return sentMessageCount.get();
+    }
+    
+    @Override
+    public long getReceivedMessageCount() {
+        return receivedMessageCount.get();
+    }
+    
+    @Override
+    public long getErrorCount() {
+        return errorCount.get();
     }
 
 }

@@ -1,6 +1,7 @@
 package com.colorlight.terminal.application.service;
 
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
+import com.colorlight.terminal.application.domain.connection.WebSocketSession;
 import com.colorlight.terminal.application.domain.status.ReportSource;
 import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
 import com.colorlight.terminal.application.port.inbound.websocket.WebsocketMessageUseCase;
@@ -8,6 +9,11 @@ import com.colorlight.terminal.application.port.outbound.connection.ConnectionMa
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * WebSocket消息应用服务
@@ -35,7 +41,7 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
             // 更新心跳时间
             connection.updateLastHeartbeatTime();
             
-            // 心跳统计(可选)
+            // 心跳统计
             connection.incrementReceivedMessageCount();
             
             // 更新设备在线状态
@@ -47,7 +53,9 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
             
             log.debug("ApplicationService - ws - 设备心跳处理成功: deviceId={}, 最后心跳时间={}",
                     connection.getDeviceId(), connection.getLastHeartbeatTime());
-            
+
+            connection.sendMessage("PONG");
+
             return true;
             
         } catch (Exception e) {
@@ -98,7 +106,7 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
      * @return
      */
     @Override
-    public TerminalConnection handleConnectionEstablished(Long deviceId, Object session) {
+    public TerminalConnection handleConnectionEstablished(Long deviceId, WebSocketSession session) {
         try {
             log.debug("ApplicationService - ws - 处理设备连接建立: deviceId={}", deviceId);
             
@@ -155,6 +163,83 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
         } catch (Exception e) {
             log.error("ApplicationService - ws - 处理设备连接断开失败: deviceId={}", deviceId, e);
             return false;
+        }
+    }
+    
+    @Override
+    public boolean sendMessage(Long deviceId, String message) {
+        try {
+            log.debug("ApplicationService - ws - 发送消息给设备: deviceId={}, messageLength={}", deviceId, message.length());
+            
+            // 获取设备连接
+            Optional<TerminalConnection> connectionOpt = connectionManagerPort.getConnection(deviceId);
+            if (connectionOpt.isEmpty()) {
+                log.warn("ApplicationService - ws - 设备未连接，消息发送失败: deviceId={}", deviceId);
+                return false;
+            }
+            
+            TerminalConnection connection = connectionOpt.get();
+            
+            // 检查连接有效性
+            if (!connection.isActive()) {
+                log.warn("ApplicationService - ws - 设备连接无效，消息发送失败: deviceId={}", deviceId);
+                return false;
+            }
+            
+            // 通过会话发送消息
+            boolean success = connection.sendMessage(message);
+            
+            if (success) {
+                log.debug("ApplicationService - ws - 消息发送成功: deviceId={}", deviceId);
+                connection.incrementSentMessageCount();
+            } else {
+                log.warn("ApplicationService - ws - 消息发送失败: deviceId={}", deviceId);
+                connection.incrementErrorCount();
+            }
+            
+            return success;
+            
+        } catch (Exception e) {
+            log.error("ApplicationService - ws - 发送消息异常: deviceId={}", deviceId, e);
+            return false;
+        }
+    }
+    
+    @Override
+    public List<Long> broadcastMessage(List<Long> deviceIds, String message) {
+        if (deviceIds == null || deviceIds.isEmpty()) {
+            log.warn("ApplicationService - ws - 设备列表为空，跳过批量发送");
+            return Collections.emptyList();
+        }
+        
+        try {
+            log.info("ApplicationService - ws - 开始批量发送消息: targetDevices={}, messageLength={}", 
+                    deviceIds.size(), message.length());
+            
+            List<Long> successList = new ArrayList<>();
+            int failureCount = 0;
+            
+            for (Long deviceId : deviceIds) {
+                try {
+                    if (sendMessage(deviceId, message)) {
+                        successList.add(deviceId);
+                    } else {
+                        failureCount++;
+                    }
+                } catch (Exception e) {
+                    log.warn("ApplicationService - ws - 批量发送中单个设备失败: deviceId={}", deviceId, e);
+                    failureCount++;
+                }
+            }
+            
+            log.info("ApplicationService - ws - 批量发送完成: success={}, failure={}, total={}", 
+                    successList.size(), failureCount, deviceIds.size());
+            
+            return successList;
+            
+        } catch (Exception e) {
+            log.error("ApplicationService - ws - 批量发送消息异常: targetDevices={}", deviceIds.size(), e);
+            return Collections.emptyList();
         }
     }
 }

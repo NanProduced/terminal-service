@@ -1,6 +1,8 @@
 package com.colorlight.terminal.infrastructure.cache.redis.listener;
 
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
+import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineStatusPort;
+import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineTimePort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceStatusEventPort;
 import com.colorlight.terminal.infrastructure.cache.redis.service.DeviceOnlineTimeRedisService;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +24,8 @@ import java.util.regex.Pattern;
 @Component
 public class DeviceStatusExpirationListener extends KeyExpirationEventMessageListener {
     
-    private final DeviceOnlineTimeRedisService onlineTimeService;
+    private final DeviceOnlineTimePort deviceOnlineTimePort;
+    private final DeviceOnlineStatusPort deviceOnlineStatusPort;
     private final DeviceStatusEventPort deviceStatusEventPort;
     
     /**
@@ -34,10 +37,12 @@ public class DeviceStatusExpirationListener extends KeyExpirationEventMessageLis
      * 构造函数，注入必要依赖
      */
     public DeviceStatusExpirationListener(RedisMessageListenerContainer listenerContainer,
-                                         DeviceOnlineTimeRedisService onlineTimeService,
+                                         DeviceOnlineTimeRedisService deviceOnlineTimePort,
+                                         DeviceOnlineStatusPort deviceOnlineStatusPort,
                                          DeviceStatusEventPort deviceStatusEventPort) {
         super(listenerContainer);
-        this.onlineTimeService = onlineTimeService;
+        this.deviceOnlineTimePort = deviceOnlineTimePort;
+        this.deviceOnlineStatusPort = deviceOnlineStatusPort;
         this.deviceStatusEventPort = deviceStatusEventPort;
     }
     
@@ -67,24 +72,15 @@ public class DeviceStatusExpirationListener extends KeyExpirationEventMessageLis
      */
     private void handleDeviceStatusExpiration(Long deviceId) {
         try {
-            // 1. 从在线时间存储中获取上线时间
-            Long onlineStartTime = onlineTimeService.getOnlineStartTime(deviceId);
-            
-            if (onlineStartTime != null) {
-                // 2. 计算在线时长（从上线时间到当前时间）
-                long currentTime = System.currentTimeMillis();
-                long onlineDuration = currentTime - onlineStartTime;
-                
-                log.info("RedisTTL监听 -deviceStatus- 通过过期监听计算在线时长: deviceId={}, duration={}ms", deviceId, onlineDuration);
-                
-                // 3. 记录在线时长（如果有统计需求的话）
-                
-                // 4. 清除在线时间记录
-                onlineTimeService.removeOnlineStartTime(deviceId);
-                
-                // 5. 发布设备离线事件
-                publishOfflineEvent(deviceId, onlineDuration);
-            }
+            // 删除上线时间键
+            deviceOnlineTimePort.removeOnlineStartTime(deviceId);
+
+            // 移除设备状态索引 这里重复删保底
+            deviceOnlineStatusPort.removeDeviceIndex(deviceId);
+
+            // 发布确认终端离线事件
+            publishConfirmOfflineEvent(deviceId);
+
             
         } catch (Exception e) {
             log.error("RedisTTL监听 -deviceStatus- 处理设备状态过期失败: deviceId={}", deviceId, e);
@@ -92,15 +88,15 @@ public class DeviceStatusExpirationListener extends KeyExpirationEventMessageLis
     }
     
     /**
-     * 发布离线事件
+     * 发布确认离线事件（缓存已过期，相关键已删）
      */
-    private void publishOfflineEvent(Long deviceId, Long onlineDuration) {
+    private void publishConfirmOfflineEvent(Long deviceId) {
         try {
             // 发布设备离线事件
-            DeviceStatusEvent event = DeviceStatusEvent.createOfflineEvent(deviceId, onlineDuration);
+            DeviceStatusEvent event = DeviceStatusEvent.createConfirmOfflineEvent(deviceId);
             deviceStatusEventPort.publishStatusEvent(event);
             
-            log.info("RedisTTL监听 -deviceStatus- 设备因TTL过期而离线，已发布事件: deviceId={}, onlineDuration={}ms", deviceId, onlineDuration);
+            log.info("RedisTTL监听 -deviceStatus- 设备状态TTL过期，已发布事件: deviceId={}", deviceId);
         } catch (Exception e) {
             log.error("RedisTTL监听 -deviceStatus- 发布设备离线事件失败: deviceId={}", deviceId, e);
         }
