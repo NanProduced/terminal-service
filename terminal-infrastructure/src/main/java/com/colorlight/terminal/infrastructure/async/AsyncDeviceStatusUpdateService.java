@@ -194,6 +194,7 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
      * 定时刷新缓冲池
      * 根据配置的窗口时间定期刷新
      */
+    @Override
     @Scheduled(fixedDelayString = "#{@deviceConfigPort.getBufferPoolWindowMs()}")
     public void scheduledFlush() {
         if (!isRunning.get()) {

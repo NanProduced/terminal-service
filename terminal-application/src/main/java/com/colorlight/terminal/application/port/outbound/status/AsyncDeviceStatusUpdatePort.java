@@ -42,6 +42,24 @@ public interface AsyncDeviceStatusUpdatePort {
     BufferPoolStatus getBufferPoolStatus();
 
     /**
+     * 定时刷新设备状态缓冲池。
+     * <p>
+     * 该方法由 Spring {@code @Scheduled} 注解自动触发执行。
+     * <b>请勿在业务代码中手动调用此方法，因为它专为后台定时任务设计。</b>
+     *
+     */
+    void scheduledFlush();
+
+    /**
+     * 定时输出统计信息
+     * <p>
+     * 该方法由 Spring {@code @Scheduled} 注解自动触发执行。
+     * <b>请勿在业务代码中手动调用此方法，因为它专为后台定时任务设计。</b>
+     *
+     */
+    void logStatistics();
+
+    /**
      * 缓冲池状态信息
      */
     record BufferPoolStatus(int currentSize, int maxSize, double utilizationRate, long lastFlushTime,
