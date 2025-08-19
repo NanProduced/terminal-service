@@ -262,5 +262,11 @@
         <profileActive>local</profileActive>
       </properties>
     </profile>
+    <profile>
+      <id>intranet</id>
+      <properties>
+        <profileActive>intranet</profileActive>
+      </properties>
+    </profile>
   </profiles>
 </project>
