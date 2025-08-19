@@ -19,4 +19,31 @@ public class RedisKeyConstant {
      */
     public static final String COMMAND_DETAIL_KEY = "terminal:command:detail:%d";   // 指令详情
 
+    /*===================  设备在线状态模板 ====================== */
+
+    /**
+     * 设备在线状态 - Hash
+     * 存储设备的当前在线状态信息
+     */
+    public static final String DEVICE_STATUS_KEY = "device:status:%d";
+
+    /**
+     * 设备状态索引 - Set
+     * 存储所有设备ID，用于快速遍历
+     */
+    public static final String DEVICE_STATUS_INDEX_KEY = "device:status:index";
+
+    /**
+     * 在线设备计数 - String
+     * 存储当前在线设备总数
+     */
+    public static final String ONLINE_DEVICE_COUNT_KEY = "device:online:count";
+    
+    /**
+     * 设备在线时间 - String
+     * 存储设备的上线开始时间，用于计算在线时长
+     * TTL较长（24小时），避免因状态过期导致在线时长丢失，每天刷新
+     */
+    public static final String DEVICE_ONLINE_TIME_KEY = "device:online:time:%d";
+
 }

@@ -4,8 +4,6 @@ import com.colorlight.terminal.application.domain.command.TerminalCommand;
 import com.colorlight.terminal.application.port.outbound.command.CommandCachePort;
 import com.colorlight.terminal.application.port.outbound.config.CommandConfigPort;
 import com.colorlight.terminal.commons.utils.JsonUtils;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -30,7 +28,7 @@ import static com.colorlight.terminal.infrastructure.cache.redis.constant.RedisK
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class TerminalCommandCacheService implements CommandCachePort {
+public class TerminalCommandRedisService implements CommandCachePort {
     
     private final RedisTemplate<String, Object> redisTemplate;
     private final CommandConfigPort commandConfigPort;

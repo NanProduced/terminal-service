@@ -20,7 +20,9 @@ public enum TechErrorCode implements ErrorCode {
      * JSON序列化/反序列化错误
      * <p>Jackson</p>
      */
-    JSON_SERIALIZATION_EXCEPTION("TM0101", "序列化/反序列化错误", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR);
+    JSON_SERIALIZATION_EXCEPTION("TM0101", "序列化/反序列化错误", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR),
+
+    JSON_MERGE_EXCEPTION("TM0102", "Json合并错误", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR);
 
     /**
      * 错误码

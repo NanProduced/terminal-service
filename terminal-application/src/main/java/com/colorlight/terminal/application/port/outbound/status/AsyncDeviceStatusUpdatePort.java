@@ -1,0 +1,57 @@
+package com.colorlight.terminal.application.port.outbound.status;
+
+import com.colorlight.terminal.application.domain.status.DeviceOnlineStatus;
+import lombok.Getter;
+
+import java.util.List;
+
+/**
+ * 异步设备状态更新端口
+ * 定义异步状态更新能力，支持缓冲池和批量处理
+ * 
+ * @author Nan
+ */
+public interface AsyncDeviceStatusUpdatePort {
+    
+    /**
+     * 异步提交设备状态更新
+     * 将状态更新请求加入缓冲池，由后台线程批量处理
+     * 
+     * @param status 设备状态
+     */
+    void submitStatusUpdate(DeviceOnlineStatus status);
+    
+    /**
+     * 异步批量提交设备状态更新
+     * 
+     * @param statusList 设备状态列表
+     */
+    void submitBatchStatusUpdate(List<DeviceOnlineStatus> statusList);
+    
+    /**
+     * 立即刷新缓冲池
+     * 强制将缓冲池中的所有待处理状态立即提交
+     */
+    void flushBuffer();
+    
+    /**
+     * 获取缓冲池状态信息
+     * 
+     * @return 缓冲池状态
+     */
+    BufferPoolStatus getBufferPoolStatus();
+
+    /**
+     * 缓冲池状态信息
+     */
+    record BufferPoolStatus(int currentSize, int maxSize, double utilizationRate, long lastFlushTime,
+                            long totalProcessed, long totalFlushed) {
+
+    @Override
+        public String toString() {
+            return String.format("BufferPoolStatus{currentSize=%d, maxSize=%d, utilizationRate=%.2f%%, " +
+                            "lastFlushTime=%d, totalProcessed=%d, totalFlushed=%d}",
+                    currentSize, maxSize, utilizationRate * 100, lastFlushTime, totalProcessed, totalFlushed);
+        }
+    }
+}

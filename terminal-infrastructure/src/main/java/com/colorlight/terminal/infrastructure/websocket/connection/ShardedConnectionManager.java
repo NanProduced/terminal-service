@@ -65,7 +65,7 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
     @Override
     public boolean addConnection(Long deviceId, TerminalConnection connection) {
         if (!running || deviceId == null || connection == null) {
-            log.warn("ShardedConnectionManager: 无法添加连接 - manager={}, deviceId={}, connection={}",
+            log.warn("ShardedConnectionManager - 无法添加连接 - manager={}, deviceId={}, connection={}",
                     running, deviceId, connection != null);
             return false;
         }
@@ -76,13 +76,13 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
             
             if (added) {
                 totalConnections.incrementAndGet();
-                log.debug("Connection added for device: {}, total: {}", deviceId, totalConnections.get());
+                log.debug("ShardedConnectionManager - 添加终端连接: {}, total: {}", deviceId, totalConnections.get());
             }
             
             return added;
             
         } catch (Exception e) {
-            log.error("Failed to add connection for device: {}", deviceId, e);
+            log.error("ShardedConnectionManager - 添加终端连接失败: {}", deviceId, e);
             return false;
         }
     }
@@ -99,13 +99,13 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
             
             if (removed != null) {
                 totalConnections.decrementAndGet();
-                log.debug("Connection removed for device: {}, total: {}", deviceId, totalConnections.get());
+                log.debug("ShardedConnectionManager - 移除终端连接: {}, total: {}", deviceId, totalConnections.get());
             }
             
             return removed;
             
         } catch (Exception e) {
-            log.error("Failed to remove connection for device: {}", deviceId, e);
+            log.error("ShardedConnectionManager - 移除终端连接失败: {}", deviceId, e);
             return null;
         }
     }
@@ -121,7 +121,7 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
             return shard.getConnection(deviceId);
             
         } catch (Exception e) {
-            log.error("Failed to get connection for device: {}", deviceId, e);
+            log.error("ShardedConnectionManager - 获取终端连接失败: {}", deviceId, e);
             return Optional.empty();
         }
     }
@@ -219,7 +219,7 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
             totalConnections.addAndGet(-cleanedCount);
             
             if (cleanedCount > 0) {
-                log.info("Cleaned up {} invalid connections, remaining: {}", 
+                log.info("ShardedConnectionManager - 清除 {} 个无效连接, 当前连接数: {}",
                         cleanedCount, totalConnections.get());
             }
             
@@ -234,7 +234,7 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
     
     @Override
     public void destroy() {
-        log.info("Shutting down ShardedConnectionManager...");
+        log.info("ShardedConnectionManager - Shutting down ShardedConnectionManager...");
         
         globalLock.writeLock().lock();
         try {
@@ -246,7 +246,7 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
             }
             
             totalConnections.set(0);
-            log.info("ShardedConnectionManager shutdown completed");
+            log.info("ShardedConnectionManager - ShardedConnectionManager shutdown completed");
             
         } finally {
             globalLock.writeLock().unlock();
@@ -274,7 +274,7 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
             boolean added = (existing == null);
             
             if (!added) {
-                log.debug("Device {} already connected in shard {}", deviceId, shardId);
+                log.debug("ConnectionShard - 设备 {} 连接已经存在 {}", deviceId, shardId);
             }
             
             return added;
@@ -315,7 +315,7 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
                     if (!isSessionValid(connection)) {
                         iterator.remove();
                         cleanedCount++;
-                        log.debug("Cleaned invalid connection for device: {} in shard: {}", 
+                        log.debug("ConnectionShard - 清除无效连接: {} - 分片编号: {}",
                                 entry.getKey(), shardId);
                     }
                 }
@@ -341,7 +341,7 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
         public void shutdown() {
             shardLock.writeLock().lock();
             try {
-                log.debug("Shutting down shard {} with {} connections", shardId, connections.size());
+                log.debug("ConnectionShard - Shutting down shard {} with {} connections", shardId, connections.size());
                 connections.clear();
             } finally {
                 shardLock.writeLock().unlock();

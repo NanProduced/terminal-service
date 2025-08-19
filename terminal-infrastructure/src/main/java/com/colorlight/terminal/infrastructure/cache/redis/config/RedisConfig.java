@@ -1,4 +1,4 @@
-package com.colorlight.terminal.infrastructure.persistence.redis.config;
+package com.colorlight.terminal.infrastructure.cache.redis.config;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;

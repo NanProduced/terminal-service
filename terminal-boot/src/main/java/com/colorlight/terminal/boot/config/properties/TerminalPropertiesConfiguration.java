@@ -1,5 +1,6 @@
 package com.colorlight.terminal.boot.config.properties;
 
+import com.colorlight.terminal.infrastructure.config.properties.DeviceConfigProperties;
 import com.colorlight.terminal.infrastructure.config.properties.TerminalCommandConfigProperties;
 import com.colorlight.terminal.infrastructure.websocket.config.NettyWebsocketProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -15,7 +16,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @EnableConfigurationProperties({
         NettyWebsocketProperties.class,
-        TerminalCommandConfigProperties.class
+        TerminalCommandConfigProperties.class,
+        DeviceConfigProperties.class
 })
 public class TerminalPropertiesConfiguration {
 }

@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- 引入 Spring Boot 的 Logback 配置 -->
+    <!-- 引入 Spring Boot 的 Logback 默认配置 -->
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
-    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
     
     <!-- Log configuration properties -->
     <springProfile name="!prod">
@@ -14,10 +13,15 @@
     
     <property name="APP_NAME" value="terminal-service"/>
     <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-}] %logger{50} - %msg%n"/>
-    <property name="CONSOLE_PATTERN" value="%clr(%d{HH:mm:ss.SSS}){faint} %clr([%thread]){blue} %clr(%-5level){highlight} %clr([%X{traceId:-}]){yellow} %clr(%logger{36}){cyan} - %msg%n"/>
+    <property name="CONSOLE_PATTERN" value="%clr(%d{HH:mm:ss.SSS}){faint} %clr([%25.25thread]){blue} %clr(%-5level){highlight} %clr([%X{traceId:-}]){yellow} %clr(%logger{36}){cyan} - %msg%n"/>
 
-    <!-- Console output (使用Spring Boot默认配置) -->
-    <!-- CONSOLE appender 已通过 defaults.xml 和 console-appender.xml 引入 -->
+    <!-- Custom Console output -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
 
     <!-- All logs output to file -->
     <appender name="FILE_ALL" class="ch.qos.logback.core.rolling.RollingFileAppender">

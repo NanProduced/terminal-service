@@ -70,7 +70,7 @@ public class CaffeineConfig {
     private <K, V> RemovalListener<K, V> createRemovalListener(String cacheType) {
         return (key, value, cause) -> {
             if (log.isDebugEnabled()) {
-                log.debug("缓存移除事件 - 类型: {}, Key: {}, 原因: {}", cacheType, key, cause);
+                log.debug("Caffeine - 缓存移除事件 - 类型: {}, Key: {}, 原因: {}", cacheType, key, cause);
             }
             
             // 根据移除原因进行不同处理
