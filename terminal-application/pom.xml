@@ -5,11 +5,15 @@
   <parent>
     <groupId>com.colorlight.terminal</groupId>
     <artifactId>colorlight-terminal</artifactId>
-    <version>0.0.1</version>
+    <version>interlayer-master-0.0.1</version>
   </parent>
   <artifactId>terminal-application</artifactId>
   <name>terminal-application</name>
   <description>应用编排与领域服务</description>
+  <version>${this.version}</version>
+  <properties>
+    <this.version>${common.version}</this.version>
+  </properties>
   <dependencies>
     <!-- 应用层最小依赖原则 - 只保留必要的框架支持 -->
     <dependency>

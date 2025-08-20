@@ -5,11 +5,15 @@
   <parent>
     <groupId>com.colorlight.terminal</groupId>
     <artifactId>colorlight-terminal</artifactId>
-    <version>0.0.1</version>
+    <version>interlayer-master-0.0.1</version>
   </parent>
   <artifactId>terminal-api</artifactId>
   <name>terminal-api</name>
   <description>设备 REST API 定义与 DTO</description>
+  <version>${this.version}</version>
+  <properties>
+    <this.version>${common.version}</this.version>
+  </properties>
   <dependencies>
     <!-- HTTP API协议定义 - 仅允许Spring Web依赖 -->
     <dependency>
