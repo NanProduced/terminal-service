@@ -1,73 +1,100 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <modelVersion>4.0.0</modelVersion>
-  <parent>
-    <groupId>com.colorlight.terminal</groupId>
-    <artifactId>colorlight-terminal</artifactId>
-    <version>0.0.1</version>
-  </parent>
-  <artifactId>terminal-rpc-api</artifactId>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
-  <!-- RPC包独立版本号，deploy的时候解开注释增加版本 -->
-  <!--  <version>0.0.1-SNAPSHOT</version>-->
+    <parent>
+        <groupId>com.colorlight.terminal</groupId>
+        <artifactId>colorlight-terminal</artifactId>
+        <version>interlayer-master-0.0.1</version>
+    </parent>
 
-  <name>terminal-rpc-api</name>
-  <description>Dubbo RPC 共享接口与 DTO（JDK 11 编译）</description>
-  <properties>
-    <maven.compiler.release>11</maven.compiler.release>
-    <java.version>11</java.version>
-  </properties>
-  
-  <dependencies>
-    <!-- RPC接口定义最小化依赖 - 纯JDK11实现，无Lombok -->
-  </dependencies>
-  
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <release>${maven.compiler.release}</release>
-          <source>${java.version}</source>
-          <target>${java.version}</target>
-        </configuration>
-      </plugin>
-      
-      <!-- 兼容性检查插件 -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-enforcer-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>enforce-java-version</id>
-            <goals>
-              <goal>enforce</goal>
-            </goals>
-            <configuration>
-              <rules>
-                <requireJavaVersion>
-                  <version>[11,18)</version>
-                  <message>兼容jdk11-jdk17</message>
-                </requireJavaVersion>
-              </rules>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-    </plugins>
-  </build>
-  <distributionManagement>
-    <repository>
-      <id>releases</id>
-      <name>Releases</name>
-      <url>http://192.168.1.83:8082/repository/maven-releases/</url>
-    </repository>
-    <snapshotRepository>
-      <id>snapshots</id>
-      <name>Snapshots</name>
-      <url>http://192.168.1.83:8082/repository/maven-snapshots/</url>
-    </snapshotRepository>
-  </distributionManagement>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>terminal-rpc-api</artifactId>
+    <!-- RPC包独立版本号，deploy的时候解开注释增加版本 -->
+    <!--  <version>0.0.1-SNAPSHOT</version>-->
+    <name>terminal-rpc-api</name>
+    <packaging>jar</packaging>
+    <version>${this.version}</version>
+
+    <description>Dubbo RPC 共享接口与 DTO（JDK 11 编译）</description>
+    <properties>
+        <this.version>${common.version}</this.version>
+        <maven.compiler.release>11</maven.compiler.release>
+        <java.version>11</java.version>
+    </properties>
+
+    <dependencies>
+        <!-- RPC接口定义最小化依赖 - 纯JDK11实现，无Lombok -->
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 源码打包插件 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <attach>true</attach>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- 编译插件 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.5.1</version>
+                <configuration>
+                    <source>11</source>
+                    <target>11</target>
+                </configuration>
+            </plugin>
+
+            <!-- 兼容性检查 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-java-version</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[11,18)</version>
+<!--                                    <message>兼容 JDK11-JDK17</message>-->
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <!-- 发布仓库配置 -->
+    <distributionManagement>
+        <repository>
+            <id>releases</id>
+            <name>Releases</name>
+            <url>http://192.168.1.83:8082/repository/maven-releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>snapshots</id>
+            <name>Snapshots</name>
+            <url>http://192.168.1.83:8082/repository/maven-snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
 </project>

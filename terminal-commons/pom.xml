@@ -5,12 +5,15 @@
   <parent>
     <groupId>com.colorlight.terminal</groupId>
     <artifactId>colorlight-terminal</artifactId>
-    <version>0.0.1</version>
+    <version>interlayer-master-0.0.1</version>
   </parent>
   <artifactId>terminal-commons</artifactId>
   <name>terminal-commons</name>
   <description>通用工具包和常量定义</description>
-  
+  <version>${this.version}</version>
+  <properties>
+    <this.version>${common.version}</this.version>
+  </properties>
   <dependencies>
     <!-- JSON处理 -->
     <dependency>
