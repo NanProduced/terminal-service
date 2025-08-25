@@ -21,7 +21,7 @@ public interface DeviceInteractionApi {
 
     @GetMapping("/wp-json/wp/v2/comments")
     List<DeviceApiCommand> getCommands(@RequestParam(value = "clt_type", defaultValue = "terminal") String clt_type,
-                                       @RequestParam(value = "device_num") Integer device_num);
+                                       @RequestParam(value = "device_num") String device_num);
 
     @PostMapping("/wp-json/wp/v2/comments")
     void confirmCommand(@RequestParam("post") Integer post,

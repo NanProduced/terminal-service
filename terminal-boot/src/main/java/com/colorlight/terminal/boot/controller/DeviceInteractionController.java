@@ -54,7 +54,7 @@ public class DeviceInteractionController implements DeviceInteractionApi {
             tags = {"终端指令"}
     )
     @Override
-    public List<DeviceApiCommand> getCommands(String cltType, Integer deviceNum) {
+    public List<DeviceApiCommand> getCommands(String cltType, String deviceNum) {
         // cltType、deviceNum这两个参数没用，历史问题
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         try {
