@@ -14,6 +14,10 @@ import java.time.format.DateTimeFormatter;
  */
 public class TimeUtils {
 
+    private TimeUtils() {
+        throw new TechnicalException(TechErrorCode.INSTANTIATION_IS_PROHIBITED);
+    }
+
     /**
      * 将事件时间戳转换为LocalDateTime
      *

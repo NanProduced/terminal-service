@@ -51,7 +51,7 @@ import java.util.Objects;
 public class JsonUtils {
 
     private JsonUtils() {
-        throw new UnsupportedOperationException();
+        throw new TechnicalException(TechErrorCode.INSTANTIATION_IS_PROHIBITED);
     }
 
     /**
@@ -264,6 +264,24 @@ public class JsonUtils {
         } catch (JsonProcessingException e) {
             throw new TechnicalException(TechErrorCode.JSON_SERIALIZATION_EXCEPTION, e);
         }
+    }
+
+    /**
+     * 使用JSON序列化和反序列化实现对象的深拷贝。
+     *
+     * @param <T>   对象的类型
+     * @param source 要进行深拷贝的源对象
+     * @return      一个全新的、与源对象完全独立的深拷贝副本
+     * @throws IOException 如果序列化或反序列化过程中发生错误
+     */
+    public static <T> T deepCopy(T source) throws IOException {
+        if (source == null) {
+            return null;
+        }
+        // 将源对象序列化为JSON字符串
+        String json = OBJECT_MAPPER.writeValueAsString(source);
+        // 从JSON字符串反序列化回一个新的对象实例
+        return (T) OBJECT_MAPPER.readValue(json, source.getClass());
     }
 
 

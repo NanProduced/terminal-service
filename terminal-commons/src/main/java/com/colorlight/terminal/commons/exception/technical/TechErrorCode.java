@@ -24,7 +24,9 @@ public enum TechErrorCode implements ErrorCode {
 
     JSON_MERGE_EXCEPTION("TM0102", "Json合并错误", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR),
 
-    TIME_FORMAT_TRANSLATE_FAILED("TM0103", "Java.time时间转换失败", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR);
+    TIME_FORMAT_TRANSLATE_FAILED("TM0103", "Java.time时间转换失败", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR),
+
+    INSTANTIATION_IS_PROHIBITED("TM0104", "禁止实例化", ErrorLevel.WARN, HttpStatusCode.INTERNAL_SERVER_ERROR);
 
     /**
      * 错误码

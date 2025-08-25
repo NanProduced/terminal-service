@@ -3,6 +3,7 @@ package com.colorlight.terminal.boot.controller;
 import com.colorlight.terminal.api.DeviceInteractionApi;
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
 import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
+import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.boot.converter.CommandConverter;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
@@ -34,6 +35,7 @@ import java.util.stream.Collectors;
 public class DeviceInteractionController implements DeviceInteractionApi {
     
     private final TerminalCommandUseCase terminalCommandUseCase;
+    private final TerminalReportUseCase terminalReportUseCase;
     private final CommandConverter commandConverter;
 
     @Operation(
@@ -44,8 +46,8 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     @Override
     public void reportTerminalStatus(String report) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        // TODO: 实现设备状态处理逻辑
-        log.info("DeviceReport - 收到上报消息: deviceId={}, report={}", principal.getDeviceId(), report);
+        log.debug("DeviceReport - 收到上报消息: deviceId={}, report={}", principal.getDeviceId(), report);
+        terminalReportUseCase.saveLedStatus(principal.getDeviceId(), report);
     }
 
     @Operation(

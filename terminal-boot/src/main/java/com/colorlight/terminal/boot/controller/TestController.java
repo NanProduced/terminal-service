@@ -1,11 +1,17 @@
 package com.colorlight.terminal.boot.controller;
 
 import com.colorlight.terminal.application.domain.status.DeviceOnlineStatus;
+import com.colorlight.terminal.application.dto.request.SendCommandRequest;
+import com.colorlight.terminal.application.dto.result.CommandSendResult;
+import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
 import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
 import com.colorlight.terminal.rpc.dto.RpcResult;
 import com.colorlight.terminal.rpc.dto.request.CreateTerminalAccountDTO;
+import com.colorlight.terminal.rpc.dto.request.SingleCommandRequestDTO;
+import com.colorlight.terminal.rpc.dto.result.SingleCommandSendResultDTO;
 import com.colorlight.terminal.rpc.dto.result.TerminalAccountResultDTO;
 import com.colorlight.terminal.rpc.service.TerminalAccountRpcService;
+import com.colorlight.terminal.rpc.service.TerminalCommandRpcService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +31,7 @@ public class TestController {
 
     private final TerminalAccountRpcService terminalAccountRpcService;
     private final DeviceOnlineStatusUseCase deviceOnlineStatusUseCase;
+    private final TerminalCommandRpcService terminalCommandRpcService;
 
     /**
      * 测试创建终端账号
@@ -145,6 +152,16 @@ public class TestController {
         } catch (Exception e) {
             return ResponseEntity.ok(0); // 故障时返回0
         }
+    }
+
+    /**
+     * 测试RPC下发单个指令
+     * @param request
+     * @return
+     */
+    @PostMapping("/command/single")
+    public RpcResult<SingleCommandSendResultDTO> sendCommand(@RequestBody SingleCommandRequestDTO request) {
+        return terminalCommandRpcService.sendCommand(request);
     }
 
 }

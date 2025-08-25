@@ -23,18 +23,19 @@ public class TerminalApplication {
         try {
             SpringApplication.run(TerminalApplication.class, args);
 
-            log.info("📡 设备终端通信服务 (Terminal Service) 启动成功!");
-            log.info("🌐 HTTP服务端口: 8088");
-            log.info("🔌 WebSocket服务端口: 8443");
-            log.info("📱 设备HTTP接口: http://localhost:8088/terminal/**");
-            log.info("🔗 WebSocket连接: ws://localhost:8443/ColorWebSocket/websocket/chat");
-            log.info("🔐 认证方式: URL参数认证 (?username=xxx&password=xxx)");
-            log.info("📋 管理端点: http://localhost:8088/actuator");
-            log.info("📊 健康检查: http://localhost:8088/actuator/health");
+            log.info("=============== 服务信息 ===============");
+            log.info("设备终端通信服务 (Terminal Service) 启动成功!");
+            log.info("HTTP服务端口: 8088");
+            log.info("WebSocket服务端口: 8443");
+            log.info("设备HTTP接口: http://localhost:8088/terminal/**");
+            log.info("WebSocket连接: ws://localhost:8443/ColorWebSocket/websocket/chat");
+            log.info("认证方式: URL参数认证 (?username=xxx&password=xxx)");
+            log.info("管理端点: http://localhost:8088/actuator");
+            log.info("健康检查: http://localhost:8088/actuator/health");
             log.info("========== 设备终端通信服务启动完成 ==========");
 
         } catch (Exception e) {
-            log.error("❌ 设备终端通信服务启动失败！", e);
+            log.error("设备终端通信服务启动失败！", e);
             System.exit(1);
         }
     }
