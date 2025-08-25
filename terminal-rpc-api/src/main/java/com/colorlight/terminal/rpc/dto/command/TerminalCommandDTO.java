@@ -58,6 +58,8 @@ public class TerminalCommandDTO {
 
         private String raw;
 
+        public Content() {}
+
         public Content(String raw) {
             this.raw = raw;
         }
