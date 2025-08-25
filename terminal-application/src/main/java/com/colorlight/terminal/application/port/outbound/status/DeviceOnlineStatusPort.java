@@ -123,4 +123,11 @@ public interface DeviceOnlineStatusPort {
      * @param deviceId 设备ID
      */
     void releaseDeviceUpdateLock(Long deviceId);
+
+    /**
+     * 启动时清理设备状态（不影响计数器）
+     * 
+     * @param deviceId 设备ID
+     */
+    void removeDeviceStatusForStartupCleanup(Long deviceId);
 }

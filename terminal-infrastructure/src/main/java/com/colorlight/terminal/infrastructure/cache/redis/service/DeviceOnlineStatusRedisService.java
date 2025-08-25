@@ -670,4 +670,33 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             log.error("DeviceOnlineStatus - 释放分布式锁异常: deviceId={}", deviceId, e);
         }
     }
+
+    @Override
+    public void removeDeviceStatusForStartupCleanup(Long deviceId) {
+        String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
+        
+        try {
+            redisTemplate.execute(new SessionCallback<Object>() {
+                @Override
+                public Object execute(RedisOperations operations) throws DataAccessException {
+                    operations.multi();
+                    
+                    // 删除状态详情（不影响计数器）
+                    operations.delete(statusKey);
+                    
+                    // 从索引中移除
+                    operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
+                    
+                    // 启动清理时不修改计数器，因为已经在启动时重置
+                    
+                    return operations.exec();
+                }
+            });
+            
+            log.debug("DeviceOnlineStatus - 启动清理设备状态成功: deviceId={}", deviceId);
+            
+        } catch (Exception e) {
+            log.error("DeviceOnlineStatus - 启动清理设备状态失败: deviceId={}", deviceId, e);
+        }
+    }
 }

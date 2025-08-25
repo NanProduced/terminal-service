@@ -240,13 +240,10 @@ public class StartupCacheCleanupService implements ApplicationRunner {
      */
     private void cleanupDeviceCache(Long deviceId) {
         try {
-            // 1. 移除设备状态
-            deviceOnlineStatusPort.removeDeviceStatus(deviceId);
+            // 1. 启动清理专用方法（不影响计数器）
+            deviceOnlineStatusPort.removeDeviceStatusForStartupCleanup(deviceId);
             
-            // 2. 移除设备索引
-            deviceOnlineStatusPort.removeDeviceIndex(deviceId);
-            
-            // 3. 移除在线时间记录
+            // 2. 移除在线时间记录
             deviceOnlineTimePort.removeOnlineStartTime(deviceId);
             
             log.debug("StartupCleanup - 设备缓存清理完成: deviceId={}", deviceId);
