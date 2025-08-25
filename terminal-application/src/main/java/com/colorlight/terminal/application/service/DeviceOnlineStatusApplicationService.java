@@ -105,11 +105,20 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
     
     /**
      * 根据配置选择同步或异步方式更新设备状态
+     * 对于GO_LIVE状态强制同步处理，确保状态立即写入
      * 
      * @param status 设备状态
      */
     private void updateDeviceStatusWithMode(DeviceOnlineStatus status) {
-        // 检查是否启用异步模式且异步服务可用
+        // 对于首次上线，强制同步处理确保状态立即写入，避免竞态条件
+        if (status.getStatus() == OnlineStatus.GO_LIVE || status.getStatus() == OnlineStatus.RECONNECT) {
+            deviceOnlineStatusPort.smartDetermined(status);
+            log.debug("ApplicationService - 同步保存关键状态: deviceId={}, status={}", 
+                    status.getDeviceId(), status.getStatus());
+            return;
+        }
+        
+        // 其他状态（如ONLINE心跳）使用配置的异步/同步模式
         boolean useAsync = deviceConfigPort.isAsyncStatusUpdateEnabled() 
                 && asyncDeviceStatusUpdatePort != null;
         
