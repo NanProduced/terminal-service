@@ -120,7 +120,7 @@ terminal:
     enabled: true
     server:
       host: 0.0.0.0
-      port: 8843                              # 和播放盒二次开发文档对齐
+      port: 8443                              # 和播放盒二次开发文档对齐
       path: /ColorWebSocket/websocket/chat    # 和播放盒二次开发文档对齐
       boss-threads: 1
       worker-threads: 0                       # 0=CPU核心数*2

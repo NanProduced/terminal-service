@@ -28,7 +28,7 @@ public class NettyWebsocketProperties {
         private String host = "0.0.0.0";
 
         // 播放盒规定的ws连接端口
-        private int port = 8843;
+        private int port = 8443;
 
         // 播放盒规定的ws连接端点
         private String path = "/ColorWebSocket/websocket/chat";

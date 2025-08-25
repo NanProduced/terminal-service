@@ -11,23 +11,43 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.*;
 import io.netty.util.AttributeKey;
+import io.netty.util.ReferenceCountUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
 @Slf4j
 @Component
 @ChannelHandler.Sharable
-@RequiredArgsConstructor
 public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
 
     private final TerminalAuthUseCase terminalAuthUseCase;
     private final NettyWebsocketProperties nettyWebsocketProperties;
+    
+    /**
+     * WebSocket认证专用线程池
+     * 使用设备事件处理器线程池，避免阻塞I/O线程
+     */
+    private final Executor websocketAuthExecutor;
+    
+    /**
+     * 手动构造函数以支持 @Qualifier 注解
+     */
+    public NettyWebsocketAuthHandler(
+            TerminalAuthUseCase terminalAuthUseCase,
+            NettyWebsocketProperties nettyWebsocketProperties,
+            @Qualifier("deviceEventExecutor") Executor websocketAuthExecutor) {
+        this.terminalAuthUseCase = terminalAuthUseCase;
+        this.nettyWebsocketProperties = nettyWebsocketProperties;
+        this.websocketAuthExecutor = websocketAuthExecutor;
+    }
 
     public static final AttributeKey<TerminalPrincipal> TERMINAL_PRINCIPAL = AttributeKey.valueOf("terminalPrincipal");
     public static final AttributeKey<String> DEVICE_ID = AttributeKey.valueOf("deviceId");
@@ -40,15 +60,34 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
             return;
         }
 
+        // 只拦截 WebSocket 握手的 HTTP 请求
+        if (!isWebSocketHandshakeToPath(request, nettyWebsocketProperties.getServer().getPath())) {
+            ctx.fireChannelRead(request);
+            return;
+        }
+
+        // 异步处理WebSocket认证，避免阻塞I/O线程
+        // 需要增加引用计数，防止在异步处理期间被释放
+        ReferenceCountUtil.retain(request);
+        
+        websocketAuthExecutor.execute(() -> {
+            handleWebSocketAuthentication(ctx, request);
+        });
+    }
+
+    /**
+     * 在业务线程池中处理WebSocket认证
+     * 避免阻塞Netty的I/O线程
+     */
+    private void handleWebSocketAuthentication(ChannelHandlerContext ctx, FullHttpRequest request) {
         try {
-            // 只拦截 WebSocket 握手的 HTTP 请求
-            if (!isWebSocketHandshakeToPath(request, nettyWebsocketProperties.getServer().getPath())) {
-                ctx.fireChannelRead(request);
+            // 检查连接是否还有效
+            if (!ctx.channel().isActive()) {
+                log.debug("NettyWebsocketAuthHandler - 连接已关闭，跳过认证处理");
                 return;
             }
 
             // 校验连接请求
-            // todo: 在 pipeline 添加时把本 handler 绑定到业务线程池,避免阻塞I/O线程
             if (!authenticateRequest(ctx, request)) {
                 log.debug("NettyWebsocketAuthHandler - WebSocket认证失败,发送401并关闭连接");
                 sendErrorResponse(ctx);
@@ -58,12 +97,27 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
             // 播放盒ws协议把用户名密码敏感信息放在请求URI中
             // 为了让后续的 WebSocketServerProtocolHandler 正常匹配路径，这里认证成功后需要修改URI
             request.setUri(nettyWebsocketProperties.getServer().getPath());
-            ctx.pipeline().remove(this);
-            ctx.fireChannelRead(request);
+            
+            // 将处理结果回调到I/O线程
+            ctx.channel().eventLoop().execute(() -> {
+                try {
+                    ctx.pipeline().remove(this);
+                    ctx.fireChannelRead(request);
+                } catch (Exception e) {
+                    log.error("NettyWebsocketAuthHandler - 认证成功后处理异常", e);
+                    sendErrorResponse(ctx);
+                }
+            });
 
         } catch (Exception e) {
             log.error("NettyWebsocketAuthHandler - Websocket认证异常", e);
-            sendErrorResponse(ctx);
+            // 异步发送错误响应
+            ctx.channel().eventLoop().execute(() -> {
+                sendErrorResponse(ctx);
+            });
+        } finally {
+            // 释放引用计数
+            ReferenceCountUtil.release(request);
         }
     }
 
@@ -111,13 +165,27 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void sendErrorResponse(ChannelHandlerContext ctx) {
-        DefaultFullHttpResponse response = new DefaultFullHttpResponse(
-                HttpVersion.HTTP_1_1, HttpResponseStatus.UNAUTHORIZED,
-                io.netty.buffer.Unpooled.copiedBuffer("认证失败", StandardCharsets.UTF_8)
-        );
-        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
-        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        // 确保在I/O线程中执行
+        if (ctx.channel().eventLoop().inEventLoop()) {
+            doSendErrorResponse(ctx);
+        } else {
+            ctx.channel().eventLoop().execute(() -> doSendErrorResponse(ctx));
+        }
+    }
 
-        ctx.writeAndFlush(response).addListener(io.netty.channel.ChannelFutureListener.CLOSE);
+    private void doSendErrorResponse(ChannelHandlerContext ctx) {
+        try {
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(
+                    HttpVersion.HTTP_1_1, HttpResponseStatus.UNAUTHORIZED,
+                    io.netty.buffer.Unpooled.copiedBuffer("认证失败", StandardCharsets.UTF_8)
+            );
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+
+            ctx.writeAndFlush(response).addListener(io.netty.channel.ChannelFutureListener.CLOSE);
+        } catch (Exception e) {
+            log.error("NettyWebsocketAuthHandler - 发送错误响应异常", e);
+            ctx.close();
+        }
     }
 }

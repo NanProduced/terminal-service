@@ -34,7 +34,7 @@ public class TerminalAuthenticationProvider implements AuthenticationProvider {
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
         String accountName = authentication.getName();
         String rawPassword = authentication.getCredentials().toString();
-        if (StringUtils.isNotBlank(accountName) || StringUtils.isNotBlank(rawPassword)) {
+        if (StringUtils.isBlank(accountName) || StringUtils.isBlank(rawPassword)) {
             throw new DeviceResponseException(CommonErrorCode.PARAMETER_MISSING);
         }
 
