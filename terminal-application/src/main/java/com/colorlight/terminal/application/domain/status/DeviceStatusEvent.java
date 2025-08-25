@@ -135,12 +135,13 @@ public class DeviceStatusEvent {
     /**
      * 创建刷新事件-心跳
      */
-    public static DeviceStatusEvent createHeartbeatEvent(Long deviceId, ReportSource source) {
+    public static DeviceStatusEvent createHeartbeatEvent(Long deviceId, ReportSource source, String clientIp) {
         return DeviceStatusEvent.builder()
                 .deviceId(deviceId)
                 .eventTime(System.currentTimeMillis())
                 .eventType(EventType.DEVICE_HEARTBEAT)
                 .reportSource(source)
+                .clientIp(clientIp)
                 .build();
     }
 }

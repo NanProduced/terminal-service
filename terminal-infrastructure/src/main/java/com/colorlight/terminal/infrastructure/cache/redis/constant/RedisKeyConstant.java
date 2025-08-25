@@ -46,4 +46,10 @@ public class RedisKeyConstant {
      */
     public static final String DEVICE_ONLINE_TIME_KEY = "device:online:time:%d";
 
+    /*===================  分布式锁 ====================== */
+
+    /**
+     * 终端在线状态更新分布式锁
+     */
+    public static final String DEVICE_STATUS_UPDATE_LOCK_KEY = "device:update:lock:%d";
 }

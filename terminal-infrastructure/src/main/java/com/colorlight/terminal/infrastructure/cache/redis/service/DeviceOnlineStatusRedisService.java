@@ -78,6 +78,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, status.getDeviceId());
         
         try {
+            // 在应用层分布式锁保护下，直接执行保存操作
             // 使用Redis事务保证原子性
             redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
@@ -92,7 +93,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                     // 添加到设备索引
                     operations.opsForSet().add(DEVICE_STATUS_INDEX_KEY, status.getDeviceId());
 
-                    // 更新在线设备计数
+                    // 增加在线设备计数
                     operations.opsForValue().increment(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
                     
                     return operations.exec();
@@ -112,6 +113,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             throw e;
         }
     }
+    
 
     /**
      * 在线状态更新走这个方法，可异步
@@ -628,6 +630,44 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             return Long.valueOf(value.toString());
         } catch (NumberFormatException e) {
             return null;
+        }
+    }
+
+    // ==================== 并发控制实现 ====================
+
+    @Override
+    public Boolean tryAcquireDeviceUpdateLock(Long deviceId, Long timeoutMs) {
+        String lockKey = String.format(RedisKeyConstant.DEVICE_STATUS_UPDATE_LOCK_KEY, deviceId);
+        try {
+            // 使用SET NX PX命令实现分布式锁
+            Duration timeout = Duration.ofMillis(timeoutMs);
+            Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", timeout);
+            
+            if (Boolean.TRUE.equals(acquired)) {
+                log.debug("DeviceOnlineStatus - 获取分布式锁成功: deviceId={}, timeout={}ms", deviceId, timeoutMs);
+            } else {
+                log.debug("DeviceOnlineStatus - 获取分布式锁失败，锁已存在: deviceId={}", deviceId);
+            }
+            
+            return acquired;
+        } catch (Exception e) {
+            log.error("DeviceOnlineStatus - 获取分布式锁异常: deviceId={}", deviceId, e);
+            return false;
+        }
+    }
+
+    @Override
+    public void releaseDeviceUpdateLock(Long deviceId) {
+        String lockKey = String.format(RedisKeyConstant.DEVICE_STATUS_UPDATE_LOCK_KEY, deviceId);
+        try {
+            Boolean deleted = redisTemplate.delete(lockKey);
+            if (deleted) {
+                log.debug("DeviceOnlineStatus - 释放分布式锁成功: deviceId={}", deviceId);
+            } else {
+                log.debug("DeviceOnlineStatus - 分布式锁不存在或已过期: deviceId={}", deviceId);
+            }
+        } catch (Exception e) {
+            log.error("DeviceOnlineStatus - 释放分布式锁异常: deviceId={}", deviceId, e);
         }
     }
 }

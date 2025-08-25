@@ -38,11 +38,23 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
     
     @Override
     public void updateLastReportTime(Long deviceId, ReportSource source, String clientIp) {
+        // 使用基础设施层的分布式锁防止并发竞态
+        Boolean acquired = false;
+        
         try {
+            // 尝试获取分布式锁，超时5秒
+            acquired = deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(deviceId, 5000L);
+            
+            if (!acquired) {
+                log.warn("ApplicationService - 获取设备更新锁失败，跳过此次更新: deviceId={}, source={}", 
+                        deviceId, source);
+                return;
+            }
+            
             log.debug("ApplicationService - 更新设备上报时间: deviceId={}, source={}, async={}", 
                     deviceId, source, deviceConfigPort.isAsyncStatusUpdateEnabled());
             
-            // 获取当前状态
+            // 获取当前状态（在锁保护下）
             Optional<DeviceOnlineStatus> currentStatusOpt = deviceOnlineStatusPort.getDeviceStatus(deviceId);
 
             /*
@@ -66,7 +78,7 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
                     log.info("ApplicationService - 设备上线（网络波动、超时重连）: deviceId={}, source={}", deviceId, source);
                 } else {
                     // 发布维持在线状态事件
-                    DeviceStatusEvent event = DeviceStatusEvent.createHeartbeatEvent(deviceId, source);
+                    DeviceStatusEvent event = DeviceStatusEvent.createHeartbeatEvent(deviceId, source, clientIp);
                     deviceStatusEventPort.publishStatusEvent(event);
                 }
             } else {
@@ -83,6 +95,11 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
             
         } catch (Exception e) {
             log.error("ApplicationService - 更新设备上报时间失败: deviceId={}, source={}", deviceId, source, e);
+        } finally {
+            // 释放分布式锁
+            if (acquired) {
+                deviceOnlineStatusPort.releaseDeviceUpdateLock(deviceId);
+            }
         }
     }
     
@@ -337,4 +354,5 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
             return 0;
         }
     }
+    
 }

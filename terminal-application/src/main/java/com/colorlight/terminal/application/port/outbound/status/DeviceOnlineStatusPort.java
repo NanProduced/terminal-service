@@ -105,4 +105,22 @@ public interface DeviceOnlineStatusPort {
      * @param onlineDeviceCount 在线设备数
      */
     void setOnlineDeviceCount(int onlineDeviceCount);
+
+    // ==================== 并发控制方法 ====================
+
+    /**
+     * 尝试获取设备更新分布式锁
+     * 
+     * @param deviceId 设备ID
+     * @param timeoutMs 锁超时时间（毫秒）
+     * @return 是否成功获取锁
+     */
+    Boolean tryAcquireDeviceUpdateLock(Long deviceId, Long timeoutMs);
+
+    /**
+     * 释放设备更新分布式锁
+     * 
+     * @param deviceId 设备ID
+     */
+    void releaseDeviceUpdateLock(Long deviceId);
 }
