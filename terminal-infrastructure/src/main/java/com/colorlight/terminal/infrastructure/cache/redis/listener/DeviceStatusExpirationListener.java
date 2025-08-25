@@ -7,26 +7,30 @@ import com.colorlight.terminal.application.port.outbound.status.DeviceStatusEven
 import com.colorlight.terminal.infrastructure.cache.redis.service.DeviceOnlineTimeRedisService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.Message;
-import org.springframework.data.redis.listener.KeyExpirationEventMessageListener;
+import org.springframework.data.redis.listener.PatternTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
+import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PostConstruct;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * Redis设备状态过期监听器
- * 监听设备状态键过期事件，计算在线时长
+ * 监听当前数据库的设备状态键过期事件，计算在线时长
  * 
  * @author Nan
  */
 @Slf4j
 @Component
-public class DeviceStatusExpirationListener extends KeyExpirationEventMessageListener {
+public class DeviceStatusExpirationListener implements MessageListener {
     
     private final DeviceOnlineTimePort deviceOnlineTimePort;
     private final DeviceOnlineStatusPort deviceOnlineStatusPort;
     private final DeviceStatusEventPort deviceStatusEventPort;
+    private final RedisMessageListenerContainer listenerContainer;
+    private final PatternTopic keyExpirationTopic;
     
     /**
      * 设备状态键模式：device:status:123
@@ -39,11 +43,22 @@ public class DeviceStatusExpirationListener extends KeyExpirationEventMessageLis
     public DeviceStatusExpirationListener(RedisMessageListenerContainer listenerContainer,
                                          DeviceOnlineTimeRedisService deviceOnlineTimePort,
                                          DeviceOnlineStatusPort deviceOnlineStatusPort,
-                                         DeviceStatusEventPort deviceStatusEventPort) {
-        super(listenerContainer);
+                                         DeviceStatusEventPort deviceStatusEventPort,
+                                         PatternTopic keyExpirationTopic) {
+        this.listenerContainer = listenerContainer;
         this.deviceOnlineTimePort = deviceOnlineTimePort;
         this.deviceOnlineStatusPort = deviceOnlineStatusPort;
         this.deviceStatusEventPort = deviceStatusEventPort;
+        this.keyExpirationTopic = keyExpirationTopic;
+    }
+    
+    /**
+     * 启动时注册监听器到当前数据库的过期事件主题
+     */
+    @PostConstruct
+    public void init() {
+        listenerContainer.addMessageListener(this, keyExpirationTopic);
+        log.info("RedisTTL监听 -deviceStatus- 已注册到特定数据库的键过期事件监听: {}", keyExpirationTopic.getTopic());
     }
     
     @Override
