@@ -37,4 +37,26 @@ public interface TerminalAccountRepository {
      * @return 保存后的终端账号
      */
     TerminalAccount save(TerminalAccount terminalAccount);
+    
+    /**
+     * 立即更新设备登录时间（用于首次上线）
+     * 确保firstLoginTime不丢失，同时更新lastLoginTime和lastLoginIp
+     * 
+     * @param deviceId 设备ID
+     * @param clientIp 客户端IP
+     * @param loginTime 登录时间
+     * @return 更新影响的行数
+     */
+    int updateLoginTimeImmediate(Long deviceId, String clientIp, java.time.LocalDateTime loginTime);
+    
+    /**
+     * 更新设备登录时间（用于批量更新）
+     * 利用数据库COALESCE保护firstLoginTime，只更新lastLoginTime和lastLoginIp
+     * 
+     * @param deviceId 设备ID  
+     * @param clientIp 客户端IP
+     * @param loginTime 登录时间
+     * @return 更新影响的行数
+     */
+    int updateLoginTime(Long deviceId, String clientIp, java.time.LocalDateTime loginTime);
 }

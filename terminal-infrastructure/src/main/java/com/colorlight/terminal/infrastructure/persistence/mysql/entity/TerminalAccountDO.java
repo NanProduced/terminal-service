@@ -42,19 +42,19 @@ public class TerminalAccountDO {
     /**
      * 首次登录时间 - 上云时间
      */
-    @TableField("first_login_time")
+    @TableField(value = "first_login_time", updateStrategy = FieldStrategy.NEVER)
     private LocalDateTime firstLoginTime;
 
     /**
      * 最后登录时间
      */
-    @TableField("last_login_time")
+    @TableField(value = "last_login_time", updateStrategy = FieldStrategy.NOT_NULL)
     private LocalDateTime lastLoginTime;
 
     /**
      * 最后登录IP
      */
-    @TableField("last_login_ip")
+    @TableField(value = "last_login_ip", updateStrategy = FieldStrategy.NOT_NULL)
     private String lastLoginIp;
 
     /**
