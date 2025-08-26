@@ -1,6 +1,6 @@
 package com.colorlight.terminal.infrastructure.async;
 
-import com.colorlight.terminal.application.dto.cache.LoginUpdateRecord;
+import com.colorlight.terminal.application.dto.record.LoginUpdateRecord;
 import com.colorlight.terminal.application.port.outbound.status.AsyncTerminalLoginUpdatePort;
 import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalAccountRepository;

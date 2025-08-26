@@ -72,7 +72,7 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
 
                 // 如果从离线变为在线，发布上线事件（这里应该是短暂的掉线后重连）
                 if (updateStatus.getStatus() == OnlineStatus.RECONNECT) {
-                    // 创建“重连”事件，记录这段时间为异常，但是不刷新上线时间（在线时间将覆盖这段短暂的“离线”）
+                    // 创建“重连”事件
                     DeviceStatusEvent event = DeviceStatusEvent.createReconnectEvent(deviceId, source, clientIp);
                     deviceStatusEventPort.publishStatusEvent(event);
                     log.info("ApplicationService - 设备上线（网络波动、超时重连）: deviceId={}, source={}", deviceId, source);
@@ -306,7 +306,7 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
             long firstSize = expiredDeviceIds.size();
             log.info("ApplicationService - 发现离线设备: device={}", expiredDeviceIds);
             
-            // 获取这些设备的详细状态，计算在线时长
+            // 获取这些设备的详细状态
             Map<Long, DeviceOnlineStatus> statusMap = deviceOnlineStatusPort.batchGetDeviceStatus(expiredDeviceIds);
             List<DeviceStatusEvent> offlineEvents = new ArrayList<>();
 
@@ -336,11 +336,23 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
                     if (currentStatus == OnlineStatus.ONLINE || 
                         currentStatus == OnlineStatus.GO_LIVE || 
                         currentStatus == OnlineStatus.RECONNECT) {
-                        long onlineDurationMs = status.markOffline();
                         
-                        // 创建离线事件
-                        DeviceStatusEvent event = DeviceStatusEvent.createDetectedOfflineEvent(deviceId, onlineDurationMs);
-                        offlineEvents.add(event);
+                        // 在markOffline()之前提取时间信息
+                        Long onlineStartTime = status.getOnlineStartTime();
+                        Long lastReportTime = status.getLastReportTime();
+                        
+                        // 标记为离线（仅状态变更）
+                        status.markOffline();
+                        
+                        // 创建离线事件，传递原始时间戳
+                        if (onlineStartTime != null && lastReportTime != null) {
+                            DeviceStatusEvent event = DeviceStatusEvent.createDetectedOfflineEvent(
+                                deviceId, onlineStartTime, lastReportTime);
+                            offlineEvents.add(event);
+                        } else {
+                            log.warn("设备离线但缺少时间信息: deviceId={}, onlineStartTime={}, lastReportTime={}", 
+                                    deviceId, onlineStartTime, lastReportTime);
+                        }
                     }
                 }
             }

@@ -116,9 +116,7 @@ public class DeviceConfigAdapter implements DeviceConfigPort {
     private void copyExpirationListenerConfig(DeviceConfigProperties.ExpirationListener source,
                                              DeviceProperties.ExpirationListener target) {
         target.setEnabled(source.isEnabled());
-        target.setOnlineTimeTtlHours(source.getOnlineTimeTtlHours());
         target.setAutoFreshEnabled(source.isAutoFreshEnabled());
-        target.setTtlRefreshIntervalHours(source.getTtlRefreshIntervalHours());
         target.setStreamQueryThreshold(source.getStreamQueryThreshold());
     }
 
@@ -140,7 +138,6 @@ public class DeviceConfigAdapter implements DeviceConfigPort {
                                        DeviceProperties.TaskStartup target) {
         target.setStaggeredEnabled(source.isStaggeredEnabled());
         target.setBaseDelayMs(source.getBaseDelayMs());
-        target.setTtlRefreshDelayMs(source.getTtlRefreshDelayMs());
         target.setBufferPoolDelayMs(source.getBufferPoolDelayMs());
         target.setStatisticsDelayMs(source.getStatisticsDelayMs());
     }

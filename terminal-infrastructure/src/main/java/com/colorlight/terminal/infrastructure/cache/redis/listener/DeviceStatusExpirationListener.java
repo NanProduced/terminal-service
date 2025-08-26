@@ -2,9 +2,7 @@ package com.colorlight.terminal.infrastructure.cache.redis.listener;
 
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineStatusPort;
-import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineTimePort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceStatusEventPort;
-import com.colorlight.terminal.infrastructure.cache.redis.service.DeviceOnlineTimeRedisService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.listener.PatternTopic;
@@ -26,7 +24,6 @@ import java.util.regex.Pattern;
 @Component
 public class DeviceStatusExpirationListener implements MessageListener {
     
-    private final DeviceOnlineTimePort deviceOnlineTimePort;
     private final DeviceOnlineStatusPort deviceOnlineStatusPort;
     private final DeviceStatusEventPort deviceStatusEventPort;
     private final RedisMessageListenerContainer listenerContainer;
@@ -41,12 +38,10 @@ public class DeviceStatusExpirationListener implements MessageListener {
      * 构造函数，注入必要依赖
      */
     public DeviceStatusExpirationListener(RedisMessageListenerContainer listenerContainer,
-                                         DeviceOnlineTimeRedisService deviceOnlineTimePort,
                                          DeviceOnlineStatusPort deviceOnlineStatusPort,
                                          DeviceStatusEventPort deviceStatusEventPort,
                                          PatternTopic keyExpirationTopic) {
         this.listenerContainer = listenerContainer;
-        this.deviceOnlineTimePort = deviceOnlineTimePort;
         this.deviceOnlineStatusPort = deviceOnlineStatusPort;
         this.deviceStatusEventPort = deviceStatusEventPort;
         this.keyExpirationTopic = keyExpirationTopic;
@@ -87,10 +82,7 @@ public class DeviceStatusExpirationListener implements MessageListener {
      */
     private void handleDeviceStatusExpiration(Long deviceId) {
         try {
-            // 删除上线时间键
-            deviceOnlineTimePort.removeOnlineStartTime(deviceId);
-
-            // 移除设备状态索引 这里重复删保底
+            // 移除设备状态索引
             deviceOnlineStatusPort.removeDeviceIndex(deviceId);
 
             // 发布确认终端离线事件

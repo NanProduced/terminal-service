@@ -1,4 +1,4 @@
-package com.colorlight.terminal.application.dto.cache;
+package com.colorlight.terminal.application.dto.record;
 
 import lombok.Builder;
 import lombok.Data;

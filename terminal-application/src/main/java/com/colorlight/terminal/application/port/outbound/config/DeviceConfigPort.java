@@ -81,14 +81,6 @@ public interface DeviceConfigPort {
     }
 
     /**
-     * 获取上线时间TTL(小时)
-     * @return TTL小时数
-     */
-    default long getOnlineTimeTtlHours() {
-        return getDeviceConfig().getExpirationListener().getOnlineTimeTtlHours();
-    }
-    
-    /**
      * 是否启用自动清理
      * @return 是否启用
      */
@@ -191,14 +183,6 @@ public interface DeviceConfigPort {
     // ==================== TTL刷新配置 ====================
     
     /**
-     * 获取TTL刷新间隔(小时)
-     * @return 刷新间隔小时数
-     */
-    default long getTtlRefreshIntervalHours() {
-        return getDeviceConfig().getExpirationListener().getTtlRefreshIntervalHours();
-    }
-    
-    /**
      * 获取流式查询阈值
      * @return 设备数量阈值
      */
@@ -280,14 +264,6 @@ public interface DeviceConfigPort {
      */
     default long getTaskBaseDelayMs() {
         return getDeviceConfig().getTaskStartup().getBaseDelayMs();
-    }
-    
-    /**
-     * 获取TTL刷新任务延迟(毫秒)
-     * @return TTL刷新延迟
-     */
-    default long getTaskTtlRefreshDelayMs() {
-        return getTaskBaseDelayMs() + getDeviceConfig().getTaskStartup().getTtlRefreshDelayMs();
     }
     
     /**

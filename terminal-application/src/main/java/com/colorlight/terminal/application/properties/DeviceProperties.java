@@ -206,20 +206,9 @@ public class DeviceProperties {
         private boolean enabled = true;
         
         /**
-         * 上线时间TTL(小时) - 记录终端的上线时间，统计终端在线时间用的
-         */
-        private long onlineTimeTtlHours = 24;
-        
-        /**
          * 是否启用自动清理
          */
         private boolean autoFreshEnabled = true;
-        
-        /**
-         * TTL刷新间隔(小时)
-         * 设置为略小于onlineTimeTtlHours，确保在线设备不会过期
-         */
-        private long ttlRefreshIntervalHours = 23;
         
         /**
          * 流式查询阈值
@@ -278,12 +267,6 @@ public class DeviceProperties {
          * 应用启动后的基础等待时间
          */
         private long baseDelayMs = 60_000; // 1分钟
-        
-        /**
-         * TTL刷新任务延迟(毫秒)
-         * 相对于基础延迟的额外延迟
-         */
-        private long ttlRefreshDelayMs = 30_000; // 30秒
         
         /**
          * 缓冲池任务延迟(毫秒)
