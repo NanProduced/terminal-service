@@ -145,7 +145,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
         updateReceivedMessageCount(deviceId);
         
         // 简单的心跳检测
-        if ("ping".equalsIgnoreCase(message.trim())) {
+        if ("heartbeat".equalsIgnoreCase(message.trim()) || "ping".equalsIgnoreCase(message.trim())) {
             handleHeartbeat(deviceId);
         } else {
             // 处理业务消息
