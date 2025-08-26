@@ -102,13 +102,15 @@ public class DeviceStatusEvent {
      * @param clientIp IP
      * @return
      */
-    public static DeviceStatusEvent createReconnectEvent(Long deviceId, ReportSource source, String clientIp) {
+    public static DeviceStatusEvent createReconnectEvent(Long deviceId, ReportSource source, String clientIp, Long onlineStartTime, Long lastReportTime) {
         return DeviceStatusEvent.builder()
                 .deviceId(deviceId)
                 .eventTime(System.currentTimeMillis())
                 .eventType(EventType.DEVICE_RECONNECT)
                 .reportSource(source)
                 .clientIp(clientIp)
+                .onlineStartTime(onlineStartTime)
+                .lastReportTime(lastReportTime)
                 .build();
     }
     

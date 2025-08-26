@@ -2,7 +2,9 @@ package com.colorlight.terminal.infrastructure.event;
 
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 import com.colorlight.terminal.application.dto.record.TerminalOnlineTimeRecord;
+import com.colorlight.terminal.application.dto.record.TerminalReconnectRecord;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalOnlineTimeRepository;
+import com.colorlight.terminal.application.port.outbound.repository.TerminalReconnectRepository;
 import com.colorlight.terminal.application.port.outbound.status.AsyncTerminalLoginUpdatePort;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalAccountRepository;
 import com.colorlight.terminal.commons.utils.TimeUtils;
@@ -27,6 +29,7 @@ public class DeviceStatusEventHandler {
     
     private final TerminalAccountRepository terminalAccountRepository;
     private final TerminalOnlineTimeRepository terminalOnlineTimeRepository;
+    private final TerminalReconnectRepository  terminalReconnectRepository;
     private final AsyncTerminalLoginUpdatePort asyncTerminalLoginUpdatePort;
     
     /**
@@ -58,6 +61,8 @@ public class DeviceStatusEventHandler {
             
             // 重连时提交到缓冲池异步更新
             updateLoginTimeAsync(event);
+            // 记录重连信息
+            saveTerminalReconnect(event);
         }
     }
     
@@ -69,10 +74,10 @@ public class DeviceStatusEventHandler {
     public void handleDetectedDeviceOffline(DeviceStatusEvent event) {
         if (event.getEventType() == DeviceStatusEvent.EventType.DEVICE_DETECTED_OFFLINE) {
             log.info("DeviceStatusEvent - 标记设备离线事件: deviceId={}", event.getDeviceId());
-        }
 
-        // 记录在线时长
-        saveTerminalOnlineTime(event);
+            // 记录在线时长
+            saveTerminalOnlineTime(event);
+        }
     }
 
     /**
@@ -176,5 +181,26 @@ public class DeviceStatusEventHandler {
 
         terminalOnlineTimeRepository.saveTerminalOnlineTime(record);
         log.debug("DeviceOnlineTime - 设备在线时长记录保存成功: deviceId={}, info={}", event.getDeviceId(), event);
+    }
+
+    // ==================== 终端异常重连记录辅助方法 ====================
+
+    /**
+     * 保存设备重连信息
+     * @param event 重连事件
+     */
+    private void saveTerminalReconnect(DeviceStatusEvent event) {
+
+        TerminalReconnectRecord record = TerminalReconnectRecord.builder()
+                .deviceId(event.getDeviceId())
+                .startOnlineTime(TimeUtils.convertTimestampToLocalDateTime(event.getOnlineStartTime()))
+                .lastReportTime(TimeUtils.convertTimestampToLocalDateTime(event.getLastReportTime()))
+                .reconnectTime(TimeUtils.convertTimestampToLocalDateTime(event.getEventTime()))
+                .reconnectIp(event.getClientIp())
+                .reconnectSource(event.getReportSource().name())
+                .build();
+
+        terminalReconnectRepository.saveReconnectRecord(record);
+        log.debug("DeviceReconnect - 设备重连信息保存成功: deviceId={}, info={}", event.getDeviceId(), event);
     }
 }

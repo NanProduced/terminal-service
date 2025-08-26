@@ -1,6 +1,8 @@
 package com.colorlight.terminal.infrastructure.persistence.mongodb.converter;
 
 import com.colorlight.terminal.application.dto.record.TerminalOnlineTimeRecord;
+import com.colorlight.terminal.application.dto.record.TerminalReconnectRecord;
+import com.colorlight.terminal.infrastructure.persistence.mongodb.document.TerminalAbnormalReconnectDocument;
 import com.colorlight.terminal.infrastructure.persistence.mongodb.document.TerminalOnlineTimeDocument;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -10,13 +12,15 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Mapper(componentModel = "spring", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
-public interface TerminalOnlineTimeConverter {
+public interface TerminalRecordConverter {
 
     @Mapping(target = "objectId", ignore = true)
     @Mapping(target = "duration", expression = "java(calculateDuration(record.getStartTime(), record.getEndTime()))")
     @Mapping(target = "createAt", expression = "java(java.time.LocalDateTime.now())")
     TerminalOnlineTimeDocument convertToTerminalOnlineTimeDocument(TerminalOnlineTimeRecord record);
 
+    @Mapping(target = "objectId", ignore = true)
+    TerminalAbnormalReconnectDocument convertToTerminalReconnectDocument(TerminalReconnectRecord record);
     /**
      * 计算在线时长
      */
