@@ -42,9 +42,14 @@ public class DeviceStatusEvent {
     private String clientIp;
     
     /**
-     * 在线时长(仅离线事件有效，毫秒)
+     * 上线开始时间戳(毫秒) - 用于计算在线时长
      */
-    private Long onlineDuration;
+    private Long onlineStartTime;
+    
+    /**
+     * 最后上报时间戳(毫秒) - 离线事件的结束时间
+     */
+    private Long lastReportTime;
     
     /**
      * 事件类型枚举
@@ -109,13 +114,18 @@ public class DeviceStatusEvent {
     
     /**
      * 创建设备离线事件（定时任务标记）
+     * @param deviceId 设备ID
+     * @param onlineStartTime 上线开始时间戳(毫秒)
+     * @param lastReportTime 最后上报时间戳(毫秒)
+     * @return 离线事件
      */
-    public static DeviceStatusEvent createDetectedOfflineEvent(Long deviceId, long onlineDuration) {
+    public static DeviceStatusEvent createDetectedOfflineEvent(Long deviceId, Long onlineStartTime, Long lastReportTime) {
         return DeviceStatusEvent.builder()
                 .deviceId(deviceId)
                 .eventTime(System.currentTimeMillis())
                 .eventType(EventType.DEVICE_DETECTED_OFFLINE)
-                .onlineDuration(onlineDuration)
+                .onlineStartTime(onlineStartTime)
+                .lastReportTime(lastReportTime)
                 .build();
     }
 
@@ -143,5 +153,25 @@ public class DeviceStatusEvent {
                 .reportSource(source)
                 .clientIp(clientIp)
                 .build();
+    }
+    
+    /**
+     * 计算在线时长（毫秒）
+     * 仅适用于离线事件
+     * @return 在线时长(毫秒)，如果无法计算则返回0
+     */
+    public long calculateOnlineDuration() {
+        if (onlineStartTime != null && lastReportTime != null && lastReportTime > onlineStartTime) {
+            return lastReportTime - onlineStartTime;
+        }
+        return 0L;
+    }
+    
+    /**
+     * 检查事件是否包含有效的时间范围数据
+     * @return 是否有效
+     */
+    public boolean hasValidTimeRange() {
+        return onlineStartTime != null && lastReportTime != null && lastReportTime >= onlineStartTime;
     }
 }

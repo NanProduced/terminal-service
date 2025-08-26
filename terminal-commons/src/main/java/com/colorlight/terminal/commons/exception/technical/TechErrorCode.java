@@ -26,7 +26,9 @@ public enum TechErrorCode implements ErrorCode {
 
     TIME_FORMAT_TRANSLATE_FAILED("TM0103", "Java.time时间转换失败", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR),
 
-    INSTANTIATION_IS_PROHIBITED("TM0104", "禁止实例化", ErrorLevel.WARN, HttpStatusCode.INTERNAL_SERVER_ERROR);
+    INSTANTIATION_IS_PROHIBITED("TM0104", "禁止实例化", ErrorLevel.WARN, HttpStatusCode.INTERNAL_SERVER_ERROR),
+
+    MONGO_DB_ERROR("TM0105", "MongoDB操作失败", ErrorLevel.CRITICAL, HttpStatusCode.INTERNAL_SERVER_ERROR);
 
     /**
      * 错误码

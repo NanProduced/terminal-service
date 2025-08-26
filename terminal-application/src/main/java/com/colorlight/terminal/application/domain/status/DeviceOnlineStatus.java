@@ -108,17 +108,12 @@ public class DeviceOnlineStatus {
     
     /**
      * 标记为离线
-     * @return 本次在线时长(毫秒)，如果之前已离线则返回0
      */
-    public long markOffline() {
-        if (this.status == OnlineStatus.ONLINE && this.onlineStartTime != null) {
-            long onlineDuration = System.currentTimeMillis() - this.onlineStartTime;
+    public void markOffline() {
+        if (this.status != OnlineStatus.OFFLINE) {
             this.status = OnlineStatus.OFFLINE;
             this.statusChangeTime = System.currentTimeMillis();
-            this.onlineStartTime = null;
-            return onlineDuration;
         }
-        return 0L;
     }
     
     /**

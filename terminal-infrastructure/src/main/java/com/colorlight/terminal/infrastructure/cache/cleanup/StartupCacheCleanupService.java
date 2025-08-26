@@ -2,7 +2,6 @@ package com.colorlight.terminal.infrastructure.cache.cleanup;
 
 import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineStatusPort;
-import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineTimePort;
 import com.colorlight.terminal.infrastructure.cache.redis.service.DeviceOnlineStatusRedisService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +31,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class StartupCacheCleanupService implements ApplicationRunner {
 
     private final DeviceOnlineStatusPort deviceOnlineStatusPort;
-    private final DeviceOnlineTimePort deviceOnlineTimePort;
     private final DeviceConfigPort deviceConfigPort;
 
     @Override
@@ -240,11 +238,8 @@ public class StartupCacheCleanupService implements ApplicationRunner {
      */
     private void cleanupDeviceCache(Long deviceId) {
         try {
-            // 1. 启动清理专用方法（不影响计数器）
+            // 启动清理专用方法（不影响计数器）
             deviceOnlineStatusPort.removeDeviceStatusForStartupCleanup(deviceId);
-            
-            // 2. 移除在线时间记录
-            deviceOnlineTimePort.removeOnlineStartTime(deviceId);
             
             log.debug("StartupCleanup - 设备缓存清理完成: deviceId={}", deviceId);
             

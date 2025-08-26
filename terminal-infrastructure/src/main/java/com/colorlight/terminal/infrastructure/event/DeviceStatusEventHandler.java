@@ -1,6 +1,8 @@
 package com.colorlight.terminal.infrastructure.event;
 
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
+import com.colorlight.terminal.application.dto.record.TerminalOnlineTimeRecord;
+import com.colorlight.terminal.application.port.outbound.repository.TerminalOnlineTimeRepository;
 import com.colorlight.terminal.application.port.outbound.status.AsyncTerminalLoginUpdatePort;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalAccountRepository;
 import com.colorlight.terminal.commons.utils.TimeUtils;
@@ -24,6 +26,7 @@ import java.time.LocalDateTime;
 public class DeviceStatusEventHandler {
     
     private final TerminalAccountRepository terminalAccountRepository;
+    private final TerminalOnlineTimeRepository terminalOnlineTimeRepository;
     private final AsyncTerminalLoginUpdatePort asyncTerminalLoginUpdatePort;
     
     /**
@@ -65,22 +68,21 @@ public class DeviceStatusEventHandler {
     @EventListener
     public void handleDetectedDeviceOffline(DeviceStatusEvent event) {
         if (event.getEventType() == DeviceStatusEvent.EventType.DEVICE_DETECTED_OFFLINE) {
-            log.info("DeviceStatusEvent - 标记设备离线事件: deviceId={}, 在线时长={}ms",
-                    event.getDeviceId(), event.getOnlineDuration());
+            log.info("DeviceStatusEvent - 标记设备离线事件: deviceId={}", event.getDeviceId());
         }
+
+        // 记录在线时长
+        saveTerminalOnlineTime(event);
     }
 
     /**
      * 处理设备状态缓存过期监听事件
-     *
      */
     @Async("deviceEventExecutor")
     @EventListener
     public void handleConfirmDeviceOffline(DeviceStatusEvent event) {
         if (event.getEventType() == DeviceStatusEvent.EventType.DEVICE_CONFIRMED_OFFLINE) {
-            log.info("DeviceStatusEvent - 确认设备离线事件: deviceId={}, 在线时长={}ms",
-                    event.getDeviceId(), event.getOnlineDuration());
-
+            log.info("DeviceStatusEvent - 确认设备离线事件: deviceId={}", event.getDeviceId());
         }
     }
     
@@ -151,5 +153,28 @@ public class DeviceStatusEventHandler {
         } catch (Exception e) {
             log.error("DeviceLoginUpdate - 提交登录时间异步更新失败: deviceId={}", event.getDeviceId(), e);
         }
+    }
+
+    // ==================== 记录在线时长辅助方法 ====================
+
+    /**
+     * 保存设备在线时长记录
+     * @param event 设备离线事件
+     */
+    private void saveTerminalOnlineTime(DeviceStatusEvent event) {
+
+        if (event.getOnlineStartTime() == null || event.getLastReportTime() == null) {
+            log.error("DeviceOnlineTime - 上线/离线时间为空，保存失败: deviceId={}, event={}", event.getDeviceId(), event);
+            return;
+        }
+
+        TerminalOnlineTimeRecord record = TerminalOnlineTimeRecord.builder()
+                .deviceId(event.getDeviceId())
+                .startTime(TimeUtils.convertTimestampToLocalDateTime(event.getOnlineStartTime()))
+                .endTime(TimeUtils.convertTimestampToLocalDateTime(event.getLastReportTime()))
+                .build();
+
+        terminalOnlineTimeRepository.saveTerminalOnlineTime(record);
+        log.debug("DeviceOnlineTime - 设备在线时长记录保存成功: deviceId={}, info={}", event.getDeviceId(), event);
     }
 }

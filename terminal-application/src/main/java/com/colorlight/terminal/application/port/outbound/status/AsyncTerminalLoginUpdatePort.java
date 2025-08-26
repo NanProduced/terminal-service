@@ -1,6 +1,6 @@
 package com.colorlight.terminal.application.port.outbound.status;
 
-import com.colorlight.terminal.application.dto.cache.LoginUpdateRecord;
+import com.colorlight.terminal.application.dto.record.LoginUpdateRecord;
 
 import java.time.LocalDateTime;
 import java.util.List;

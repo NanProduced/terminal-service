@@ -5,7 +5,6 @@ import com.colorlight.terminal.application.domain.status.OnlineStatus;
 import com.colorlight.terminal.application.domain.status.ReportSource;
 import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineStatusPort;
-import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineTimePort;
 import com.colorlight.terminal.infrastructure.cache.redis.constant.RedisKeyConstant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +35,6 @@ import static com.colorlight.terminal.infrastructure.cache.redis.constant.RedisK
 public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     
     private final RedisTemplate<String, Object> redisTemplate;
-    private final DeviceOnlineTimePort deviceOnlineTimePort;
     private final DeviceConfigPort deviceConfigPort;
     
     /**
@@ -99,12 +97,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                     return operations.exec();
                 }
             });
-            
-            // 分离存储：如果是在线状态且有上线时间，记录到独立的在线时间存储
-            // 重连的话这里会刷新上线时间
-            if (status.getOnlineStartTime() != null) {
-                deviceOnlineTimePort.recordOnlineStartTime(status.getDeviceId(), status.getOnlineStartTime());
-            }
             
             log.debug("DeviceOnlineStatus - 保存设备状态成功: deviceId={}, status={}", status.getDeviceId(), status.getStatus());
             
@@ -503,11 +495,8 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         
         try {
             log.debug("DeviceOnlineStatus - 批量标记设备离线: count={}", deviceIds.size());
-            
-            // 1. 先批量计算在线时长
-            Map<Long, Long> onlineDurations = deviceOnlineTimePort.batchCalculateOnlineDuration(deviceIds);
-            
-            // 2. 批量更新Redis状态
+
+            // 批量更新Redis状态
             redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
                 public Object execute(RedisOperations operations) throws DataAccessException {
@@ -532,8 +521,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 }
             });
             
-            log.info("DeviceOnlineStatus - 批量标记设备离线完成: count={}, 计算在线时长数量={}",
-                    deviceIds.size(), onlineDurations.size());
+            log.info("DeviceOnlineStatus - 批量标记设备离线完成: count={}", deviceIds.size());
             
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 批量标记设备离线失败: deviceIds.size={}", deviceIds.size(), e);
