@@ -133,4 +133,51 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         // todo：实现获取素材接口
         return List.of();
     }
+
+    @Operation(
+            summary = "终端上报素材播放记录",
+            description = "终端通过HTTP接口上传素材播放记录",
+            tags = {"终端节目"}
+    )
+    @Override
+    public void reportMediaPlayTimes(String report) {
+        TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        log.debug("DeviceMedia - 终端 {} 上报素材播放记录: {}", principal.getDeviceId(), report);
+        // todo: 素材播放记录存储
+    }
+
+    @Operation(
+            summary = "终端上报节目播放记录",
+            description = "终端通过HTTP接口上传节目播放记录",
+            tags = {"终端节目"}
+    )
+    @Override
+    public void reportProgramPlayTimes(String report) {
+        TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        log.debug("DeviceProgram - 终端 {} 上报节目播放记录: {}", principal.getDeviceId(), report);
+        // todo: 节目播放记录存储
+    }
+
+    @Operation(
+            summary = "终端获取排程信息",
+            description = "终端通过HTTP接口获取排程信息",
+            tags = {"终端节目"}
+    )
+    @Override
+    public String getSchedule() {
+        TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        log.info("DeviceSchedule - 终端 {} 请求获取排程", principal.getDeviceId());
+        return null;
+    }
+
+    @Operation(
+            summary = "终端上报传感器监控数据",
+            description = "终端通过HTTP接口上报传感器监控数据",
+            tags = {"终端节目"}
+    )
+    @Override
+    public void reportSensorData(String report) {
+        TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        log.debug("DeviceSensorData - 终端 {} 上报传感器数据: {}", principal.getDeviceId(), report);
+    }
 }
