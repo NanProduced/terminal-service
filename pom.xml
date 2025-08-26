@@ -5,7 +5,7 @@
 
   <groupId>com.colorlight.terminal</groupId>
   <artifactId>colorlight-terminal</artifactId>
-  <version>interlayer-master-0.0.1</version>
+  <version>interlayer-master-0.0.2</version>
   <packaging>pom</packaging>
   <name>colorlight-terminal</name>
   <description>Colorlight Terminal Service</description>
@@ -34,7 +34,7 @@
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!--        通用版本-->
-    <common.version>master-master-0.0.1</common.version>
+    <common.version>master-master-0.0.2</common.version>
     <!-- 核心框架版本 -->
     <spring-boot.version>3.3.11</spring-boot.version>
     <spring-cloud.version>2023.0.3</spring-cloud.version>

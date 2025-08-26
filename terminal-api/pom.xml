@@ -5,7 +5,7 @@
   <parent>
     <groupId>com.colorlight.terminal</groupId>
     <artifactId>colorlight-terminal</artifactId>
-    <version>interlayer-master-0.0.1</version>
+    <version>interlayer-master-0.0.2</version>
   </parent>
   <artifactId>terminal-api</artifactId>
   <name>terminal-api</name>
