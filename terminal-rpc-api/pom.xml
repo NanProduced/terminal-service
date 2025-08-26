@@ -26,6 +26,11 @@
 
     <dependencies>
         <!-- RPC接口定义最小化依赖 - 纯JDK11实现，无Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>
