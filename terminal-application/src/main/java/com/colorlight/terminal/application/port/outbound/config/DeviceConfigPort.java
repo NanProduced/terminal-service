@@ -263,4 +263,46 @@ public interface DeviceConfigPort {
     default long getOfflineCheckIntervalSeconds() {
         return getOfflineCheckInterval() / 1000;
     }
+    
+    // ==================== 定时任务启动配置 ====================
+    
+    /**
+     * 是否启用交错启动
+     * @return 是否启用
+     */
+    default boolean isTaskStaggeredEnabled() {
+        return getDeviceConfig().getTaskStartup().isStaggeredEnabled();
+    }
+    
+    /**
+     * 获取任务基础延迟时间(毫秒)
+     * @return 基础延迟时间
+     */
+    default long getTaskBaseDelayMs() {
+        return getDeviceConfig().getTaskStartup().getBaseDelayMs();
+    }
+    
+    /**
+     * 获取TTL刷新任务延迟(毫秒)
+     * @return TTL刷新延迟
+     */
+    default long getTaskTtlRefreshDelayMs() {
+        return getTaskBaseDelayMs() + getDeviceConfig().getTaskStartup().getTtlRefreshDelayMs();
+    }
+    
+    /**
+     * 获取缓冲池任务延迟(毫秒)
+     * @return 缓冲池任务延迟
+     */
+    default long getTaskBufferPoolDelayMs() {
+        return getTaskBaseDelayMs() + getDeviceConfig().getTaskStartup().getBufferPoolDelayMs();
+    }
+    
+    /**
+     * 获取统计任务延迟(毫秒)
+     * @return 统计任务延迟
+     */
+    default long getTaskStatisticsDelayMs() {
+        return getTaskBaseDelayMs() + getDeviceConfig().getTaskStartup().getStatisticsDelayMs();
+    }
 }

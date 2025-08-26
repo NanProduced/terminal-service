@@ -42,6 +42,9 @@ public class DeviceConfigAdapter implements DeviceConfigPort {
         // 复制缓存清理配置
         copyStartupCleanup(configProperties.getStartupCleanup(), domainConfig.getStartupCleanup());
         
+        // 复制定时任务启动配置
+        copyTaskStartupConfig(configProperties.getTaskStartup(), domainConfig.getTaskStartup());
+        
         return domainConfig;
     }
     
@@ -128,5 +131,17 @@ public class DeviceConfigAdapter implements DeviceConfigPort {
         target.setStrategy(source.getStrategy());
         target.setRequired(source.isRequired());
         target.setBufferSeconds(source.getBufferSeconds());
+    }
+    
+    /**
+     * 复制定时任务启动配置
+     */
+    private void copyTaskStartupConfig(DeviceConfigProperties.TaskStartup source,
+                                       DeviceProperties.TaskStartup target) {
+        target.setStaggeredEnabled(source.isStaggeredEnabled());
+        target.setBaseDelayMs(source.getBaseDelayMs());
+        target.setTtlRefreshDelayMs(source.getTtlRefreshDelayMs());
+        target.setBufferPoolDelayMs(source.getBufferPoolDelayMs());
+        target.setStatisticsDelayMs(source.getStatisticsDelayMs());
     }
 }

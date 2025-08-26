@@ -180,5 +180,24 @@ terminal:
       strategy: "smart"             # 清理策略：conservative保守/aggressive激进/smart智能
       required: false               # 清理失败是否阻断启动（false=记录日志继续启动，true=失败时阻断启动）
       buffer-seconds: 60            # 保守策略的缓冲时间(秒) - TTL基础上的安全缓冲
+    # 定时任务启动配置
+    task-startup:
+      # 启用交错启动，避免多任务同时启动资源竞争
+      staggered-enabled: true
+
+      # 基础延迟时间（1分钟）- 应用启动后等待1分钟再开始执行定时任务
+      base-delay-ms: 60000
+
+      # TTL刷新任务额外延迟（30秒）- 在基础延迟基础上再延迟30秒
+      # 最终延迟 = 60000 + 30000 = 90秒
+      ttl-refresh-delay-ms: 30000
+
+      # 缓冲池任务额外延迟（15秒）- 在基础延迟基础上再延迟15秒
+      # 最终延迟 = 60000 + 15000 = 75秒
+      buffer-pool-delay-ms: 15000
+
+      # 统计任务额外延迟（120秒）- 在基础延迟基础上再延迟120秒
+      # 最终延迟 = 60000 + 120000 = 180秒（3分钟）
+      statistics-delay-ms: 120000
 
 

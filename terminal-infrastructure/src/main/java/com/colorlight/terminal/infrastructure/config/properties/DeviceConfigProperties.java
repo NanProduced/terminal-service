@@ -42,6 +42,11 @@ public class DeviceConfigProperties {
     private StartupCleanup startupCleanup = new StartupCleanup();
     
     /**
+     * 定时任务启动配置
+     */
+    private TaskStartup taskStartup = new TaskStartup();
+    
+    /**
      * 离线检测配置
      */
     @Data
@@ -259,5 +264,42 @@ public class DeviceConfigProperties {
          * 用于保守策略，在TTL基础上额外的安全缓冲
          */
         private long bufferSeconds = 60;
+    }
+    
+    /**
+     * 定时任务启动配置
+     */
+    @Data
+    public static class TaskStartup {
+        
+        /**
+         * 是否启用交错启动
+         * 避免多个定时任务同时启动造成资源竞争
+         */
+        private boolean staggeredEnabled = true;
+        
+        /**
+         * 基础延迟时间(毫秒)
+         * 应用启动后的基础等待时间
+         */
+        private long baseDelayMs = 60_000; // 1分钟
+        
+        /**
+         * TTL刷新任务延迟(毫秒)
+         * 相对于基础延迟的额外延迟
+         */
+        private long ttlRefreshDelayMs = 30_000; // 30秒
+        
+        /**
+         * 缓冲池任务延迟(毫秒)
+         * 状态更新和登录更新缓冲池任务的延迟
+         */
+        private long bufferPoolDelayMs = 15_000; // 15秒
+        
+        /**
+         * 统计任务延迟(毫秒)
+         * 统计和监控任务的延迟
+         */
+        private long statisticsDelayMs = 120_000; // 2分钟
     }
 }

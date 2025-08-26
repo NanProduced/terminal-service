@@ -193,9 +193,11 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
     /**
      * 定时刷新缓冲池
      * 根据配置的窗口时间定期刷新
+     * 配置延迟启动，避免系统启动时资源竞争
      */
     @Override
-    @Scheduled(fixedDelayString = "#{@deviceConfigPort.getBufferPoolWindowMs()}")
+    @Scheduled(fixedDelayString = "#{@deviceConfigPort.getBufferPoolWindowMs()}",
+               initialDelayString = "#{@deviceConfigPort.getTaskBufferPoolDelayMs()}")
     public void scheduledFlush() {
         if (!isRunning.get()) {
             return;
@@ -269,8 +271,10 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
     
     /**
      * 定期输出统计信息
+     * 配置延迟启动，避免系统启动时资源竞争
      */
-    @Scheduled(fixedRateString = "#{@deviceConfigPort.getBufferPoolStatisticsInterval()}")
+    @Scheduled(fixedRateString = "#{@deviceConfigPort.getBufferPoolStatisticsInterval()}",
+               initialDelayString = "#{@deviceConfigPort.getTaskStatisticsDelayMs()}")
     public void logStatistics() {
         if (!isRunning.get()) {
             return;

@@ -17,10 +17,13 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 统一线程池配置
  * 
  * 统一管理所有异步任务和定时任务的线程池，包括：
- * 1. 定时任务调度器（deviceTaskScheduler）
+ * 1. 定时任务调度器（deviceTaskScheduler）- 支持延迟启动
  * 2. 异步事件处理器（deviceEventExecutor）
  * 3. 异步状态更新器（deviceStatusExecutor）
  * 4. 通用异步处理器（defaultAsyncExecutor）
+ * 
+ * 所有线程池都配置了守护线程和优雅关闭机制
+ * 定时任务支持通过配置控制延迟启动时间，避免启动时资源竞争
  * 
  * @author Nan
  */
@@ -33,6 +36,7 @@ public class ThreadPoolConfig {
     /**
      * 定时任务调度器（全局一个就行，多了没用）
      * 用于离线检测、TTL刷新等定时任务
+     *
      */
     @Primary
     @Bean("deviceTaskScheduler")
@@ -62,7 +66,7 @@ public class ThreadPoolConfig {
         
         scheduler.initialize();
         
-        log.info("ThreadPool -定时任务线程池初始化完成: poolSize={}", scheduler.getPoolSize());
+        log.info("ThreadPool - 定时任务线程池初始化完成: poolSize={}, 支持延迟启动配置", scheduler.getPoolSize());
         
         return scheduler;
     }

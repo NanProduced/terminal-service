@@ -36,8 +36,10 @@ public class DeviceOnlineTimeTtlRefreshService {
     /**
      * 每日TTL刷新任务
      * 使用配置的TTL刷新间隔，默认23小时，为24小时TTL留出1小时缓冲时间
+     * 配置延迟启动，避免系统启动时资源竞争
      */
-    @Scheduled(fixedRateString = "#{@deviceConfigPort.getTtlRefreshIntervalHours() * 3600000}")
+    @Scheduled(fixedRateString = "#{@deviceConfigPort.getTtlRefreshIntervalHours() * 3600000}",
+               initialDelayString = "#{@deviceConfigPort.getTaskTtlRefreshDelayMs()}")
     public void refreshOnlineDeviceTtl() {
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
