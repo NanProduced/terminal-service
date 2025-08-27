@@ -11,13 +11,12 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.Objects;
 
 /**
  * 终端上报数据的MongoDB存储实现类
  *
- * @author Demon
+ * @author Nan
  */
 @Repository
 @RequiredArgsConstructor
@@ -47,27 +46,5 @@ public class MongoTerminalStatusReportRepository implements TerminalStatusReport
             newDoc.setUpdateTime(now);
             mongoTemplate.save(newDoc);
         }
-    }
-
-    @Override
-    public Optional<TerminalStatusReport> findByDeviceId(Long deviceId) {
-        Query query = Query.query(Criteria.where("deviceId").is(deviceId));
-        TerminalStatusReportDocument document = mongoTemplate.findOne(query, TerminalStatusReportDocument.class);
-        return Optional.ofNullable(document)
-                .map(TerminalStatusReportDocument::getTerminalStatusReport);
-    }
-
-    @Override
-    public Map<Long, TerminalStatusReport> findByDeviceIds(List<Long> deviceIds) {
-        Query query = Query.query(Criteria.where("deviceId").in(deviceIds));
-        List<TerminalStatusReportDocument> documents = mongoTemplate.find(query, TerminalStatusReportDocument.class);
-
-        return documents.stream()
-                .filter(doc -> doc.getDeviceId() != null && doc.getTerminalStatusReport() != null)
-                .collect(Collectors.toMap(
-                        TerminalStatusReportDocument::getDeviceId,
-                        TerminalStatusReportDocument::getTerminalStatusReport,
-                        (existing, replacement) -> replacement // 如果有重复key，使用新值
-                ));
     }
 }
