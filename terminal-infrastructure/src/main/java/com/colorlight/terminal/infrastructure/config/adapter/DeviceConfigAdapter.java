@@ -66,6 +66,7 @@ public class DeviceConfigAdapter implements DeviceConfigPort {
     private void copyStatusUpdateConfig(DeviceConfigProperties.StatusUpdate source,
                                        DeviceProperties.StatusUpdate target) {
         target.setRedisTtl(source.getRedisTtl());
+        target.setReconnectTtl(source.getReconnectTtl());
         target.setHttpEnabled(source.isHttpEnabled());
         target.setWebsocketEnabled(source.isWebsocketEnabled());
         target.setAsyncEnabled(source.isAsyncEnabled());
@@ -126,9 +127,6 @@ public class DeviceConfigAdapter implements DeviceConfigPort {
     private void copyStartupCleanup(DeviceConfigProperties.StartupCleanup source,
                                     DeviceProperties.StartupCleanup target) {
         target.setEnabled(source.isEnabled());
-        target.setStrategy(source.getStrategy());
-        target.setRequired(source.isRequired());
-        target.setBufferSeconds(source.getBufferSeconds());
     }
     
     /**

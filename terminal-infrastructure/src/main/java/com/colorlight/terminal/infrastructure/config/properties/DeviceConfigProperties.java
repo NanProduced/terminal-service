@@ -86,9 +86,14 @@ public class DeviceConfigProperties {
     public static class StatusUpdate {
         
         /**
-         * Redis状态TTL(秒)
+         * Redis状态初始TTL(秒) - 设备上线和心跳时使用
          */
-        private long redisTtl = 120;
+        private long redisTtl = 3600; // 1小时
+        
+        /**
+         * 重连窗口TTL(秒) - 设备离线后等待重连的时间
+         */
+        private long reconnectTtl = 120;
         
         /**
          * 是否启用HTTP请求状态更新
@@ -232,27 +237,6 @@ public class DeviceConfigProperties {
          * 是否启用启动时缓存清理
          */
         private boolean enabled = true;
-
-        /**
-         * 清理策略
-         * conservative: 保守 - 只清理超过TTL+缓冲时间的设备
-         * aggressive: 激进 - 清理所有可能离线的设备
-         * smart: 智能 - 根据系统配置动态计算清理阈值
-         */
-        private String strategy = "smart";
-
-        /**
-         * 是否强制要求清理成功
-         * true: 清理失败时阻断应用启动
-         * false: 清理失败时记录日志但继续启动
-         */
-        private boolean required = false;
-
-        /**
-         * 保守策略的缓冲时间(秒)
-         * 用于保守策略，在TTL基础上额外的安全缓冲
-         */
-        private long bufferSeconds = 60;
     }
     
     /**

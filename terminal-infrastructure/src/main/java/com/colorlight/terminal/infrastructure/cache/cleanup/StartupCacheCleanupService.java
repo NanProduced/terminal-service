@@ -2,7 +2,6 @@ package com.colorlight.terminal.infrastructure.cache.cleanup;
 
 import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineStatusPort;
-import com.colorlight.terminal.infrastructure.cache.redis.service.DeviceOnlineStatusRedisService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -12,14 +11,12 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
 
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Set;
 
 /**
  * 启动缓存清理服务
  * 
- * 在应用启动时主动清理可能的"僵尸"设备缓存，解决服务器宕机重启后的缓存污染问题
+ * 应用启动时清理过时的设备缓存，基于TTL方案的清理策略
  * 
  * @author Nan
  */
@@ -35,222 +32,103 @@ public class StartupCacheCleanupService implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        log.info("StartupCleanup - 开始执行启动缓存清理任务");
+        log.info("StartupCleanup - 开始执行启动缓存清理");
         
         StopWatch stopWatch = new StopWatch();
-        int onlineDeviceCount = deviceOnlineStatusPort.getOnlineDeviceCount();
-        log.info("StartupCleanup - 当前遗留的在线设备数量 - {}", onlineDeviceCount);
-
-        deviceOnlineStatusPort.setOnlineDeviceCount(0);
-
-        log.info("StartupCleanup - 在线设备数量已清零");
-
         stopWatch.start();
         
         try {
-            CleanupResult result = executeCleanupStrategy();
+            CleanupResult result = executeCleanup();
             
             stopWatch.stop();
             
-            log.info("StartupCleanup - 缓存清理任务完成: " +
-                    "检查设备={}, 清理设备={}, 保留设备={}, 耗时={}ms",
-                    result.totalChecked(), result.cleanedCount(), 
-                    result.retainedCount(), stopWatch.getTotalTimeMillis());
+            log.info("StartupCleanup - 清理完成: 检查={}, 清理={}, 保留={}, 耗时={}ms",
+                    result.totalChecked, result.cleanedCount, result.retainedCount, stopWatch.getTotalTimeMillis());
             
-            // 清理耗时过长记录警告
-            if (stopWatch.getTotalTimeMillis() > 10000) { // 超过10秒
-                log.warn("StartupCleanup - 缓存清理耗时较长: {}ms, 建议检查设备数量或Redis性能", 
-                        stopWatch.getTotalTimeMillis());
+            if (stopWatch.getTotalTimeMillis() > 10000) {
+                log.warn("StartupCleanup - 清理耗时较长: {}ms", stopWatch.getTotalTimeMillis());
             }
 
-            int currentOnlineDeviceCount = deviceOnlineStatusPort.getOnlineDeviceCount();
-            log.info("StartupCleanup - 当前在线设备数量 - {}", currentOnlineDeviceCount);
-            deviceOnlineStatusPort.setOnlineDeviceCount(currentOnlineDeviceCount + result.retainedCount);
-            log.info("StartupCleanup - 设置当前在线设备数量为 当前数量 + 保留设备数量 - {}", result.retainedCount + currentOnlineDeviceCount);
-
+            // 重置在线设备计数器
+            deviceOnlineStatusPort.setOnlineDeviceCount(result.retainedCount);
+            log.info("StartupCleanup - 重置计数器: {}", result.retainedCount);
 
         } catch (Exception e) {
-            log.error("StartupCleanup - 启动缓存清理任务失败", e);
-            
-            // 根据配置决定是否阻断启动
-            if (deviceConfigPort.isStartupCleanupRequired()) {
-                throw new RuntimeException("启动缓存清理失败，应用无法正常启动", e);
-            }
+            log.error("StartupCleanup - 清理失败", e);
+            // 失败不阻断启动，记录错误继续启动
         }
     }
     
     /**
-     * 执行清理策略
+     * 执行清理逻辑
      */
-    private CleanupResult executeCleanupStrategy() {
-        String strategy = deviceConfigPort.getStartupCleanupStrategy();
+    private CleanupResult executeCleanup() {
+        // 计算清理阈值：当前时间 - (离线超时 + 5分钟安全缓冲)
+        long cleanupThreshold = System.currentTimeMillis() - 
+                (deviceConfigPort.getOfflineTimeoutThreshold() + 300_000);
         
-        log.info("StartupCleanup - 执行清理策略: {}", strategy);
+        log.debug("StartupCleanup - 清理阈值: {}ms 之前的设备", cleanupThreshold);
         
-        return switch (strategy.toLowerCase()) {
-            case "conservative" -> executeConservativeCleanup();
-            case "aggressive" -> executeAggressiveCleanup();
-            case "smart" -> executeSmartCleanup();
-            default -> {
-                log.warn("StartupCleanup - 未知清理策略: {}, 使用smart策略", strategy);
-                yield executeSmartCleanup();
+        // 获取所有设备并逐个检查
+        Set<Long> allDeviceIds = deviceOnlineStatusPort.getAllDeviceIds();
+        int totalChecked = allDeviceIds.size();
+        int cleanedCount = 0;
+        int retainedCount = 0;
+        
+        log.info("StartupCleanup - 发现设备总数: {}", totalChecked);
+        
+        for (Long deviceId : allDeviceIds) {
+            try {
+                if (shouldCleanupDevice(deviceId, cleanupThreshold)) {
+                    deviceOnlineStatusPort.removeDeviceStatusForStartupCleanup(deviceId);
+                    cleanedCount++;
+                } else {
+                    retainedCount++;
+                }
+                
+                // 每100个设备输出进度
+                if ((cleanedCount + retainedCount) % 100 == 0) {
+                    log.debug("StartupCleanup - 进度: 已处理={}/{}", cleanedCount + retainedCount, totalChecked);
+                }
+                
+            } catch (Exception e) {
+                log.warn("StartupCleanup - 处理设备失败: deviceId={}", deviceId, e);
+                retainedCount++; // 失败时保守处理，算作保留
             }
-        };
-    }
-    
-    /**
-     * 保守清理策略
-     * 只清理明显过期的设备（超过TTL + 缓冲时间）
-     */
-    private CleanupResult executeConservativeCleanup() {
-        log.info("StartupCleanup - 执行保守清理策略");
-        
-        // 使用TTL + 额外缓冲时间作为清理阈值
-        long bufferTime = deviceConfigPort.getStartupCleanupBufferSeconds();
-        long cleanupThreshold = System.currentTimeMillis() - 
-                (deviceConfigPort.getDeviceStatusTtlSeconds() + bufferTime) * 1000L;
-        
-        log.debug("StartupCleanup - 保守清理阈值: TTL={}s, 缓冲={}s", 
-                deviceConfigPort.getDeviceStatusTtlSeconds(), bufferTime);
-        
-        return executeThresholdBasedCleanup(cleanupThreshold, "保守");
-    }
-    
-    /**
-     * 激进清理策略
-     * 清理所有可能离线的设备（使用离线检测阈值）
-     */
-    private CleanupResult executeAggressiveCleanup() {
-        log.info("StartupCleanup - 执行激进清理策略");
-        
-        // 使用离线检测阈值
-        long cleanupThreshold = System.currentTimeMillis() - 
-                deviceConfigPort.getOfflineCheckThresholdSeconds() * 1000L;
-        
-        log.debug("StartupCleanup - 激进清理阈值: {}s", 
-                deviceConfigPort.getOfflineCheckThresholdSeconds());
-        
-        return executeThresholdBasedCleanup(cleanupThreshold, "激进");
-    }
-    
-    /**
-     * 智能清理策略
-     * 根据系统配置智能选择清理阈值
-     */
-    private CleanupResult executeSmartCleanup() {
-        log.info("StartupCleanup - 执行智能清理策略");
-        
-        // 计算智能阈值：离线阈值 + 定时任务间隔 + 少量缓冲
-        long offlineThreshold = deviceConfigPort.getOfflineCheckThresholdSeconds();
-        long taskInterval = deviceConfigPort.getOfflineCheckIntervalSeconds();
-        long smartBuffer = Math.min(60, taskInterval / 2); // 最多60秒缓冲
-        
-        long cleanupThreshold = System.currentTimeMillis() - 
-                (offlineThreshold + taskInterval + smartBuffer) * 1000L;
-        
-        log.debug("StartupCleanup - 智能清理阈值: 离线={}s, 间隔={}s, 缓冲={}s", 
-                offlineThreshold, taskInterval, smartBuffer);
-        
-        return executeThresholdBasedCleanup(cleanupThreshold, "智能");
-    }
-    
-    /**
-     * 基于阈值的清理执行
-     */
-    private CleanupResult executeThresholdBasedCleanup(long cleanupThreshold, String strategyName) {
-        AtomicInteger totalChecked = new AtomicInteger(0);
-        AtomicInteger cleanedCount = new AtomicInteger(0);
-        AtomicInteger retainedCount = new AtomicInteger(0);
-        
-        try {
-            // 使用流式处理避免内存问题
-            if (deviceOnlineStatusPort instanceof DeviceOnlineStatusRedisService redisService) {
-                
-                log.debug("StartupCleanup - 开始{}清理，使用流式处理", strategyName);
-                
-                redisService.streamAllDeviceIds(deviceId -> {
-                    totalChecked.incrementAndGet();
-                    
-                    try {
-                        if (shouldCleanupDevice(deviceId, cleanupThreshold)) {
-                            cleanupDeviceCache(deviceId);
-                            cleanedCount.incrementAndGet();
-                        } else {
-                            retainedCount.incrementAndGet();
-                        }
-                        
-                        // 每处理1000个设备输出一次进度
-                        if (totalChecked.get() % 1000 == 0) {
-                            log.debug("StartupCleanup - {}清理进度: 已检查={}, 已清理={}", 
-                                    strategyName, totalChecked.get(), cleanedCount.get());
-                        }
-                        
-                    } catch (Exception e) {
-                        log.warn("StartupCleanup - 处理设备清理失败: deviceId={}", deviceId, e);
-                    }
-                });
-                
-            } else {
-                log.warn("StartupCleanup - 设备状态服务不支持流式处理，跳过启动清理");
-                return new CleanupResult(0, 0, 0);
-            }
-            
-        } catch (Exception e) {
-            log.error("StartupCleanup - {}清理执行失败", strategyName, e);
-            throw e;
         }
         
-        return new CleanupResult(totalChecked.get(), cleanedCount.get(), retainedCount.get());
+        return new CleanupResult(totalChecked, cleanedCount, retainedCount);
     }
     
     /**
-     * 判断设备是否应该被清理
+     * 判断设备是否需要清理
      */
     private boolean shouldCleanupDevice(Long deviceId, long cleanupThreshold) {
         try {
-            // 获取设备最后上报时间
             Long lastReportTime = deviceOnlineStatusPort.getDeviceLastReportTime(deviceId);
             
             if (lastReportTime == null) {
-                // 没有上报时间记录，清理设备状态
-                log.debug("StartupCleanup - 设备无上报时间记录，标记清理: deviceId={}", deviceId);
+                log.debug("StartupCleanup - 设备无上报记录，清理: deviceId={}", deviceId);
                 return true;
             }
             
-            // 检查是否超过清理阈值
             boolean shouldCleanup = lastReportTime < cleanupThreshold;
             
             if (shouldCleanup) {
-                log.debug("StartupCleanup - 设备超过清理阈值，标记清理: deviceId={}, lastReport={}, threshold={}", 
-                        deviceId, lastReportTime, cleanupThreshold);
+                long ageMinutes = (System.currentTimeMillis() - lastReportTime) / 60000;
+                log.debug("StartupCleanup - 设备过时清理: deviceId={}, 无活动{}分钟", deviceId, ageMinutes);
             }
             
             return shouldCleanup;
             
         } catch (Exception e) {
-            log.warn("StartupCleanup - 检查设备清理条件失败: deviceId={}", deviceId, e);
-            return false;
+            log.warn("StartupCleanup - 检查设备失败: deviceId={}", deviceId, e);
+            return false; // 异常时不清理，保守处理
         }
     }
     
     /**
-     * 清理设备缓存
-     */
-    private void cleanupDeviceCache(Long deviceId) {
-        try {
-            // 启动清理专用方法（不影响计数器）
-            deviceOnlineStatusPort.removeDeviceStatusForStartupCleanup(deviceId);
-            
-            log.debug("StartupCleanup - 设备缓存清理完成: deviceId={}", deviceId);
-            
-        } catch (Exception e) {
-            log.error("StartupCleanup - 清理设备缓存失败: deviceId={}", deviceId, e);
-            throw e;
-        }
-    }
-    
-    /**
-     * 清理结果记录
+     * 清理结果
      */
     public record CleanupResult(
             int totalChecked,    // 总检查数量

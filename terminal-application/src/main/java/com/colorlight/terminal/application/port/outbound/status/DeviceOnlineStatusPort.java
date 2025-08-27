@@ -85,13 +85,22 @@ public interface DeviceOnlineStatusPort {
      * @return 过期的设备ID列表
      */
     List<Long> findExpiredDevices(long expireThreshold);
+
+    /**
+     * 启动时清理设备状态（不影响计数器）
+     *
+     * @param deviceId 设备ID
+     */
+    void removeDeviceStatusForStartupCleanup(Long deviceId);
     
     /**
-     * 批量更新设备状态为离线
+     * 标记单个设备为离线状态并重置TTL为重连窗口
+     * 用于离线检测时的原子化操作
      * 
-     * @param deviceIds 设备ID列表
+     * @param deviceId 设备ID
+     * @return 包含时间信息的状态对象，用于保存在线时长记录；如果设备不存在返回null
      */
-    void batchMarkOffline(List<Long> deviceIds);
+    DeviceOnlineStatus markOfflineAndResetTtl(Long deviceId);
     
     /**
      * 获取在线设备数量
@@ -124,10 +133,4 @@ public interface DeviceOnlineStatusPort {
      */
     void releaseDeviceUpdateLock(Long deviceId);
 
-    /**
-     * 启动时清理设备状态（不影响计数器）
-     * 
-     * @param deviceId 设备ID
-     */
-    void removeDeviceStatusForStartupCleanup(Long deviceId);
 }

@@ -38,31 +38,33 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     private final DeviceConfigPort deviceConfigPort;
     
     /**
-     * 获取状态TTL配置
+     * 获取状态TTL配置 - 用于正常在线状态
      */
     private Duration getStatusTtl() {
         return Duration.ofSeconds(deviceConfigPort.getRedisStatusTtl());
     }
+    
+    /**
+     * 获取重连窗口TTL配置 - 用于离线后等待重连
+     */
+    private Duration getReconnectTtl() {
+        return Duration.ofSeconds(deviceConfigPort.getReconnectTtl());
+    }
 
     @Override
     public void smartDetermined(DeviceOnlineStatus status) {
-        if (status.getStatus() == null) {
-            updateDeviceStatus(status);
-        }
-        else {
-            switch (status.getStatus()) {
-                case GO_LIVE:
-                case RECONNECT:
-                    saveDeviceStatus(status);
-                    break;
-                case ONLINE:
+        // 检查 status.getStatus() 是否为 null
+        Optional.ofNullable(status.getStatus())
+                .ifPresentOrElse(s -> {
+                    switch (s) {
+                        case GO_LIVE, RECONNECT -> saveDeviceStatus(status);
+                        case ONLINE -> updateDeviceStatus(status);
+                        // OFFLINE 和 default 不需要任何操作
+                        case OFFLINE, default -> {}
+                    }
+                }, () -> {
                     updateDeviceStatus(status);
-                    break;
-                // 离线不在这里处理
-                case OFFLINE:
-                default:
-            }
-        }
+                });
     }
 
     /**
@@ -216,11 +218,14 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     public Long getDeviceLastReportTime(Long deviceId) {
         Optional<DeviceOnlineStatus> deviceStatus = getDeviceStatus(deviceId);
         if (deviceStatus.isPresent()) {
-            return deviceStatus.get().getOnlineStartTime();
+            DeviceOnlineStatus status = deviceStatus.get();
+            Long lastReportTime = status.getLastReportTime();
+            if (lastReportTime != null && lastReportTime > 0) {
+                return lastReportTime;
+            }
+            return status.getOnlineStartTime();
         }
-        else {
-            return 0L;
-        }
+        return null; // 返回null而不是0，更明确表示设备不存在
     }
 
     @Override
@@ -482,49 +487,99 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         }
     }
 
-    /**
-     * 标记离线
-     * @param deviceIds 设备ID列表
-     */
     @Override
     @SuppressWarnings("unchecked")
-    public void batchMarkOffline(List<Long> deviceIds) {
-        if (deviceIds == null || deviceIds.isEmpty()) {
-            return;
-        }
-        
-        try {
-            log.debug("DeviceOnlineStatus - 批量标记设备离线: count={}", deviceIds.size());
+    public void removeDeviceStatusForStartupCleanup(Long deviceId) {
+        String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
 
-            // 批量更新Redis状态
+        try {
             redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
                 public Object execute(RedisOperations operations) throws DataAccessException {
                     operations.multi();
-                    
-                    for (Long deviceId : deviceIds) {
-                        String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
-                        
-                        // 更新状态为离线
-                        operations.opsForHash().put(statusKey, "status", OnlineStatus.OFFLINE.name());
-                        operations.opsForHash().put(statusKey, "statusChangeTime", System.currentTimeMillis());
-                        // 移除状态索引
-                        operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
-                        // 重新设置TTL
-                        operations.expire(statusKey, getStatusTtl());
-                    }
-                    
-                    // 减少在线设备计数
-                    operations.opsForValue().decrement(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY, deviceIds.size());
-                    
+
+                    // 删除状态详情（不影响计数器）
+                    operations.delete(statusKey);
+
+                    // 从索引中移除
+                    operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
+
+                    // 启动清理时不修改计数器，因为已经在启动时重置
+
                     return operations.exec();
                 }
             });
-            
-            log.info("DeviceOnlineStatus - 批量标记设备离线完成: count={}", deviceIds.size());
-            
+
+            log.debug("DeviceOnlineStatus - 启动清理设备状态成功: deviceId={}", deviceId);
+
         } catch (Exception e) {
-            log.error("DeviceOnlineStatus - 批量标记设备离线失败: deviceIds.size={}", deviceIds.size(), e);
+            log.error("DeviceOnlineStatus - 启动清理设备状态失败: deviceId={}", deviceId, e);
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public DeviceOnlineStatus markOfflineAndResetTtl(Long deviceId) {
+        String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
+
+        try {
+            // 先获取当前状态信息
+            Optional<DeviceOnlineStatus> currentStatusOpt = getDeviceStatus(deviceId);
+            if (currentStatusOpt.isEmpty()) {
+                log.debug("DeviceOnlineStatus - 设备状态不存在，无法标记离线: deviceId={}", deviceId);
+                return null;
+            }
+
+            DeviceOnlineStatus currentStatus = currentStatusOpt.get();
+            OnlineStatus status = currentStatus.getStatus();
+
+            // 检查是否为在线相关状态
+            if (status != OnlineStatus.ONLINE && status != OnlineStatus.GO_LIVE && status != OnlineStatus.RECONNECT) {
+                log.debug("DeviceOnlineStatus - 设备非在线状态，跳过离线处理: deviceId={}, status={}", deviceId, status);
+                return null;
+            }
+
+            // 验证时间信息完整性
+            if (currentStatus.getOnlineStartTime() == null || currentStatus.getLastReportTime() == null) {
+                log.warn("DeviceOnlineStatus - 设备时间信息不完整，跳过离线处理: deviceId={}, onlineStartTime={}, lastReportTime={}",
+                        deviceId, currentStatus.getOnlineStartTime(), currentStatus.getLastReportTime());
+                return null;
+            }
+
+            // 使用Redis事务原子化执行离线操作
+            redisTemplate.execute(new SessionCallback<Object>() {
+                @Override
+                public Object execute(RedisOperations operations) throws DataAccessException {
+                    operations.multi();
+
+                    // 更新状态为离线
+                    operations.opsForHash().put(statusKey, "status", OnlineStatus.OFFLINE.name());
+                    operations.opsForHash().put(statusKey, "statusChangeTime", System.currentTimeMillis());
+
+                    // 重置TTL为重连窗口时间
+                    operations.expire(statusKey, getReconnectTtl());
+
+                    // 从在线设备索引中移除
+                    operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
+
+                    // 减少在线设备计数
+                    operations.opsForValue().decrement(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
+
+                    return operations.exec();
+                }
+            });
+
+            // 标记当前状态对象为离线（返回给调用方用于保存在线时长记录）
+            currentStatus.markOffline();
+
+            log.info("DeviceOnlineStatus - 设备标记离线并重置TTL成功: deviceId={}, reconnectTtl={}s",
+                    deviceId, getReconnectTtl().getSeconds());
+
+            return currentStatus;
+
+        } catch (Exception e) {
+            log.error("DeviceOnlineStatus - 标记设备离线失败: deviceId={}", deviceId, e);
+            return null;
         }
     }
     
@@ -659,32 +714,5 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         }
     }
 
-    @Override
-    public void removeDeviceStatusForStartupCleanup(Long deviceId) {
-        String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
-        
-        try {
-            redisTemplate.execute(new SessionCallback<Object>() {
-                @Override
-                public Object execute(RedisOperations operations) throws DataAccessException {
-                    operations.multi();
-                    
-                    // 删除状态详情（不影响计数器）
-                    operations.delete(statusKey);
-                    
-                    // 从索引中移除
-                    operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
-                    
-                    // 启动清理时不修改计数器，因为已经在启动时重置
-                    
-                    return operations.exec();
-                }
-            });
-            
-            log.debug("DeviceOnlineStatus - 启动清理设备状态成功: deviceId={}", deviceId);
-            
-        } catch (Exception e) {
-            log.error("DeviceOnlineStatus - 启动清理设备状态失败: deviceId={}", deviceId, e);
-        }
-    }
+
 }

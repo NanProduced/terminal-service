@@ -150,7 +150,8 @@ terminal:
       timeout-threshold: 70000      # 离线超时阈值(毫秒) 70秒 （判断终端离线的阈值，本来规定的60秒，这里再加10秒，不影响）
       statistics-interval: 300000   # 统计信息输出间隔(毫秒) 5分钟 （定时打印在线情况日志）
     status-update:
-      redis-ttl: 120                # Redis状态TTL(秒) 2分钟 （终端状态Redis缓存的过期时间，离线检查只改状态不删缓存）
+      redis-ttl: 3600                # Redis终端状态初始TTL(秒) 1小时 （终端状态Redis缓存的过期时间，离线检查只改状态不删缓存）
+      reconnect-ttl: 120            # 终端重连窗口时间 （终端被标记离线后，120s过期）
       http-enabled: true            # 启用HTTP请求状态更新 （终端调用http请求时刷新最后上报时间）
       websocket-enabled: true       # 启用WebSocket状态更新 （终端websocket交互刷新最后上报时间，连接、消息、心跳都算）
       async-enabled: true           # 启用异步状态更新 （异步变更终端状态，不阻塞业务接口）
@@ -175,9 +176,6 @@ terminal:
       stream-query-threshold: 2000    # 流式查询阈值 - 超过此数量使用流式查询 （查需要延长过期时间的终端的流处理阈值）
     startup-cleanup:
       enabled: true                 # 启用启动时缓存清理（解决服务器宕机重启后的僵尸缓存问题）
-      strategy: "smart"             # 清理策略：conservative保守/aggressive激进/smart智能
-      required: false               # 清理失败是否阻断启动（false=记录日志继续启动，true=失败时阻断启动）
-      buffer-seconds: 60            # 保守策略的缓冲时间(秒) - TTL基础上的安全缓冲
     # 定时任务启动配置
     task-startup:
       # 启用交错启动，避免多任务同时启动资源竞争

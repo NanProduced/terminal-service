@@ -49,6 +49,14 @@ public interface DeviceConfigPort {
     }
     
     /**
+     * 获取重连窗口TTL(秒)
+     * @return 重连窗口TTL时间
+     */
+    default long getReconnectTtl() {
+        return getDeviceConfig().getStatusUpdate().getReconnectTtl();
+    }
+    
+    /**
      * 是否启用HTTP状态更新
      * @return 是否启用
      */
@@ -198,54 +206,6 @@ public interface DeviceConfigPort {
      */
     default boolean isStartupCleanupEnabled() {
         return getDeviceConfig().getStartupCleanup().isEnabled();
-    }
-    
-    /**
-     * 获取启动清理策略
-     * @return 清理策略
-     */
-    default String getStartupCleanupStrategy() {
-        return getDeviceConfig().getStartupCleanup().getStrategy();
-    }
-    
-    /**
-     * 是否强制要求启动清理成功
-     * @return 是否强制要求
-     */
-    default boolean isStartupCleanupRequired() {
-        return getDeviceConfig().getStartupCleanup().isRequired();
-    }
-    
-    /**
-     * 获取启动清理缓冲时间(秒)
-     * @return 缓冲时间
-     */
-    default long getStartupCleanupBufferSeconds() {
-        return getDeviceConfig().getStartupCleanup().getBufferSeconds();
-    }
-    
-    /**
-     * 获取设备状态TTL(秒) - 用于启动清理计算
-     * @return TTL秒数
-     */
-    default long getDeviceStatusTtlSeconds() {
-        return getRedisStatusTtl();
-    }
-    
-    /**
-     * 获取离线检测阈值(秒) - 用于启动清理计算
-     * @return 离线阈值秒数
-     */
-    default long getOfflineCheckThresholdSeconds() {
-        return getOfflineTimeoutThreshold() / 1000;
-    }
-    
-    /**
-     * 获取离线检测间隔(秒) - 用于启动清理计算
-     * @return 检测间隔秒数
-     */
-    default long getOfflineCheckIntervalSeconds() {
-        return getOfflineCheckInterval() / 1000;
     }
     
     // ==================== 定时任务启动配置 ====================
