@@ -54,17 +54,24 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     @Override
     public void smartDetermined(DeviceOnlineStatus status) {
         // 检查 status.getStatus() 是否为 null
-        Optional.ofNullable(status.getStatus())
-                .ifPresentOrElse(s -> {
-                    switch (s) {
-                        case GO_LIVE, RECONNECT -> saveDeviceStatus(status);
-                        case ONLINE -> updateDeviceStatus(status);
-                        // OFFLINE 和 default 不需要任何操作
-                        case OFFLINE, default -> {}
-                    }
-                }, () -> {
+        if (status.getStatus() == null) {
+            updateDeviceStatus(status);
+        } else {
+            switch (status.getStatus()) {
+                case GO_LIVE:
+                case RECONNECT:
+                    saveDeviceStatus(status);
+                    break;
+                case ONLINE:
                     updateDeviceStatus(status);
-                });
+                    break;
+                case OFFLINE:
+                    // OFFLINE 不做任何处理
+                    break;
+                default:
+                    break;
+            }
+        }
     }
 
     /**
