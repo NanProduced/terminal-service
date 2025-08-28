@@ -2,6 +2,7 @@ package com.colorlight.terminal.api;
 
 import com.colorlight.terminal.dto.command.DeviceApiCommand;
 import com.colorlight.terminal.dto.command.DeviceApiCommandConfirm;
+import com.colorlight.terminal.dto.log.DeviceApiTerminalLog;
 import com.colorlight.terminal.dto.media.DeviceApiMedia;
 import com.colorlight.terminal.dto.program.DeviceApiProgram;
 import org.springframework.web.bind.annotation.*;
@@ -85,5 +86,12 @@ public interface DeviceInteractionApi {
      */
     @PostMapping("/wp-json/led/v2/monitor")
     void reportSensorData(@RequestBody String report);
+
+    /**
+     * 终端日志上报接口
+     * @param logs 终端日志
+     */
+    @PostMapping("/wp-json/led/monitor/log")
+    void reportTerminalLog(@RequestBody List<DeviceApiTerminalLog> logs);
 
 }

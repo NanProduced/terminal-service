@@ -12,19 +12,19 @@ spring:
       discovery:
         server-addr: 192.168.51.114:8848
         service: terminal-service
-        namespace: 500a59a2-cdc1-41f0-ae2e-5d4b1ed1e92f
+        namespace: bf06b404-e018-4549-987b-505386a734dc
         group: DEFAULT_GROUP
         username: nacos
-        password: nacos
+        password: LedMasterNacos
         register-enabled: true
         heart-beat-interval: 5000
         heart-beat-timeout: 15000
       config:
         server-addr: 192.168.51.114:8848
-        namespace: 500a59a2-cdc1-41f0-ae2e-5d4b1ed1e92f
+        namespace: bf06b404-e018-4549-987b-505386a734dc
         group: DEFAULT_GROUP
         username: nacos
-        password: nacos
+        password: LedMasterNacos
         timeout: 5000
         config-long-poll-timeout: 1000
         config-retry-time: 100000

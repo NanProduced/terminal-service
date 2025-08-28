@@ -2,13 +2,16 @@ package com.colorlight.terminal.boot.controller;
 
 import com.colorlight.terminal.api.DeviceInteractionApi;
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
+import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.boot.converter.CommandConverter;
+import com.colorlight.terminal.boot.converter.TerminalLogConverter;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
 import com.colorlight.terminal.dto.command.DeviceApiCommand;
 import com.colorlight.terminal.dto.command.DeviceApiCommandConfirm;
+import com.colorlight.terminal.dto.log.DeviceApiTerminalLog;
 import com.colorlight.terminal.dto.media.DeviceApiMedia;
 import com.colorlight.terminal.dto.program.DeviceApiProgram;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
@@ -37,6 +40,7 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     private final TerminalCommandUseCase terminalCommandUseCase;
     private final TerminalReportUseCase terminalReportUseCase;
     private final CommandConverter commandConverter;
+    private final TerminalLogConverter terminalLogConverter;
 
     @Operation(
             summary = "上报终端信息",
@@ -179,5 +183,19 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     public void reportSensorData(String report) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceSensorData - 终端 {} 上报传感器数据: {}", principal.getDeviceId(), report);
+    }
+
+    @Operation(
+            summary = "终端上报日志",
+            description = "终端通过HTTP接口上报终端日志",
+            tags = {"终端日志"}
+
+    )
+    @Override
+    public void reportTerminalLog(List<DeviceApiTerminalLog> logs) {
+        TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        log.debug("DeviceSchedule - 终端 {} 上报终端日志: {}", principal.getDeviceId(), logs);
+        List<TerminalLog> terminalLogs = terminalLogConverter.convertToTerminalLog(logs);
+        terminalReportUseCase.asyncSaveTerminalLog(principal.getDeviceId(), terminalLogs);
     }
 }

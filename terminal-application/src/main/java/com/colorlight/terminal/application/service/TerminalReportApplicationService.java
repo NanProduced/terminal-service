@@ -1,18 +1,27 @@
 package com.colorlight.terminal.application.service;
 
+import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
+import com.colorlight.terminal.application.port.outbound.repository.TerminalLogRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalStatusReportRepository;
+import com.colorlight.terminal.commons.exception.CommonErrorCode;
+import com.colorlight.terminal.commons.exception.business.BusinessException;
 import com.colorlight.terminal.commons.utils.JsonUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TerminalReportApplicationService implements TerminalReportUseCase {
 
     private final TerminalStatusReportRepository terminalStatusReportRepository;
+    private final TerminalLogRepository terminalLogRepository;
 
     @Override
     public void saveLedStatus(Long deviceId, String reportStr) {
@@ -29,6 +38,23 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     @Override
     @Async("deviceStatusExecutor")
     public void asyncSaveTerminalStatusReport(Long deviceId, TerminalStatusReport report) {
-        terminalStatusReportRepository.saveTerminalStatusReport(deviceId, report);
+        try {
+            terminalStatusReportRepository.saveTerminalStatusReport(deviceId, report);
+            log.info("ApplicationService - 异步保存终端led_status成功: deviceId={}", deviceId);
+        } catch (Exception e) {
+            throw new BusinessException(CommonErrorCode.OPERATION_FAILED, e);
+        }
+    }
+
+    @Override
+    @Async("defaultAsyncExecutor")
+    public void asyncSaveTerminalLog(Long deviceId, List<TerminalLog> logs) {
+        try {
+            logs.forEach(e -> e.setDeviceId(deviceId));
+            terminalLogRepository.batchSaveTerminalLog(logs);
+            log.info("ApplicationService - 异步保存终端日志成功: deviceId={}, 日志数量:{}", deviceId, logs.size());
+        } catch (Exception e) {
+            throw new BusinessException(CommonErrorCode.OPERATION_FAILED, e);
+        }
     }
 }
