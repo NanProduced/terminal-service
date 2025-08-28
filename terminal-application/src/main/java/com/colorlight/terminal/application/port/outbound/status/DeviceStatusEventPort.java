@@ -4,7 +4,6 @@ import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 
 /**
  * 设备状态事件发布端口接口
- * 预留扩展机制，用于通知其他系统
  * 
  * @author Nan
  */

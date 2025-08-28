@@ -39,12 +39,9 @@ public class RedisKeyConstant {
      */
     public static final String ONLINE_DEVICE_COUNT_KEY = "device:online:count";
     
-    /**
-     * 设备在线时间 - String
-     * 存储设备的上线开始时间，用于计算在线时长
-     * TTL较长（24小时），避免因状态过期导致在线时长丢失，每天刷新
-     */
-    public static final String DEVICE_ONLINE_TIME_KEY = "device:online:time:%d";
+    /*=================== 设备开机时间 ===================*/
+
+    public static final String DEVICE_SWITCH_ON_RECORD_KEY = "device:switch:%d";
 
     /*===================  分布式锁 ====================== */
 
