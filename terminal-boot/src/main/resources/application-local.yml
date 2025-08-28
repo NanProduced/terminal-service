@@ -129,7 +129,35 @@ terminal:
       so-reuse-addr: true
     heartbeat:
       interval: 55                            # 设备心跳间隔(秒),和播放盒二次开发文档对齐
-
+  # WebSocket连接统计配置示例
+  websocket:
+    stats:
+      # 是否启用WebSocket统计信息定时输出
+      enabled: true
+      # 统计信息输出间隔(毫秒) - 默认5分钟
+      interval: 300000
+      # 统计任务初始延迟(毫秒) - 默认2分钟
+      initial-delay: 120000
+      # 是否启用详细的分片信息输出
+      detail-enabled: true
+      # 是否启用负载均衡分析
+      load-balance-analysis-enabled: true
+      # 是否启用可视化条形图输出
+      visual-bar-enabled: true
+      # 负载均衡警告阈值
+      # 当最大分片/最小分片的比率超过此值时发出警告
+      load-balance-warning-threshold: 2.0
+    connection:
+      # 是否启用连接清理
+      cleanup-enabled: true
+      # 连接清理间隔(毫秒) - 默认10分钟
+      cleanup-interval: 600000
+      # 心跳超时阈值(毫秒)
+      # 默认65秒，比WebSocket心跳间隔(55秒)多10秒容错
+      heartbeat-timeout: 65000
+      # 是否启用紧急统计信息输出
+      # 在连接数异常时输出详细调试信息
+      emergency-stats-enabled: true
   # 终端指令配置 - 支持Nacos动态刷新
   command:
     expire:

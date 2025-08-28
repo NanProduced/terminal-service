@@ -2,9 +2,12 @@ package com.colorlight.terminal.boot.config.properties;
 
 import com.colorlight.terminal.infrastructure.config.properties.DeviceConfigProperties;
 import com.colorlight.terminal.infrastructure.config.properties.TerminalCommandConfigProperties;
+import com.colorlight.terminal.infrastructure.config.properties.WebSocketConfigProperties;
 import com.colorlight.terminal.infrastructure.websocket.config.NettyWebsocketProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 /**
  * 终端配置属性装配
@@ -17,7 +20,18 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties({
         NettyWebsocketProperties.class,
         TerminalCommandConfigProperties.class,
-        DeviceConfigProperties.class
+        DeviceConfigProperties.class,
+        WebSocketConfigProperties.class
 })
 public class TerminalPropertiesConfiguration {
+    
+    /**
+     * 为SpEL表达式提供明确的Bean引用
+     * 使用@Primary避免类型冲突，直接返回注入的配置实例
+     */
+    @Bean("webSocketConfigProperties")
+    @Primary
+    public WebSocketConfigProperties webSocketConfigProperties(WebSocketConfigProperties properties) {
+        return properties;
+    }
 }
