@@ -1,5 +1,6 @@
 package com.colorlight.terminal.application.service;
 
+import com.colorlight.terminal.application.domain.handler.ReportTimePopulator;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
@@ -31,6 +32,8 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
         try {
             // 尝试反序列化为led_status
             final TerminalStatusReport terminalStatusReport = JsonUtils.fromJson(reportStr, TerminalStatusReport.class);
+            // 自动填充reportTime
+            ReportTimePopulator.populateReportTime(terminalStatusReport, System.currentTimeMillis() / 1000);
             // 反序列化成功则异步持久化
             asyncSaveTerminalStatusReport(deviceId, terminalStatusReport);
             // 处理开机时间戳记录
