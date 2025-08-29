@@ -70,7 +70,7 @@ public class DeviceTimeZoneRedisService implements DeviceTimeZonePort {
             TerminalStatusReport.NewRtc rtc = reportData.get().getNewrtc();
             // 构建设备时区缓存结构
             DeviceTimeZoneCache deviceTimeZoneCache = new DeviceTimeZoneCache(deviceId, rtc.getTimezoneId(), rtc.getTimezone());
-            LocalDateTime serverTime = TimeUtils.convertTimestampToUtc(rtc.getReportTime());
+            LocalDateTime serverTime = TimeUtils.convertTimestampToUtc(rtc.getReportTime() * 1000);
             LocalDateTime localTime = TimeUtils.convertStringToLocalDateTime(rtc.getTime(), null);
             // 计算设备本地时间（相比与本地时区）的偏差（对比服务器标准时间）
             Duration deviation = Duration.between(TimeUtils.transTimeToUTC(localTime, deviceTimeZoneCache.getDeviceZoneId()), serverTime);

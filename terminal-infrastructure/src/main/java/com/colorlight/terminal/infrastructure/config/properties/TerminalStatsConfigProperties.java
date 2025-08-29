@@ -35,9 +35,9 @@ public class TerminalStatsConfigProperties {
         /**
          * 时间偏差阈值(秒)
          * 与标准时间相差超过此值视为有偏差，需要校准
-         * 默认2秒
+         * 默认5秒
          */
-        private long offsetThresholdSeconds = 2L;
+        private long offsetThresholdSeconds = 5L;
         
         /**
          * 时区缓存TTL(小时)
