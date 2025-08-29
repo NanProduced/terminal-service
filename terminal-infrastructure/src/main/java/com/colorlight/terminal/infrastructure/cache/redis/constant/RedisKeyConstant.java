@@ -43,6 +43,10 @@ public class RedisKeyConstant {
 
     public static final String DEVICE_SWITCH_ON_RECORD_KEY = "device:switch:%d";
 
+    /*=================== 设备时间及时区信息缓存 ===================*/
+
+    public static final String DEVICE_TIME_ZONE_KEY = "device:timezone:%d";
+
     /*===================  分布式锁 ====================== */
 
     /**

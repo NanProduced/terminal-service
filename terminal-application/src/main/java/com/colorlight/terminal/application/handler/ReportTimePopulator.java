@@ -1,4 +1,4 @@
-package com.colorlight.terminal.application.domain.handler;
+package com.colorlight.terminal.application.handler;
 
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
 import lombok.extern.slf4j.Slf4j;

@@ -3,10 +3,12 @@ package com.colorlight.terminal.commons.utils;
 
 import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
 import com.colorlight.terminal.commons.exception.technical.TechnicalException;
+import org.apache.commons.lang3.StringUtils;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
@@ -17,6 +19,38 @@ public class TimeUtils {
     private TimeUtils() {
         throw new TechnicalException(TechErrorCode.INSTANTIATION_IS_PROHIBITED);
     }
+
+    /**
+     * 将指定时区时间转成服务器时区查询
+     * @param browserTime 浏览器时间
+     * @param browserZone 浏览器时区
+     * @return
+     */
+    public static LocalDateTime transTimeToUTC(LocalDateTime browserTime, ZoneId browserZone) {
+        ZonedDateTime zonedDateTime = ZonedDateTime.of(browserTime, browserZone);
+        ZonedDateTime utcZonedDateTime = zonedDateTime.withZoneSameInstant(ZoneId.of("UTC"));
+        return utcZonedDateTime.toLocalDateTime();
+    }
+
+    /**
+     * 时间戳转UTC LocalDateTime
+     * @param timestamp 时间戳
+     * @return UTC
+     */
+    public static LocalDateTime convertTimestampToUtc(Long timestamp) {
+        if (timestamp == null) {
+            return null;
+        }
+        try {
+            return LocalDateTime.ofInstant(
+                    Instant.ofEpochMilli(timestamp),
+                    ZoneId.of("UTC")
+            );
+        } catch (Exception e) {
+            throw new TechnicalException(TechErrorCode.TIME_FORMAT_TRANSLATE_FAILED);
+        }
+    }
+
 
     /**
      * 将事件时间戳转换为LocalDateTime
@@ -59,8 +93,11 @@ public class TimeUtils {
      * @return 转换后的 LocalDateTime 对象
      */
     public static LocalDateTime convertStringToLocalDateTime(String timeStr, String pattern) {
-        if (timeStr == null || pattern == null || timeStr.isEmpty() || pattern.isEmpty()) {
+        if (StringUtils.isBlank(timeStr)) {
             return null;
+        }
+        if (StringUtils.isBlank(pattern)) {
+            pattern = "yyyy-MM-dd HH:mm:ss";
         }
         try {
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);

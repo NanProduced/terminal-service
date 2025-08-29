@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -144,10 +145,11 @@ public class DeviceInteractionController implements DeviceInteractionApi {
             tags = {"终端节目"}
     )
     @Override
-    public void reportMediaPlayTimes(String report) {
+    public void reportMediaPlayRecords(String report) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceMedia - 终端 {} 上报素材播放记录: {}", principal.getDeviceId(), report);
-        // todo: 素材播放记录存储
+        if (StringUtils.isBlank(report)) return;
+        terminalReportUseCase.asyncHandleMediaPlayRecordReport(principal.getDeviceId(), report);
     }
 
     @Operation(
@@ -156,7 +158,7 @@ public class DeviceInteractionController implements DeviceInteractionApi {
             tags = {"终端节目"}
     )
     @Override
-    public void reportProgramPlayTimes(String report) {
+    public void reportProgramPlayRecords(String report) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceProgram - 终端 {} 上报节目播放记录: {}", principal.getDeviceId(), report);
         // todo: 节目播放记录存储

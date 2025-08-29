@@ -32,4 +32,11 @@ public interface TerminalReportUseCase {
      * @param logs 日志
      */
     void asyncSaveTerminalLog(Long deviceId, List<TerminalLog> logs);
+
+    /**
+     * 异步处理素材播放记录上报
+     * @param deviceId 设备Id
+     * @param reportStr 上报Json
+     */
+    void asyncHandleMediaPlayRecordReport(Long deviceId, String reportStr);
 }

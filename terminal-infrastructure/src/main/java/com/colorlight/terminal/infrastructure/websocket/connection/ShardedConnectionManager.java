@@ -25,9 +25,9 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
 
     /**
      * 分片数量 - 基于CPU核心数优化
-     * <p>最大16分片，8核以下按核心数乘2</p>
+     * <p>8核以下按核心数乘2</p>
      */
-    private static final int SHARD_COUNT = Math.max(16, Runtime.getRuntime().availableProcessors() * 2);
+    private static final int SHARD_COUNT = Math.min(16, Runtime.getRuntime().availableProcessors() * 2);
     
     /** 每个分片的初始容量 */
     private static final int INITIAL_SHARD_CAPACITY = 1024;

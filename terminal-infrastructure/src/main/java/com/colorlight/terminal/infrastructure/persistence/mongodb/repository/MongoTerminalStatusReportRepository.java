@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * 终端上报数据的MongoDB存储实现类
@@ -46,5 +47,12 @@ public class MongoTerminalStatusReportRepository implements TerminalStatusReport
             newDoc.setUpdateTime(now);
             mongoTemplate.save(newDoc);
         }
+    }
+
+    @Override
+    public Optional<TerminalStatusReport> getReportData(Long deviceId) {
+        Query query = Query.query(Criteria.where("deviceId").is(deviceId));
+        return Optional.ofNullable(mongoTemplate.findOne(query, TerminalStatusReportDocument.class))
+                .map(TerminalStatusReportDocument::getTerminalStatusReport);
     }
 }

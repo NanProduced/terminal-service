@@ -64,14 +64,14 @@ public interface DeviceInteractionApi {
      * @param report 素材播放信息
      */
     @PostMapping( "/wp-json/led/flowfee")
-    void reportMediaPlayTimes(@RequestBody String report);
+    void reportMediaPlayRecords(@RequestBody String report);
 
     /**
      * 终端上报节目播放信息
      * @param report 节目播放信息
      */
     @PostMapping("/wp-json/led/flowfee/v2/program")
-    void reportProgramPlayTimes(@RequestBody String report);
+    void reportProgramPlayRecords(@RequestBody String report);
 
     /**
      * 终端获取排程信息

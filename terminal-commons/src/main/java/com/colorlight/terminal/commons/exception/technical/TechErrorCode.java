@@ -30,7 +30,11 @@ public enum TechErrorCode implements ErrorCode {
 
     MONGO_DB_ERROR("TM0105", "MongoDB操作失败", ErrorLevel.CRITICAL, HttpStatusCode.INTERNAL_SERVER_ERROR),
 
-    MYSQL_ERROR("TM0106", "MySQL操作失败", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR);
+    MYSQL_ERROR("TM0106", "MySQL操作失败", ErrorLevel.WARN, HttpStatusCode.INTERNAL_SERVER_ERROR),
+
+    REDIS_ERROR("TM0107", "Redis操作失败", ErrorLevel.WARN, HttpStatusCode.INTERNAL_SERVER_ERROR),
+
+    THREAD_POOL_REJECTED_ERROR("TM0108", "线程池耗尽拒绝任务", ErrorLevel.FATAL, HttpStatusCode.INTERNAL_SERVER_ERROR);
 
     /**
      * 错误码

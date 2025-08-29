@@ -1,5 +1,7 @@
 package com.colorlight.terminal.boot.config.threadpool;
 
+import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
+import com.colorlight.terminal.commons.exception.technical.TechnicalException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +23,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 2. 异步事件处理器（deviceEventExecutor）
  * 3. 异步状态更新器（deviceStatusExecutor）
  * 4. 通用异步处理器（defaultAsyncExecutor）
+ * 5. 统计数据处理器（statisticsReportExecutor）
  * 
  * 所有线程池都配置了守护线程和优雅关闭机制
  * 定时任务支持通过配置控制延迟启动时间，避免启动时资源竞争
@@ -146,7 +149,51 @@ public class ThreadPoolConfig {
         
         return executor;
     }
-    
+
+    /**
+     * 统计数据上报处理器
+     * 专用于高频次统计数据上报：素材播放、节目播放、GPS、传感器数据
+     */
+    @Bean("statisticsReportExecutor")
+    public Executor statisticsReportExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+
+        // 核心线程数 - 基于数据库连接池设计
+        executor.setCorePoolSize(8);
+
+        // 最大线程数 - 支持突发高峰
+        executor.setMaxPoolSize(30);
+
+        // 队列容量 - 缓冲高频上报
+        executor.setQueueCapacity(3000);
+
+        // 线程空闲时间
+        executor.setKeepAliveSeconds(300);  // 5分钟，适应上报波峰波谷
+
+        // 线程命名
+        executor.setThreadNamePrefix("stats-report-");
+
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(120);
+
+        // 拒绝策略：丢弃最旧任务
+        executor.setRejectedExecutionHandler((task, ext) -> {
+            log.error("ThreadPool - 统计任务被拒绝: queue={}, active={}",
+                    ext.getQueue().size(), ext.getActiveCount());
+            // 考虑：收集监控指标
+            throw new TechnicalException(TechErrorCode.THREAD_POOL_REJECTED_ERROR);
+        });
+
+        executor.initialize();
+
+        log.info("ThreadPool - 统计上报处理器初始化完成: core={}, max={}, queue={}",
+                executor.getCorePoolSize(), executor.getMaxPoolSize(), executor.getQueueCapacity());
+
+        return executor;
+    }
+
+
+
     /**
      * 默认异步执行器
      * 用于其他通用异步任务（不知道怎么分类的就用这个）
@@ -163,7 +210,7 @@ public class ThreadPoolConfig {
         executor.setMaxPoolSize(8);
         
         // 队列容量
-        executor.setQueueCapacity(100);
+        executor.setQueueCapacity(500);
         
         // 线程空闲时间(秒)
         executor.setKeepAliveSeconds(60);
