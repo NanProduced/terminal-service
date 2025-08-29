@@ -1,8 +1,10 @@
 package com.colorlight.terminal.application.domain.report;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import lombok.Data;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 
@@ -51,8 +53,11 @@ public class MediaPlayRecordReport {
 
     /**
      * 播放开始UTC时间
+     * 注意：反序列化时使用setStartUtcTimeAndAdjustStartTime方法
      */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonProperty("startUtcTime") // 明确指定JSON属性名
+    @Setter(lombok.AccessLevel.NONE) // 禁用Lombok自动生成的setter
     private LocalDateTime startUtcTime;
 
     /**
@@ -91,7 +96,16 @@ public class MediaPlayRecordReport {
     private LocalDateTime adjustStartTime;
 
     /**
-     * 反序列化时先将adjustStartTime设置为startUtcTime
+     * 手动提供的setter方法，用于程序内部调用
+     * @param startUtcTime 开始播放时间(UTC)
+     */
+    public void setStartUtcTime(LocalDateTime startUtcTime) {
+        this.startUtcTime = startUtcTime;
+    }
+
+    /**
+     * Jackson反序列化时专用的setter方法
+     * 同时设置startUtcTime和adjustStartTime
      * @param startUtcTime 开始播放时间(UTC)
      */
     @JsonSetter("startUtcTime")
