@@ -39,4 +39,11 @@ public interface TerminalReportUseCase {
      * @param reportStr 上报Json
      */
     void asyncHandleMediaPlayRecordReport(Long deviceId, String reportStr);
+
+    /**
+     * 异步处理节目播放记录上报
+     * @param deviceId 设备Id
+     * @param reportStr 上报Json
+     */
+    void asyncHandleProgramPlayRecordReport(Long deviceId, String reportStr);
 }

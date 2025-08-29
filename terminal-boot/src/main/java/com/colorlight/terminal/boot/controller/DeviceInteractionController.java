@@ -43,6 +43,11 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     private final CommandConverter commandConverter;
     private final TerminalLogConverter terminalLogConverter;
 
+    /**
+     * 上报终端信息，设备上报led_status到服务器。
+     *
+     * @param report 设备上报的led状态信息
+     */
     @Operation(
             summary = "上报终端信息",
             description = "设备上报led_status到服务器",
@@ -55,6 +60,13 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         terminalReportUseCase.saveLedStatus(principal.getDeviceId(), report);
     }
 
+    /**
+     * 获取终端指令的方法。此方法允许终端通过HTTP方式请求其待执行的指令。
+     *
+     * @param cltType 客户端类型，当前实现中未使用该参数
+     * @param deviceNum 设备编号，当前实现中未使用该参数
+     * @return 待执行的设备API命令列表；如果发生异常，则返回一个空列表
+     */
     @Operation(
             summary = "终端获取指令",
             description = "终端通过HTTP方式获取指令",
@@ -80,6 +92,12 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         }
     }
 
+    /**
+     * 终端确认指令的方法。此方法允许终端通过HTTP方式来确认接收到的指令。
+     *
+     * @param post 该参数在此上下文中未被使用，但作为方法签名的一部分保留。
+     * @param commandConfirm 包含待确认命令信息的对象，其中包含parent（父命令ID）和content（确认内容）等关键字段。
+     */
     @Operation(
             summary = "终端确认指令",
             description = "终端通过HTTP方式确认指令",
@@ -113,6 +131,12 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         }
     }
 
+    /**
+     * 终端通过HTTP接口获取节目信息。
+     *
+     * @param clt_type 客户端类型，用于区分不同的终端设备
+     * @return 返回一个包含节目信息的列表，如果未找到相关节目，则返回空列表
+     */
     @Operation(
             summary = "终端获取节目",
             description = "终端通过HTTP接口获取节目信息",
@@ -126,6 +150,12 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         return List.of();
     }
 
+    /**
+     * 终端获取素材
+     *
+     * @param parent 素材的父级标识符，用于指定从哪个层级开始检索素材
+     * @return 返回一个包含DeviceApiMedia对象的列表，表示终端可获取的素材信息
+     */
     @Operation(
             summary = "终端获取素材",
             description = "终端通过HTTP接口获取素材信息",
@@ -139,6 +169,12 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         return List.of();
     }
 
+    /**
+     * 终端上报素材播放记录。
+     * 该方法允许终端通过HTTP接口上传其播放的素材记录。此功能主要用于收集和分析终端播放内容的数据。
+     *
+     * @param report 素材播放记录的字符串表示，包含了播放的具体信息。如果传入的字符串为空或仅包含空白字符，则不会进行处理。
+     */
     @Operation(
             summary = "终端上报素材播放记录",
             description = "终端通过HTTP接口上传素材播放记录",
@@ -152,6 +188,12 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         terminalReportUseCase.asyncHandleMediaPlayRecordReport(principal.getDeviceId(), report);
     }
 
+    /**
+     * 终端上报节目播放记录的方法。
+     * 该方法通过HTTP接口接收终端发送的节目播放记录，并进行相应的处理，如日志记录等。
+     *
+     * @param report 节目播放记录的字符串表示形式。这应该包含足够的信息以描述节目的播放情况。
+     */
     @Operation(
             summary = "终端上报节目播放记录",
             description = "终端通过HTTP接口上传节目播放记录",
@@ -161,9 +203,15 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     public void reportProgramPlayRecords(String report) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceProgram - 终端 {} 上报节目播放记录: {}", principal.getDeviceId(), report);
-        // todo: 节目播放记录存储
+        if (StringUtils.isBlank(report)) return;
+        terminalReportUseCase.asyncHandleProgramPlayRecordReport(principal.getDeviceId(), report);
     }
 
+    /**
+     * 终端获取排程信息。此方法允许终端通过HTTP接口请求其排程信息。
+     *
+     * @return 返回一个字符串，表示终端的排程信息。当前实现中总是返回null，可能需要根据实际业务逻辑进行调整以返回具体的排程数据。
+     */
     @Operation(
             summary = "终端获取排程信息",
             description = "终端通过HTTP接口获取排程信息",
@@ -187,6 +235,11 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         log.debug("DeviceSensorData - 终端 {} 上报传感器数据: {}", principal.getDeviceId(), report);
     }
 
+    /**
+     * 该方法用于处理终端通过HTTP接口上报的日志信息。
+     *
+     * @param logs 终端日志列表，包含待上报的所有日志条目。每个条目应为DeviceApiTerminalLog类型的对象，代表一条具体的终端日志。
+     */
     @Operation(
             summary = "终端上报日志",
             description = "终端通过HTTP接口上报终端日志",

@@ -1,6 +1,7 @@
 package com.colorlight.terminal.application.service;
 
 import com.colorlight.terminal.application.domain.report.MediaPlayRecordReport;
+import com.colorlight.terminal.application.domain.report.ProgramPlayRecordReport;
 import com.colorlight.terminal.application.handler.ReportTimePopulator;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
@@ -8,6 +9,7 @@ import com.colorlight.terminal.application.port.inbound.status.TerminalReportUse
 import com.colorlight.terminal.application.port.outbound.repository.TerminalLogRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalStatusReportRepository;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceMediaPlayRecordPort;
+import com.colorlight.terminal.application.port.outbound.statistics.DeviceProgramPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceSwitchRecordPort;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.business.BusinessException;
@@ -30,6 +32,7 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     private final TerminalLogRepository terminalLogRepository;
     private final DeviceSwitchRecordPort  deviceSwitchRecordPort;
     private final DeviceMediaPlayRecordPort  deviceMediaPlayRecordPort;
+    private final DeviceProgramPlayRecordPort deviceProgramPlayRecordPort;
 
     @Override
     public void saveLedStatus(Long deviceId, String reportStr) {
@@ -88,5 +91,15 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
         List<MediaPlayRecordReport> recordReports = JsonUtils.fromJson(reportStr, new TypeReference<List<MediaPlayRecordReport>>() {});
         // 数据处理
         deviceMediaPlayRecordPort.handleMediaPlayRecordReport(deviceId, recordReports);
+    }
+
+
+    @Override
+    @Async("statisticsReportExecutor")
+    public void asyncHandleProgramPlayRecordReport(Long deviceId, String reportStr) {
+        // 反序列化
+        List<ProgramPlayRecordReport> recordReports = JsonUtils.fromJson(reportStr, new TypeReference<List<ProgramPlayRecordReport>>() {});
+        // 数据处理
+        deviceProgramPlayRecordPort.handleProgramPlayRecordReport(deviceId, recordReports);
     }
 }
