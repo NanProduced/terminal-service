@@ -36,7 +36,8 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
         if (evt instanceof WebSocketServerProtocolHandler.HandshakeComplete handshakeComplete) {
-            log.debug("NettyWebsocketFrameHandler - WebSocket握手完成: requestUri={}", handshakeComplete.requestUri());
+            log.info("NettyWebsocketFrameHandler - WebSocket握手完成: requestUri={}, channelId={}", 
+                    handshakeComplete.requestUri(), ctx.channel().id().asShortText());
             initializeWebsocketSession(ctx);
         } else if (evt instanceof IdleStateEvent idleStateEvent) {
             handleIdleStateEvent(ctx, idleStateEvent);
@@ -54,6 +55,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
      */
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, WebSocketFrame frame) throws Exception {
+        
         Long deviceId = getDeviceIdFromContext(ctx);
         if (deviceId == null) {
             log.warn("NettyWebsocketFrameHandler - 未认证连接尝试发送消息，关闭连接: {}", ctx.channel().id().asShortText());
@@ -143,19 +145,32 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
      * 处理文本消息
      */
     private void handleTextFrame(Long deviceId, String message) {
-        log.debug("收到文本消息: deviceId={}, message={}", deviceId, message);
+        log.info("NettyWebsocketFrameHandler - 收到文本消息: deviceId={}, message={}", deviceId, message);
         
         // 更新接收计数
         updateReceivedMessageCount(deviceId);
 
-        final WebsocketMessage websocketMessage = JsonUtils.fromJson(message, WebsocketMessage.class);
-
-        // 简单的心跳检测
-        if ("heartbeat".equalsIgnoreCase(websocketMessage.getContent()) || "ping".equalsIgnoreCase(websocketMessage.getContent())) {
-            handleHeartbeat(deviceId);
-        } else {
-            // 处理业务消息
-            handleBusinessMessage(deviceId, websocketMessage);
+        try {
+            final WebsocketMessage websocketMessage = JsonUtils.fromJson(message, WebsocketMessage.class);
+            log.debug("NettyWebsocketFrameHandler - JSON解析成功: websocketMessage={}", websocketMessage);
+            
+            // 简单的心跳检测
+            if ("heartbeat".equalsIgnoreCase(websocketMessage.getContent()) || "ping".equalsIgnoreCase(websocketMessage.getContent())) {
+                log.info("NettyWebsocketFrameHandler - 检测到心跳消息: deviceId={}", deviceId);
+                handleHeartbeat(deviceId);
+            } else {
+                log.info("NettyWebsocketFrameHandler - 处理业务消息: deviceId={}, content={}, gps={}",
+                        deviceId, websocketMessage.getContent(), websocketMessage.getGps());
+                // 处理业务消息
+                handleBusinessMessage(deviceId, websocketMessage);
+            }
+        } catch (Exception e) {
+            log.error("NettyWebsocketFrameHandler - JSON解析失败: deviceId={}, message={}", deviceId, message, e);
+            // JSON解析失败，尝试作为纯文本心跳处理
+            if ("heartbeat".equalsIgnoreCase(message.trim()) || "ping".equalsIgnoreCase(message.trim())) {
+                log.debug("NettyWebsocketFrameHandler - 作为纯文本心跳处理: deviceId={}", deviceId);
+                handleHeartbeat(deviceId);
+            }
         }
     }
 
@@ -171,10 +186,10 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
             TerminalConnection connection = getConnectionByDeviceId(deviceId);
             if (connection != null) {
                 webSocketMessageUseCase.handleHeartbeat(connection);
-                log.debug("心跳处理成功: deviceId={}", deviceId);
+                log.debug("NettyWebsocketFrameHandler - 心跳处理成功: deviceId={}", deviceId);
             }
         } catch (Exception e) {
-            log.error("心跳处理失败: deviceId={}", deviceId, e);
+            log.error("NettyWebsocketFrameHandler - 心跳处理失败: deviceId={}", deviceId, e);
         }
     }
 
@@ -188,7 +203,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
                 webSocketMessageUseCase.handleTextMessage(connection, message);
             }
         } catch (Exception e) {
-            log.error("业务消息处理失败: deviceId={}, message={}", deviceId, message, e);
+            log.error("NettyWebsocketFrameHandler - 业务消息处理失败: deviceId={}, message={}", deviceId, message, e);
         }
     }
 
@@ -199,7 +214,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
         ctx.writeAndFlush(new PongWebSocketFrame());
         updateReceivedMessageCount(deviceId);
         handleHeartbeat(deviceId);
-        log.debug("响应Ping帧: deviceId={}", deviceId);
+        log.debug("NettyWebsocketFrameHandler - 响应Ping帧: deviceId={}", deviceId);
     }
 
     /**
@@ -208,14 +223,14 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
     private void handlePongFrame(Long deviceId) {
         updateReceivedMessageCount(deviceId);
         handleHeartbeat(deviceId);
-        log.debug("收到Pong帧: deviceId={}", deviceId);
+        log.debug("NettyWebsocketFrameHandler - 收到Pong帧: deviceId={}", deviceId);
     }
 
     /**
      * 处理关闭帧
      */
     private void handleCloseFrame(ChannelHandlerContext ctx, Long deviceId) {
-        log.info("收到关闭帧: deviceId={}", deviceId);
+        log.info("NettyWebsocketFrameHandler - 收到关闭帧: deviceId={}", deviceId);
         ctx.close();
     }
 
