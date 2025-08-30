@@ -3,13 +3,17 @@ package com.colorlight.terminal.application.service;
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
 import com.colorlight.terminal.application.domain.connection.WebSocketSession;
 import com.colorlight.terminal.application.domain.status.ReportSource;
+import com.colorlight.terminal.application.dto.websocket.WebsocketMessage;
 import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
+import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.application.port.inbound.websocket.WebsocketMessageUseCase;
 import com.colorlight.terminal.application.port.outbound.connection.ConnectionManagerPort;
+import com.colorlight.terminal.commons.utils.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -27,6 +31,7 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
     
     private final ConnectionManagerPort connectionManagerPort;
     private final DeviceOnlineStatusUseCase deviceOnlineStatusUseCase;
+    private final TerminalReportUseCase terminalReportUseCase;
 
     /**
      * 处理心跳消息
@@ -86,10 +91,12 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
                     ReportSource.WEBSOCKET, 
                     connection.getClientIp()
             );
-            
-            // TODO: 根据业务需求处理具体消息类型
-            // 例如: 指令响应、状态上报、错误报告等
-            
+
+            WebsocketMessage websocketMessage = JsonUtils.fromJson(message, WebsocketMessage.class);
+
+            // 当前websocket只上报GPS信息
+            terminalReportUseCase.asyncHandleSensorReport(connection.getDeviceId(), LocalDateTime.now(), websocketMessage.getGps());
+
             return true;
             
         } catch (Exception e) {

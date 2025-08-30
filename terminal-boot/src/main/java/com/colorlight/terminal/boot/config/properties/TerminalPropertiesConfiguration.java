@@ -36,4 +36,10 @@ public class TerminalPropertiesConfiguration {
     public WebSocketConfigProperties webSocketConfigProperties(WebSocketConfigProperties properties) {
         return properties;
     }
+
+    @Bean("terminalStatsConfigProperties")
+    @Primary
+    public TerminalStatsConfigProperties terminalStatsConfigProperties(TerminalStatsConfigProperties properties) {
+        return properties;
+    }
 }

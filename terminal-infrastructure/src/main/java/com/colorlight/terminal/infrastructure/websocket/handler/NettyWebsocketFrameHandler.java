@@ -43,10 +43,12 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
     }
 
     /**
-     * 消息处理 - 播放盒目前只发text
-     * @param ctx
-     * @param frame
-     * @throws Exception
+     * 重写方法，处理从WebSocket连接接收到的帧。
+     * 根据接收到的不同类型的WebSocket帧执行相应的逻辑处理。
+     *
+     * @param ctx ChannelHandlerContext对象，提供有关通道和管道的信息
+     * @param frame 接收到的WebSocket帧
+     * @throws Exception 如果在处理过程中发生异常，则抛出
      */
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, WebSocketFrame frame) throws Exception {
@@ -255,9 +257,11 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
         log.debug("NettyWebsocketFrameHandler - 获取连接对象: deviceId={}, connection={}", deviceId, connection != null ? "found" : "null");
         return connection;
     }
-    
+
     /**
-     * 更新接收消息计数
+     * 更新指定设备的接收消息计数。
+     *
+     * @param deviceId 设备ID
      */
     private void updateReceivedMessageCount(Long deviceId) {
         try {

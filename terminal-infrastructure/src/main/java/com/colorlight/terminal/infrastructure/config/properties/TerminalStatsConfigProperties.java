@@ -25,6 +25,11 @@ public class TerminalStatsConfigProperties {
      * 媒体播放记录配置
      */
     private MediaPlayRecord mediaPlayRecord = new MediaPlayRecord();
+
+    /**
+     * GPS数据处理配置
+     */
+    private Gps gps = new Gps();
     
     /**
      * 时区时间校准配置
@@ -58,6 +63,35 @@ public class TerminalStatsConfigProperties {
          * 默认启用，会根据设备时区偏差自动校准播放开始时间
          */
         private boolean timeCalibrationEnabled = true;
+
+    }
+
+    /**
+     * gps处理配置
+     */
+    @Data
+    public static class Gps {
+
+        /**
+         * 缓存队列大小
+         */
+        private int maxQueueSize = 10000;
+
+        /**
+         * 批处理量
+         */
+        private int batchSize = 5000;
+
+        /**
+         * 默认的google s2 geometry cell精度
+         */
+        private int defaultS2CellLevel = 16;
+
+        /**
+         * 刷新间隔（s）
+         */
+        private int flushInterval = 60;
+
 
     }
 }

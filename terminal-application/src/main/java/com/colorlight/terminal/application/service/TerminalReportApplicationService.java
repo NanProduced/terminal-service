@@ -2,12 +2,15 @@ package com.colorlight.terminal.application.service;
 
 import com.colorlight.terminal.application.domain.report.MediaPlayRecordReport;
 import com.colorlight.terminal.application.domain.report.ProgramPlayRecordReport;
+import com.colorlight.terminal.application.domain.sensor.GpsReport;
+import com.colorlight.terminal.application.domain.sensor.SensorReport;
 import com.colorlight.terminal.application.handler.ReportTimePopulator;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalLogRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalStatusReportRepository;
+import com.colorlight.terminal.application.port.outbound.statistics.DeviceGpsHandlePort;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceMediaPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceProgramPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceSwitchRecordPort;
@@ -17,9 +20,11 @@ import com.colorlight.terminal.commons.utils.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -33,7 +38,15 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     private final DeviceSwitchRecordPort  deviceSwitchRecordPort;
     private final DeviceMediaPlayRecordPort  deviceMediaPlayRecordPort;
     private final DeviceProgramPlayRecordPort deviceProgramPlayRecordPort;
+    private final DeviceGpsHandlePort deviceGpsHandlePort;
 
+    /**
+     * 保存LED状态报告。
+     * 该方法接收设备ID和一个JSON格式的状态报告字符串，尝试将其反序列化为终端状态报告对象，并自动填充报告时间。如果反序列化成功，则异步保存状态报告到数据库中，并处理开机时间戳记录（如果存在）。任何异常将被捕获但当前未作进一步处理。
+     *
+     * @param deviceId 设备的唯一标识符
+     * @param reportStr JSON格式的终端状态报告字符串
+     */
     @Override
     public void saveLedStatus(Long deviceId, String reportStr) {
         try {
@@ -53,6 +66,13 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
         }
     }
 
+    /**
+     * 异步保存终端状态报告。
+     * 该方法接收一个设备ID和一个终端状态报告对象，将状态报告异步保存到数据库中。如果保存成功，则记录一条信息日志；若过程中发生异常，则抛出业务异常。
+     *
+     * @param deviceId 设备ID
+     * @param report 终端状态报告对象
+     */
     @Override
     @Async("deviceStatusExecutor")
     public void asyncSaveTerminalStatusReport(Long deviceId, TerminalStatusReport report) {
@@ -65,8 +85,13 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
         }
     }
 
-
-
+    /**
+     * 异步保存终端日志。
+     * 该方法接收一个设备ID和一系列终端日志对象，为每个日志对象设置设备ID后，批量保存这些日志到数据库中。操作成功时会记录一条信息日志；如果过程中发生异常，则抛出业务异常。
+     *
+     * @param deviceId 设备ID
+     * @param logs 待保存的终端日志列表
+     */
     @Override
     @Async("defaultAsyncExecutor")
     public void asyncSaveTerminalLog(Long deviceId, List<TerminalLog> logs) {
@@ -80,9 +105,11 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     }
 
     /**
-     * 异步处理素材播放记录
-     * @param deviceId 设备Id
-     * @param reportStr 上报Json
+     * 异步处理媒体播放记录报告。
+     * 该方法首先将传入的JSON字符串反序列化为一系列的媒体播放记录报告对象，然后调用相应的端口处理这些记录。
+     *
+     * @param deviceId 设备ID
+     * @param reportStr 包含媒体播放记录的JSON字符串
      */
     @Override
     @Async("statisticsReportExecutor")
@@ -93,7 +120,13 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
         deviceMediaPlayRecordPort.handleMediaPlayRecordReport(deviceId, recordReports);
     }
 
-
+    /**
+     * 异步处理节目播放记录报告。
+     * 该方法首先将传入的JSON字符串反序列化为一系列的节目播放记录报告对象，然后调用相应的端口处理这些记录。
+     *
+     * @param deviceId 设备ID
+     * @param reportStr 包含节目播放记录的JSON字符串
+     */
     @Override
     @Async("statisticsReportExecutor")
     public void asyncHandleProgramPlayRecordReport(Long deviceId, String reportStr) {
@@ -101,5 +134,73 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
         List<ProgramPlayRecordReport> recordReports = JsonUtils.fromJson(reportStr, new TypeReference<List<ProgramPlayRecordReport>>() {});
         // 数据处理
         deviceProgramPlayRecordPort.handleProgramPlayRecordReport(deviceId, recordReports);
+    }
+
+    /**
+     * 异步处理传感器上报数据
+     * @param deviceId 设备Id
+     * @param reportTime 上报时间
+     * @param reportStr 上报Json
+     */
+    @Override
+    @Async("statisticsReportExecutor")
+    public void asyncHandleSensorReport(Long deviceId, LocalDateTime reportTime, String reportStr) {
+        try {
+            
+            // JSON反序列化
+            List<SensorReport> reports = JsonUtils.fromJson(reportStr, new TypeReference<List<SensorReport>>() {});
+            if (CollectionUtils.isEmpty(reports)) {
+                log.debug("ApplicationService -SensorReport- 空的传感器数据: deviceId={}", deviceId);
+                return;
+            }
+            
+            // 按类型处理
+            for (SensorReport report : reports) {
+                if (report == null || report.getSensorType() == null) {
+                    log.warn("ApplicationService -SensorReport- 传感器数据格式无效: deviceId={}, report={}", deviceId, report);
+                    continue;
+                }
+                
+                if ("gps".equals(report.getSensorType()) && report instanceof GpsReport) {
+                    processGpsReport(deviceId, reportTime, (GpsReport) report);
+                } else {
+                    processOtherReport(deviceId, report);
+                }
+            }
+            
+        } catch (Exception e) {
+            log.error("ApplicationService -SensorReport- 处理传感器数据异常: deviceId={}, reportStr={}", 
+                    deviceId, reportStr != null ? reportStr.substring(0, Math.min(100, reportStr.length())) : "null", e);
+            throw new BusinessException(CommonErrorCode.OPERATION_FAILED, "传感器数据处理失败", e);
+        }
+    }
+
+    /*==================== 传感器上报数据私有辅助方法 ====================*/
+
+    /**
+     * 处理GPS报告。
+     * 该方法接收设备ID、报告时间和一个GPS报告对象，首先设置报告的设备ID和服务器时间。然后验证报告的有效性，如果无效则记录一条调试日志并返回；如果有效，则通过端口接收GPS记录。
+     *
+     * @param deviceId 设备的唯一标识符
+     * @param reportTime 报告的时间
+     * @param report GPS报告对象
+     */
+    private void processGpsReport(Long deviceId, LocalDateTime reportTime, GpsReport report) {
+        report.setDeviceId(deviceId);
+        report.setServerTime(reportTime);
+        if (!report.validate()) {
+            log.debug("ApplicationService -GPS- 上报数据无效:{}", report);
+            return;
+        }
+        deviceGpsHandlePort.receiveGpsRecord(report);
+    }
+
+    /**
+     * 暂时不处理其他的传感器数据（仅debug日志）
+     * @param deviceId 设备Id
+     * @param report 基类
+     */
+    private void processOtherReport(Long deviceId, SensorReport report) {
+        log.debug("ApplicationService -SensorData- 设备 {} : 其他类型传感器上报（不处理）:{}", deviceId, report);
     }
 }

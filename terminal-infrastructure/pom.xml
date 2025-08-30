@@ -132,6 +132,11 @@
       <artifactId>mapstruct</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>com.google.geometry</groupId>
+      <artifactId>s2-geometry</artifactId>
+    </dependency>
+
     <!-- 编译时工具 -->
     <dependency>
       <groupId>org.projectlombok</groupId>

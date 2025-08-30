@@ -4,7 +4,6 @@ import lombok.Data;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
-import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
@@ -17,7 +16,7 @@ import java.time.LocalDateTime;
 @Data
 @Document("terminal_log")
 @CompoundIndexes({
-        @CompoundIndex(name = "idx_query_1", def = "{ 'serverTime' : -1 , 'terminalId' : 1 , 'operation' : 1 }")
+        @CompoundIndex(name = "idx_query_1", def = "{ 'deviceId' : 1 , 'serverTime' : -1 , 'operation' : 1 }")
 })
 public class TerminalLogDocument {
 
@@ -44,10 +43,6 @@ public class TerminalLogDocument {
 
     private String deviceTime;
 
-    /**
-     * 查询时间范围字段/TTL索引
-     */
-    @Indexed(expireAfterSeconds = 15552000)
     private LocalDateTime serverTime;
 
 

@@ -70,6 +70,9 @@
     <!-- 本地一级缓存 -->
     <caffeine.version>3.2.2</caffeine.version>
 
+    <!-- google s2 geometry地图索引 -->
+    <google.s2.geometry.version>2.0.0</google.s2.geometry.version>
+
   </properties>
 
   <dependencyManagement>
@@ -216,6 +219,14 @@
         <artifactId>swagger-annotations-jakarta</artifactId>
         <version>${swagger-annotations-version}</version>
       </dependency>
+
+      <!-- 地图索引 -->
+      <dependency>
+        <groupId>com.google.geometry</groupId>
+        <artifactId>s2-geometry</artifactId>
+        <version>${google.s2.geometry.version}</version>
+      </dependency>
+
 
       <!-- 测试框架 -->
       <dependency>

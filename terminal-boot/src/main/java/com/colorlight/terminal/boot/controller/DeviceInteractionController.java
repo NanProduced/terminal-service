@@ -23,6 +23,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -231,8 +232,11 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     )
     @Override
     public void reportSensorData(String report) {
+        LocalDateTime now = LocalDateTime.now();
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceSensorData - 终端 {} 上报传感器数据: {}", principal.getDeviceId(), report);
+        if (StringUtils.isBlank(report)) return;
+        terminalReportUseCase.asyncHandleSensorReport(principal.getDeviceId(), now, report);
     }
 
     /**

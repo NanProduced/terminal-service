@@ -3,6 +3,7 @@ package com.colorlight.terminal.application.port.inbound.status;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -46,4 +47,12 @@ public interface TerminalReportUseCase {
      * @param reportStr 上报Json
      */
     void asyncHandleProgramPlayRecordReport(Long deviceId, String reportStr);
+
+    /**
+     * 处理传感器上报
+     * @param deviceId 设备Id
+     * @param reportTime 上报时间
+     * @param reportStr 上报Json
+     */
+    void asyncHandleSensorReport(Long deviceId, LocalDateTime reportTime, String reportStr);
 }
