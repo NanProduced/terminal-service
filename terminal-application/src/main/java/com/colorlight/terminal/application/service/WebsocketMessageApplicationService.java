@@ -11,6 +11,7 @@ import com.colorlight.terminal.application.port.outbound.connection.ConnectionMa
 import com.colorlight.terminal.commons.utils.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -77,7 +78,7 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
      * @return
      */
     @Override
-    public boolean handleTextMessage(TerminalConnection connection, String message) {
+    public boolean handleTextMessage(TerminalConnection connection, WebsocketMessage message) {
         try {
             log.debug("ApplicationService - ws - 处理设备文本消息: deviceId={}, message={}", connection.getDeviceId(), message);
             
@@ -92,10 +93,10 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
                     connection.getClientIp()
             );
 
-            WebsocketMessage websocketMessage = JsonUtils.fromJson(message, WebsocketMessage.class);
-
-            // 当前websocket只上报GPS信息
-            terminalReportUseCase.asyncHandleSensorReport(connection.getDeviceId(), LocalDateTime.now(), websocketMessage.getGps());
+            if (StringUtils.isNotBlank(message.getGps())) {
+                // 当前websocket只上报GPS信息
+                terminalReportUseCase.asyncHandleSensorReport(connection.getDeviceId(), LocalDateTime.now(), message.getGps());
+            }
 
             return true;
             

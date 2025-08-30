@@ -19,6 +19,18 @@ import lombok.Data;
 public class WebsocketMessage {
 
     /**
+     * 设备账户名
+     */
+    private String name;
+
+    private String url;
+
+    /**
+     * 文本消息
+     */
+    private String content;
+
+    /**
      * 使用String适配后续处理
      */
     private String gps;

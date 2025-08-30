@@ -1,8 +1,10 @@
 package com.colorlight.terminal.infrastructure.websocket.handler;
 
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
+import com.colorlight.terminal.application.dto.websocket.WebsocketMessage;
 import com.colorlight.terminal.application.port.inbound.websocket.WebsocketMessageUseCase;
 import com.colorlight.terminal.application.port.outbound.connection.ConnectionManagerPort;
+import com.colorlight.terminal.commons.utils.JsonUtils;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
 import com.colorlight.terminal.infrastructure.websocket.auth.NettyWebsocketAuthHandler;
 import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebsocketSession;
@@ -145,13 +147,15 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
         
         // 更新接收计数
         updateReceivedMessageCount(deviceId);
-        
+
+        final WebsocketMessage websocketMessage = JsonUtils.fromJson(message, WebsocketMessage.class);
+
         // 简单的心跳检测
-        if ("heartbeat".equalsIgnoreCase(message.trim()) || "ping".equalsIgnoreCase(message.trim())) {
+        if ("heartbeat".equalsIgnoreCase(websocketMessage.getContent()) || "ping".equalsIgnoreCase(websocketMessage.getContent())) {
             handleHeartbeat(deviceId);
         } else {
             // 处理业务消息
-            handleBusinessMessage(deviceId, message);
+            handleBusinessMessage(deviceId, websocketMessage);
         }
     }
 
@@ -177,7 +181,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
     /**
      * 处理业务消息
      */
-    private void handleBusinessMessage(Long deviceId, String message) {
+    private void handleBusinessMessage(Long deviceId, WebsocketMessage message) {
         try {
             TerminalConnection connection = getConnectionByDeviceId(deviceId);
             if (connection != null) {

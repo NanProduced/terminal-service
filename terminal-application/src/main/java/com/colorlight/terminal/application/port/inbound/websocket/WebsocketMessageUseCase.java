@@ -2,6 +2,7 @@ package com.colorlight.terminal.application.port.inbound.websocket;
 
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
 import com.colorlight.terminal.application.domain.connection.WebSocketSession;
+import com.colorlight.terminal.application.dto.websocket.WebsocketMessage;
 
 import java.util.List;
 
@@ -24,10 +25,10 @@ public interface WebsocketMessageUseCase {
      * 处理文本消息
      * 
      * @param connection 终端连接
-     * @param message 消息内容
+     * @param message 消息封装
      * @return 是否处理成功
      */
-    boolean handleTextMessage(TerminalConnection connection, String message);
+    boolean handleTextMessage(TerminalConnection connection, WebsocketMessage message);
     
     /**
      * 处理连接建立
