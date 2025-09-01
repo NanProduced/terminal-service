@@ -21,7 +21,7 @@ public interface DeviceInteractionApi {
      * 终端信息上报接口
      * @param report 上报数据
      */
-    @PutMapping(value = "/wp-json/screen/v1/status", produces = "application/json;charset=UTF-8")
+    @PutMapping(value = "/wp-json/screen/v1/status")
     void reportTerminalStatus(@RequestBody String report);
 
     /**
