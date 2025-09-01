@@ -28,7 +28,7 @@ public class TerminalStatusReport {
     /**
      * websocket连接状态
      */
-    @JsonProperty("WebsocketStatus")
+    @JsonProperty("WebSocketStatus")
     private WebsocketStatus websocketStatus;
 
     /**

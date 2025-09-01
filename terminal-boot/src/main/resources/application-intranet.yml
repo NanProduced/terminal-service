@@ -10,15 +10,7 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: 192.168.51.114:8848
-        service: terminal-service
-        namespace: bf06b404-e018-4549-987b-505386a734dc
-        group: DEFAULT_GROUP
-        username: nacos
-        password: LedMasterNacos
-        register-enabled: true
-        heart-beat-interval: 5000
-        heart-beat-timeout: 15000
+        enabled: false  # 禁用Spring Cloud Discovery注册
       config:
         server-addr: 192.168.51.114:8848
         namespace: bf06b404-e018-4549-987b-505386a734dc
