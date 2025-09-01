@@ -26,6 +26,12 @@ public class TerminalStatusReport {
     private Terminal terminal;
 
     /**
+     * websocket连接状态
+     */
+    @JsonProperty("WebsocketStatus")
+    private WebsocketStatus websocketStatus;
+
+    /**
      * 电源状态信息
      */
     private PowerStatus powerstatus;
@@ -1226,5 +1232,18 @@ public class TerminalStatusReport {
          * 屏幕方向（portrait-竖屏，landscape-横屏，auto-自动）
          */
         private String orientation;
+    }
+
+    /**
+     * websocket连接状态
+     */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class WebsocketStatus {
+
+        private Integer status;
     }
 }
