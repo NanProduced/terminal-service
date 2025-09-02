@@ -1,9 +1,11 @@
 package com.colorlight.terminal.infrastructure.websocket.auth;
 
+import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import com.colorlight.terminal.application.dto.request.AuthRequest;
 import com.colorlight.terminal.application.dto.result.AuthResult;
 import com.colorlight.terminal.application.enums.TerminalAccountStatus;
 import com.colorlight.terminal.application.port.inbound.auth.TerminalAuthUseCase;
+import com.colorlight.terminal.infrastructure.config.properties.WebSocketConfigProperties;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
 import com.colorlight.terminal.infrastructure.websocket.config.NettyWebsocketProperties;
 import io.netty.channel.ChannelHandler;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -30,6 +33,7 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
 
     private final TerminalAuthUseCase terminalAuthUseCase;
     private final NettyWebsocketProperties nettyWebsocketProperties;
+    private final WebSocketConfigProperties webSocketConfigProperties;
     
     /**
      * WebSocket认证专用线程池
@@ -43,14 +47,17 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
     public NettyWebsocketAuthHandler(
             TerminalAuthUseCase terminalAuthUseCase,
             NettyWebsocketProperties nettyWebsocketProperties,
+            WebSocketConfigProperties webSocketConfigProperties,
             @Qualifier("deviceEventExecutor") Executor websocketAuthExecutor) {
         this.terminalAuthUseCase = terminalAuthUseCase;
         this.nettyWebsocketProperties = nettyWebsocketProperties;
+        this.webSocketConfigProperties = webSocketConfigProperties;
         this.websocketAuthExecutor = websocketAuthExecutor;
     }
 
     public static final AttributeKey<TerminalPrincipal> TERMINAL_PRINCIPAL = AttributeKey.valueOf("terminalPrincipal");
     public static final AttributeKey<String> DEVICE_ID = AttributeKey.valueOf("deviceId");
+    public static final AttributeKey<ProtocolVersion> PROTOCOL_VERSION = AttributeKey.valueOf("protocolVersion");
 
 
     @Override
@@ -61,7 +68,7 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
         }
 
         // 只拦截 WebSocket 握手的 HTTP 请求
-        if (!isWebSocketHandshakeToPath(request, nettyWebsocketProperties.getServer().getPath())) {
+        if (!isWebSocketHandshakeToPath(request)) {
             ctx.fireChannelRead(request);
             return;
         }
@@ -94,9 +101,11 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
                 return;
             }
 
-            // 播放盒ws协议把用户名密码敏感信息放在请求URI中
-            // 为了让后续的 WebSocketServerProtocolHandler 正常匹配路径，这里认证成功后需要修改URI
-            request.setUri(nettyWebsocketProperties.getServer().getPath());
+            ProtocolVersion protocolVersion = ctx.channel().attr(PROTOCOL_VERSION).get();
+
+            // 认证成功后将请求URI转换为内部统一路径
+            // 使所有协议版本都使用统一的内部WebSocket路径进行处理
+            request.setUri(nettyWebsocketProperties.getServer().getWebsocketPath());
             
             // 将处理结果回调到I/O线程
             ctx.channel().eventLoop().execute(() -> {
@@ -126,8 +135,15 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
             // 解析请求
             QueryStringDecoder decoder = new QueryStringDecoder(request.uri());
             Map<String, List<String>> params = decoder.parameters();
+
             String username = params.getOrDefault("username", List.of("")).get(0);
             String password = params.getOrDefault("password", List.of("")).get(0);
+            String versionStr = params.getOrDefault("protocol_version", List.of("")).get(0);
+
+            ProtocolVersion protocolVersion = parseProtocolVersion(decoder.path(), versionStr);
+
+            // 存储协议版本到Channel
+            context.channel().attr(PROTOCOL_VERSION).set(protocolVersion);
 
             if (!StringUtils.hasText(username) || !StringUtils.hasText(password)) {
                 log.warn("WebSocket认证失败: 缺少用户名或密码, URI: {}", request.uri().replaceAll("password=[^&]*", "password=***"));
@@ -153,15 +169,40 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private boolean isWebSocketHandshakeToPath(FullHttpRequest req, String expectedPath) {
-        // 仅拦 GET + Upgrade: websocket 且路径匹配（允许带查询串）
-        if (!HttpMethod.GET.equals(req.method())) return false;
-        CharSequence upgrade = req.headers().get(HttpHeaderNames.UPGRADE);
-        if (upgrade == null || !HttpHeaderValues.WEBSOCKET.contentEqualsIgnoreCase(upgrade)) return false;
+    private ProtocolVersion parseProtocolVersion(String path, String versionStr) {
+        // v1.0不用protocolVersion
+        if (path.equals(ProtocolVersion.V1_0.getPath())) {
+            return ProtocolVersion.V1_0;
+        }
 
-        // 解析原始 URI 并校验路径
+        return ProtocolVersion.fromVersion(versionStr);
+    }
+
+    /**
+     * 检查是否为支持的WebSocket握手请求
+     * @param req HTTP请求
+     * @return 是否为有效的WebSocket握手请求
+     */
+    private boolean isWebSocketHandshakeToPath(FullHttpRequest req) {
+        // 验证HTTP方法和WebSocket升级头
+        if (!HttpMethod.GET.equals(req.method())) {
+            return false;
+        }
+        
+        CharSequence upgrade = req.headers().get(HttpHeaderNames.UPGRADE);
+        if (upgrade == null || !HttpHeaderValues.WEBSOCKET.contentEqualsIgnoreCase(upgrade)) {
+            return false;
+        }
+
+        // 解析请求路径并匹配支持的协议版本
         QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
-        return decoder.path().equals(expectedPath);
+        String connectPath = decoder.path();
+
+        // 检查是否为任一支持的协议版本路径
+        return Arrays.stream(ProtocolVersion.values())
+                .anyMatch(version -> version.getPath().equals(connectPath) &&
+                        // 优先使用配置项，降级到枚举配置保底
+                        webSocketConfigProperties.getProtocol().isVersionSupported(version.getVersion(), version.isSupported()));
     }
 
     private void sendErrorResponse(ChannelHandlerContext ctx) {

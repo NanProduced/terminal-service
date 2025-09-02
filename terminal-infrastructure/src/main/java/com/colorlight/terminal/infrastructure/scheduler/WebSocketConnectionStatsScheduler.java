@@ -84,6 +84,7 @@ public class WebSocketConnectionStatsScheduler {
         log.info("WebSocketStats - 系统状态: {}", running ? "运行中" : "已停止");
         log.info("WebSocketStats - 总连接数: {}", totalConnections);
         log.info("WebSocketStats - 分片数量: {}", totalShards);
+        log.info("WebSocketStats - 协议版本: {}", stats.get("versionCount").toString());
         
         if (totalConnections != null && totalShards != null) {
             double avgConnectionsPerShard = (double) totalConnections / totalShards;
@@ -157,9 +158,7 @@ public class WebSocketConnectionStatsScheduler {
         blocks = Math.min(blocks, 50); // 最多50个方块，避免日志过长
         
         StringBuilder bar = new StringBuilder();
-        for (int i = 0; i < blocks; i++) {
-            bar.append("█");
-        }
+        bar.append("█".repeat(blocks));
         
         return bar.toString();
     }

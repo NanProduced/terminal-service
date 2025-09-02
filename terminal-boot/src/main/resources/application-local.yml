@@ -114,7 +114,7 @@ terminal:
     server:
       host: 0.0.0.0
       port: 8443                              # 和播放盒二次开发文档对齐
-      path: /ColorWebSocket/websocket/chat    # 和播放盒二次开发文档对齐
+      websocket-path: /websocket              # 内部netty的ws端点
       boss-threads: 1
       worker-threads: 0                       # 0=CPU核心数*2
       keep-alive: true
@@ -140,6 +140,10 @@ terminal:
       # 负载均衡警告阈值
       # 当最大分片/最小分片的比率超过此值时发出警告
       load-balance-warning-threshold: 2.0
+    protocol:  # websocket协议版本配置
+      versions:
+        "1.0": true  # v1.0版本
+        "1.1": true  # v1.1版本
     connection:
       # 是否启用连接清理
       cleanup-enabled: true

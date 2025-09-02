@@ -4,6 +4,8 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 
+import java.util.Map;
+
 /**
  * WebSocket配置属性
  * Infrastructure层Spring Boot配置属性，支持Nacos动态刷新
@@ -24,6 +26,11 @@ public class WebSocketConfigProperties {
      * 连接管理配置
      */
     private Connection connection = new Connection();
+
+    /**
+     * 协议版本配置
+     */
+    private Protocol protocol = new Protocol();
     
     /**
      * 统计信息配置
@@ -98,5 +105,35 @@ public class WebSocketConfigProperties {
          * 在连接数异常时输出详细调试信息
          */
         private boolean emergencyStatsEnabled = true;
+    }
+
+    /**
+     * 协议版本配置 - 在配置文件动态配置以覆盖枚举类中的supported
+     * <p>这里的配置项要和ProtocolVersion枚举里的版本对应</p>
+     * @see com.colorlight.terminal.application.domain.connection.ProtocolVersion
+     */
+    @Data
+    public static class Protocol {
+
+        /**
+         * 协议版本支持配置
+         * Key: 协议版本字符串 (如"1.0", "1.1")
+         * Value: 是否支持该协议版本
+         */
+        private Map<String, Boolean> versions = Map.of(
+                "1.0", true,   // 默认支持V1.0
+                "1.1", false   // 默认禁用V1.1（用于渐进式发布）
+        );
+
+        /**
+         * 检查指定协议版本是否被支持
+         *
+         * @param versionString 协议版本字符串
+         * @param enumSupported 枚举类中的supported
+         * @return 是否支持该协议版本，配置项中没有则默认使用枚举类中配置
+         */
+        public boolean isVersionSupported(String versionString, boolean enumSupported) {
+            return versions.getOrDefault(versionString, enumSupported);
+        }
     }
 }

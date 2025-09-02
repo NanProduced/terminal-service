@@ -628,6 +628,9 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         if (status.getStatus() != null) {
             map.put("status", status.getStatus().name());
         }
+        if (status.getVersion() != null) {
+            map.put("version", status.getVersion());
+        }
         if (status.getStatusChangeTime() != null) {
             map.put("statusChangeTime", status.getStatusChangeTime());
         }

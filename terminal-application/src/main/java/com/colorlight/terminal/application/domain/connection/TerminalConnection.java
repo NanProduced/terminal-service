@@ -1,9 +1,11 @@
 package com.colorlight.terminal.application.domain.connection;
 
+import com.colorlight.terminal.commons.utils.JsonUtils;
 import lombok.Data;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Data
 public class TerminalConnection {
@@ -12,6 +14,11 @@ public class TerminalConnection {
      * 设备唯一ID
      */
     private Long deviceId;
+
+    /**
+     * 协议版本
+     */
+    private ProtocolVersion protocolVersion;
 
     /**
      * Websocket会话
@@ -28,10 +35,6 @@ public class TerminalConnection {
      */
     private LocalDateTime lastActiveTime;
 
-    /**
-     * 最后心跳时间
-     */
-    private LocalDateTime lastHeartbeatTime;
 
     /**
      * 客户端IP地址
@@ -44,21 +47,37 @@ public class TerminalConnection {
     private ConnectionStatus status;
 
     /**
+     * 发送消息计数 - 统一到Connection层管理
+     */
+    private final AtomicLong sentMessageCount = new AtomicLong(0);
+
+    /**
+     * 接收消息计数 - 统一到Connection层管理
+     */
+    private final AtomicLong receivedMessageCount = new AtomicLong(0);
+
+    /**
+     * 错误消息计数 - 统一到Connection层管理
+     */
+    private final AtomicLong errorMessageCount = new AtomicLong(0);
+
+    /**
      * 创建设备连接
      * @param deviceId 设备Id
      * @param session WebSocket会话
-     * @return
+     * @return 连接封装
      */
-    public static TerminalConnection create(Long deviceId, WebSocketSession session) {
+    public static TerminalConnection create(Long deviceId, WebSocketSession session, ProtocolVersion protocolVersion) {
         LocalDateTime now = LocalDateTime.now();
         TerminalConnection connection = new TerminalConnection();
         connection.setDeviceId(deviceId);
         connection.setSession(session);
         connection.setClientIp(session != null ? session.getClientIp() : "unknown");
         connection.setLastActiveTime(now);
-        connection.setLastHeartbeatTime(now);
+        // 统一使用lastActiveTime表示最后WebSocket通信时间
         connection.setConnectTime(now);
         connection.setStatus(ConnectionStatus.CONNECTED);
+        connection.setProtocolVersion(protocolVersion);
         return connection;
     }
 
@@ -66,51 +85,48 @@ public class TerminalConnection {
         this.setLastActiveTime(LocalDateTime.now());
     }
 
-    public void updateLastHeartbeatTime() {
-        LocalDateTime now = LocalDateTime.now();
-        this.setLastHeartbeatTime(now);
-        this.setLastActiveTime(now);
-    }
-
     /**
-     * 获取发送消息计数（委托给session）
+     * 获取发送消息计数
      */
     public long getSentMessageCount() {
-        return session != null ? session.getSentMessageCount() : 0;
+        return sentMessageCount.get();
     }
 
     /**
-     * 获取接收消息计数（委托给session）
+     * 获取接收消息计数
      */
     public long getReceivedMessageCount() {
-        return session != null ? session.getReceivedMessageCount() : 0;
+        return receivedMessageCount.get();
     }
 
     /**
-     * 获取错误计数（委托给session）
+     * 获取错误计数
      */
     public long getErrorCount() {
-        return session != null ? session.getErrorCount() : 0;
+        return errorMessageCount.get();
     }
     
     /**
-     * 增加发送消息计数（更新活跃时间）
+     * 增加发送消息计数（统一更新：计数+活跃时间）
      */
     public void incrementSentMessageCount() {
+        sentMessageCount.incrementAndGet();
         updateActiveTime();
     }
 
     /**
-     * 增加接收消息计数（更新活跃时间）
+     * 增加接收消息计数（统一更新：计数+活跃时间）
      */
     public void incrementReceivedMessageCount() {
+        receivedMessageCount.incrementAndGet();
         updateActiveTime();
     }
 
     /**
-     * 增加错误计数（更新活跃时间）
+     * 增加错误计数（统一更新：计数+活跃时间）
      */
     public void incrementErrorCount() {
+        errorMessageCount.incrementAndGet();
         updateActiveTime();
     }
 
@@ -122,13 +138,13 @@ public class TerminalConnection {
     }
 
     /**
-     * 检查连接是否过期
+     * 检查连接是否过期 - 基于最后活跃时间（统一WebSocket通信时间）
      *
      * @param expireThreshold 过期时间阈值
      * @return 是否过期
      */
     public boolean isExpired(LocalDateTime expireThreshold) {
-        return lastHeartbeatTime != null && lastHeartbeatTime.isBefore(expireThreshold);
+        return lastActiveTime != null && lastActiveTime.isBefore(expireThreshold);
     }
 
     /**
@@ -173,8 +189,18 @@ public class TerminalConnection {
         if (session == null) {
             return false;
         }
-        
         return session.sendMessage(message);
+    }
+
+    /**
+     * 发送消息
+     *
+     * @param messageObj javaBean消息
+     * @return 是否成功
+     */
+    public boolean sendMessage(Object messageObj) {
+        String message = JsonUtils.toJson(messageObj);
+        return sendMessage(message);
     }
 
     /**

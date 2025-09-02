@@ -1,7 +1,9 @@
 package com.colorlight.terminal.infrastructure.websocket.connection;
 
+import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
 import com.colorlight.terminal.application.port.outbound.connection.ConnectionManagerPort;
+import com.colorlight.terminal.commons.utils.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.stereotype.Component;
@@ -39,7 +41,10 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
     
     /** 全局连接计数器 - 原子操作保证一致性 */
     private final AtomicInteger totalConnections = new AtomicInteger(0);
-    
+
+    /** 版本协议连接数统计 */
+    private final Map<ProtocolVersion, AtomicInteger> versionCounter = new ConcurrentHashMap<>();
+
     /** 全局读写锁 - 保护整体状态变更 */
     private final ReadWriteLock globalLock = new ReentrantReadWriteLock();
     
@@ -75,8 +80,19 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
             boolean added = shard.addConnection(deviceId, connection);
             
             if (added) {
+                // 增加连接计数
                 totalConnections.incrementAndGet();
-                log.debug("ShardedConnectionManager - 添加终端连接: {}, total: {}", deviceId, totalConnections.get());
+                // 增加协议计数
+                versionCounter.compute(connection.getProtocolVersion(), (key, value) -> {
+                    if (value == null) {
+                        return new AtomicInteger(1);
+                    }
+                    else {
+                        value.incrementAndGet();
+                        return value;
+                    }
+                });
+                log.debug("ShardedConnectionManager - 添加终端连接: {}, version: {}, total: {}", deviceId, connection.getProtocolVersion().getVersion(), totalConnections.get());
             }
             
             return added;
@@ -98,7 +114,10 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
             TerminalConnection removed = shard.removeConnection(deviceId);
             
             if (removed != null) {
+                // 减少连接计数
                 totalConnections.decrementAndGet();
+                // 减少协议版本计数
+                versionCounter.get(removed.getProtocolVersion()).decrementAndGet();
                 log.debug("ShardedConnectionManager - 移除终端连接: {}, total: {}", deviceId, totalConnections.get());
             }
             
@@ -191,6 +210,7 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
             stats.put("maxShardSize", maxShardSize);
             stats.put("minShardSize", minShardSize);
             stats.put("loadBalance", (double) maxShardSize / Math.max(1, minShardSize));
+            stats.put("versionCount", JsonUtils.toJson(versionCounter));
             
             return stats;
             

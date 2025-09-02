@@ -6,12 +6,11 @@ import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import lombok.Builder;
 import lombok.Data;
 
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Terminal WebSocket会话封装
+ * Terminal WebSocket会话封装 - 简化版本（纯技术会话）
  *
- * <p>对原生WebSocketSession的业务封装，提供终端设备相关的会话管理功能：</p>
+ * <p>统计功能已迁移到TerminalConnection层，此类仅保留WebSocket技术功能</p>
  *
  * @author Nan
  */
@@ -45,34 +44,6 @@ public class TerminalWebsocketSession implements WebSocketSession {
      */
     private String clientIp;
 
-    /**
-     * 最后心跳时间戳
-     */
-    private volatile Long lastHeartbeatTime;
-
-    /**
-     * 接收消息计数
-     */
-    @Builder.Default
-    private final AtomicLong receivedMessageCount = new AtomicLong(0);
-
-    /**
-     * 发送消息计数
-     */
-    @Builder.Default
-    private final AtomicLong sentMessageCount = new AtomicLong(0);
-
-    /**
-     * 重连次数
-     */
-    @Builder.Default
-    private final AtomicLong reconnectCount = new AtomicLong(0);
-
-    /**
-     * 异常计数
-     */
-    @Builder.Default
-    private final AtomicLong errorCount = new AtomicLong(0);
 
     /**
      * 检查连接是否有效
@@ -96,16 +67,6 @@ public class TerminalWebsocketSession implements WebSocketSession {
     }
 
     /**
-     * 获取距离最后心跳的时间（毫秒）
-     */
-    public long getTimeSinceLastHeartbeat() {
-        if (lastHeartbeatTime == null) {
-            return Long.MAX_VALUE;
-        }
-        return System.currentTimeMillis() - lastHeartbeatTime;
-    }
-
-    /**
      * 通过WebSocket发送消息到设备
      * 
      * @param message 消息内容 (JSON字符串)
@@ -114,7 +75,6 @@ public class TerminalWebsocketSession implements WebSocketSession {
     @Override
     public boolean sendMessage(String message) {
         if (!isConnected()) {
-            errorCount.incrementAndGet();
             return false;
         }
         
@@ -125,14 +85,9 @@ public class TerminalWebsocketSession implements WebSocketSession {
             // 异步写入并刷新
             nettyChannel.writeAndFlush(frame);
             
-            // 增加发送计数
-            sentMessageCount.incrementAndGet();
-            
             return true;
             
         } catch (Exception e) {
-            // 增加错误计数
-            errorCount.incrementAndGet();
             return false;
         }
     }
@@ -147,42 +102,22 @@ public class TerminalWebsocketSession implements WebSocketSession {
         }
     }
 
-    /**
-     * 更新心跳时间
-     */
-    public void updateHeartbeat() {
-        this.lastHeartbeatTime = System.currentTimeMillis();
-    }
-
-    /**
-     * 增加接收消息计数
-     */
-    public void incrementReceivedCount() {
-        receivedMessageCount.incrementAndGet();
-    }
-
-    /**
-     * 增加重连计数
-     */
-    public void incrementReconnectCount() {
-        reconnectCount.incrementAndGet();
-    }
     
-    // 实现WebSocketSession接口的getter方法
+    // 实现WebSocketSession接口的getter方法 - 简化版本，统计在TerminalConnection层管理
     
     @Override
     public long getSentMessageCount() {
-        return sentMessageCount.get();
+        return 0; // 统计功能已迁移到TerminalConnection层
     }
     
     @Override
     public long getReceivedMessageCount() {
-        return receivedMessageCount.get();
+        return 0; // 统计功能已迁移到TerminalConnection层
     }
     
     @Override
     public long getErrorCount() {
-        return errorCount.get();
+        return 0; // 统计功能已迁移到TerminalConnection层
     }
 
 }

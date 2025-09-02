@@ -1,10 +1,10 @@
 package com.colorlight.terminal.infrastructure.websocket.handler;
 
+import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
-import com.colorlight.terminal.application.dto.websocket.WebsocketMessage;
 import com.colorlight.terminal.application.port.inbound.websocket.WebsocketMessageUseCase;
 import com.colorlight.terminal.application.port.outbound.connection.ConnectionManagerPort;
-import com.colorlight.terminal.commons.utils.JsonUtils;
+import com.colorlight.terminal.application.domain.connection.MessageProcessingContext;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
 import com.colorlight.terminal.infrastructure.websocket.auth.NettyWebsocketAuthHandler;
 import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebsocketSession;
@@ -106,6 +106,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
         try {
             String deviceIdStr = ctx.channel().attr(NettyWebsocketAuthHandler.DEVICE_ID).get();
             TerminalPrincipal principal = ctx.channel().attr(NettyWebsocketAuthHandler.TERMINAL_PRINCIPAL).get();
+            ProtocolVersion protocolVersion = ctx.channel().attr(NettyWebsocketAuthHandler.PROTOCOL_VERSION).get();
 
             if (StringUtils.isBlank(deviceIdStr) || principal == null) {
                 log.error("WebSocket会话初始化失败: 缺少认证信息 - deviceId={}, principal={}", deviceIdStr, principal);
@@ -115,18 +116,18 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
 
             Long deviceId = Long.parseLong(deviceIdStr);
             
-            // 创建技术会话对象
+            // 创建技术会话对象（这里不用包含版本号）
             TerminalWebsocketSession technicalSession = TerminalWebsocketSession.builder()
                     .sessionId(ctx.channel().id().asShortText())
                     .deviceId(deviceId)
                     .nettyChannel(ctx.channel())
                     .clientIp(getClientIp(ctx))
                     .connectTime(System.currentTimeMillis())
-                    .lastHeartbeatTime(System.currentTimeMillis())
+                    // 心跳时间管理已迁移到TerminalConnection层
                     .build();
 
             // 通过UseCase处理连接建立
-            TerminalConnection connection = webSocketMessageUseCase.handleConnectionEstablished(deviceId, technicalSession);
+            TerminalConnection connection = webSocketMessageUseCase.handleConnectionEstablished(deviceId, technicalSession, protocolVersion);
             
             if (connection != null) {
                 log.info("WebSocket会话创建成功: deviceId={}, sessionId={}", deviceId, technicalSession.getSessionId());
@@ -145,85 +146,36 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
      * 处理文本消息
      */
     private void handleTextFrame(Long deviceId, String message) {
-        log.info("NettyWebsocketFrameHandler - 收到文本消息: deviceId={}, message={}", deviceId, message);
-        
-        // 更新接收计数
-        updateReceivedMessageCount(deviceId);
+        log.debug("NettyWebsocketFrameHandler - 收到文本消息: deviceId={}, message={}", deviceId, message);
 
-        try {
-            final WebsocketMessage websocketMessage = JsonUtils.fromJson(message, WebsocketMessage.class);
-            log.debug("NettyWebsocketFrameHandler - JSON解析成功: websocketMessage={}", websocketMessage);
-            
-            // 简单的心跳检测
-            if ("heartbeat".equalsIgnoreCase(websocketMessage.getContent()) || "ping".equalsIgnoreCase(websocketMessage.getContent())) {
-                log.info("NettyWebsocketFrameHandler - 检测到心跳消息: deviceId={}", deviceId);
-                handleHeartbeat(deviceId);
-            } else {
-                log.info("NettyWebsocketFrameHandler - 处理业务消息: deviceId={}, content={}, gps={}",
-                        deviceId, websocketMessage.getContent(), websocketMessage.getGps());
-                // 处理业务消息
-                handleBusinessMessage(deviceId, websocketMessage);
-            }
-        } catch (Exception e) {
-            log.error("NettyWebsocketFrameHandler - JSON解析失败: deviceId={}, message={}", deviceId, message, e);
-            // JSON解析失败，尝试作为纯文本心跳处理
-            if ("heartbeat".equalsIgnoreCase(message.trim()) || "ping".equalsIgnoreCase(message.trim())) {
-                log.debug("NettyWebsocketFrameHandler - 作为纯文本心跳处理: deviceId={}", deviceId);
-                handleHeartbeat(deviceId);
-            }
+        TerminalConnection connection = getConnectionByDeviceId(deviceId);
+        if (connection == null) {
+            log.warn("NettyWebsocketFrameHandler - 连接不存在，无法处理消息: deviceId={}", deviceId);
+            return;
         }
-    }
+        // 创建上下文
+        MessageProcessingContext context = MessageProcessingContext.create(connection, message);
+        if (!context.isValid()) {
+            log.warn("NettyWebsocketFrameHandler - 无法创建有效的处理上下文: deviceId={}", deviceId);
+            return;
+        }
+        // 通过对应协议版本的处理器处理文本消息
+        webSocketMessageUseCase.handleTextMessageByProcessor(context);
 
-    /**
-     * 处理心跳消息
-     */
-    private void handleHeartbeat(Long deviceId) {
-        try {
-            // 更新心跳时间
-            updateHeartbeatTime(deviceId);
-            
-            // 获取连接对象并处理心跳
-            TerminalConnection connection = getConnectionByDeviceId(deviceId);
-            if (connection != null) {
-                webSocketMessageUseCase.handleHeartbeat(connection);
-                log.debug("NettyWebsocketFrameHandler - 心跳处理成功: deviceId={}", deviceId);
-            }
-        } catch (Exception e) {
-            log.error("NettyWebsocketFrameHandler - 心跳处理失败: deviceId={}", deviceId, e);
-        }
-    }
-
-    /**
-     * 处理业务消息
-     */
-    private void handleBusinessMessage(Long deviceId, WebsocketMessage message) {
-        try {
-            TerminalConnection connection = getConnectionByDeviceId(deviceId);
-            if (connection != null) {
-                webSocketMessageUseCase.handleTextMessage(connection, message);
-            }
-        } catch (Exception e) {
-            log.error("NettyWebsocketFrameHandler - 业务消息处理失败: deviceId={}, message={}", deviceId, message, e);
-        }
     }
 
     /**
      * 处理Ping帧
      */
     private void handlePingFrame(ChannelHandlerContext ctx, Long deviceId) {
-        ctx.writeAndFlush(new PongWebSocketFrame());
-        updateReceivedMessageCount(deviceId);
-        handleHeartbeat(deviceId);
-        log.debug("NettyWebsocketFrameHandler - 响应Ping帧: deviceId={}", deviceId);
+        webSocketMessageUseCase.handlePingFrame(getConnectionByDeviceId(deviceId));
     }
 
     /**
      * 处理Pong帧
      */
     private void handlePongFrame(Long deviceId) {
-        updateReceivedMessageCount(deviceId);
-        handleHeartbeat(deviceId);
-        log.debug("NettyWebsocketFrameHandler - 收到Pong帧: deviceId={}", deviceId);
+        webSocketMessageUseCase.handlePongFrame(getConnectionByDeviceId(deviceId));
     }
 
     /**
@@ -277,33 +229,4 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
         return connection;
     }
 
-    /**
-     * 更新指定设备的接收消息计数。
-     *
-     * @param deviceId 设备ID
-     */
-    private void updateReceivedMessageCount(Long deviceId) {
-        try {
-            TerminalConnection connection = getConnectionByDeviceId(deviceId);
-            if (connection != null && connection.getWebSocketSession() instanceof TerminalWebsocketSession session) {
-                session.incrementReceivedCount();
-            }
-        } catch (Exception e) {
-            log.warn("NettyWebsocketFrameHandler - 更新接收计数失败: deviceId={}", deviceId, e);
-        }
-    }
-    
-    /**
-     * 更新心跳时间
-     */
-    private void updateHeartbeatTime(Long deviceId) {
-        try {
-            TerminalConnection connection = getConnectionByDeviceId(deviceId);
-            if (connection != null && connection.getWebSocketSession() instanceof TerminalWebsocketSession session) {
-                session.updateHeartbeat();
-            }
-        } catch (Exception e) {
-            log.warn("NettyWebsocketFrameHandler - 更新心跳时间失败: deviceId={}", deviceId, e);
-        }
-    }
 }
