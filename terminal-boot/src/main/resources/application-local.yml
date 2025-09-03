@@ -53,6 +53,7 @@ dubbo:
     address: nacos://192.168.1.185:8848?namespace=9bc919e2-0ba2-40ed-9ad9-67c85d4cd5e0&username=Nan&password=Nan12091209
     group: DEFAULT_GROUP
     register-mode: interface  # 接口级注册模式
+    enable-empty-protection: true
   protocol:
     name: dubbo
     port: 20880
@@ -63,6 +64,7 @@ dubbo:
   consumer:
     timeout: 3000
     retries: 0
+    check: false
   provider:
     timeout: 3000
     retries: 0
