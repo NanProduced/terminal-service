@@ -3,23 +3,22 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
+    <!-- 继承父POM，方便在多模块工程内构建；发布时由 flatten 创建为独立POM -->
     <parent>
         <groupId>com.colorlight.terminal</groupId>
         <artifactId>colorlight-terminal</artifactId>
-        <version>interlayer-master-0.0.2</version>
+        <version>1.0.0</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
     <artifactId>terminal-rpc-api</artifactId>
-    <!-- RPC包独立版本号，deploy的时候解开注释增加版本 -->
-    <!--  <version>0.0.1-SNAPSHOT</version>-->
+    <!-- RPC包独立版本号 -->
+    <version>1.0.1</version>
     <name>terminal-rpc-api</name>
     <packaging>jar</packaging>
-    <version>${this.version}</version>
 
     <description>Dubbo RPC 共享接口与 DTO（JDK 11 编译）</description>
     <properties>
-        <this.version>${common.version}</this.version>
         <maven.compiler.release>11</maven.compiler.release>
         <java.version>11</java.version>
     </properties>
@@ -28,54 +27,89 @@
         <!-- RPC接口定义最小化依赖 - 纯JDK11实现，无Lombok -->
     </dependencies>
 
+
     <build>
         <plugins>
-            <!-- 源码打包插件 -->
+            <!-- flatten：发布时拍扁为独立POM（无 parent），install/deploy 使用拍扁后的POM -->
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <version>3.3.0</version>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>1.5.0</version>
                 <configuration>
-                    <attach>true</attach>
+                    <flattenMode>oss</flattenMode>
+                    <updatePomFile>true</updatePomFile>
                 </configuration>
                 <executions>
                     <execution>
-                        <phase>compile</phase>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
+                        <goals><goal>flatten</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>flatten-clean</id>
+                        <phase>clean</phase>
+                        <goals><goal>clean</goal></goals>
                     </execution>
                 </executions>
             </plugin>
 
-            <!-- 编译插件 -->
+            <!-- 编译（仅用 <release>，勿与 <source>/<target> 混用） -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.5.1</version>
+                <version>3.11.0</version>
                 <configuration>
-                    <source>11</source>
-                    <target>11</target>
+                    <release>${maven.compiler.release}</release>
                 </configuration>
             </plugin>
 
-            <!-- 兼容性检查 -->
+            <!-- 打包源码 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals><goal>jar</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- 打包 javadoc（禁用严格校验，避免注释不全导致失败） -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.6.3</version>
+                <configuration>
+                    <additionalOptions>
+                        <additionalOption>-Xdoclint:none</additionalOption>
+                    </additionalOptions>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals><goal>jar</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- 运行JDK版本约束 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.4.1</version>
                 <executions>
                     <execution>
                         <id>enforce-java-version</id>
-                        <goals>
-                            <goal>enforce</goal>
-                        </goals>
+                        <goals><goal>enforce</goal></goals>
                         <configuration>
                             <rules>
                                 <requireJavaVersion>
                                     <version>[11,18)</version>
-<!--                                    <message>兼容 JDK11-JDK17</message>-->
                                 </requireJavaVersion>
                             </rules>
+                            <fail>true</fail>
                         </configuration>
                     </execution>
                 </executions>

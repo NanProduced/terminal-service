@@ -5,15 +5,12 @@
   <parent>
     <groupId>com.colorlight.terminal</groupId>
     <artifactId>colorlight-terminal</artifactId>
-    <version>interlayer-master-0.0.2</version>
+    <version>1.0.0</version>
   </parent>
   <artifactId>terminal-application</artifactId>
   <name>terminal-application</name>
   <description>应用编排与领域服务</description>
-  <version>${this.version}</version>
-  <properties>
-    <this.version>${common.version}</this.version>
-  </properties>
+
   <dependencies>
     <!-- 应用层最小依赖原则 - 只保留必要的框架支持 -->
     <dependency>
@@ -65,15 +62,6 @@
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
       <scope>provided</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>com.colorlight.ccloud</groupId>
-      <artifactId>colorlight-car-rpc-interface</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.dubbo</groupId>
-      <artifactId>dubbo</artifactId>
     </dependency>
   </dependencies>
   

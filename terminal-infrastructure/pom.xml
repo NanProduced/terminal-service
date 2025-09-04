@@ -5,15 +5,12 @@
   <parent>
     <groupId>com.colorlight.terminal</groupId>
     <artifactId>colorlight-terminal</artifactId>
-    <version>interlayer-master-0.0.2</version>
+    <version>1.0.0</version>
   </parent>
   <artifactId>terminal-infrastructure</artifactId>
   <name>terminal-infrastructure</name>
   <description>Redis/Netty/DB/Dubbo Provider 等外设实现</description>
-  <version>${this.version}</version>
-  <properties>
-    <this.version>${common.version}</this.version>
-  </properties>
+
   <dependencies>
     <!-- 业务层依赖 -->
     <dependency>

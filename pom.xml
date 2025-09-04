@@ -5,7 +5,7 @@
 
   <groupId>com.colorlight.terminal</groupId>
   <artifactId>colorlight-terminal</artifactId>
-  <version>interlayer-master-0.0.2</version>
+  <version>1.0.0</version>
   <packaging>pom</packaging>
   <name>colorlight-terminal</name>
   <description>Colorlight Terminal Service</description>
@@ -33,8 +33,8 @@
     <java.version>17</java.version>
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <!--        通用版本-->
-    <common.version>master-master-0.0.2</common.version>
+    <!-- rpc-api包独立版本号 -->
+    <terminal-rpc-api.version>0.0.1</terminal-rpc-api.version>
     <!-- 核心框架版本 -->
     <spring-boot.version>3.3.11</spring-boot.version>
     <spring-cloud.version>2023.0.3</spring-cloud.version>
@@ -72,9 +72,6 @@
 
     <!-- google s2 geometry地图索引 -->
     <google.s2.geometry.version>2.0.0</google.s2.geometry.version>
-
-    <!-- 接口版本 -->
-    <carRPC.version>master-master-0.0.1</carRPC.version>
 
   </properties>
 
@@ -149,7 +146,7 @@
       <dependency>
         <groupId>com.colorlight.terminal</groupId>
         <artifactId>terminal-rpc-api</artifactId>
-        <version>${project.version}</version>
+        <version>${terminal-rpc-api.version}</version>
       </dependency>
 
       <!-- 网络通信 -->
@@ -221,12 +218,6 @@
         <groupId>io.swagger.core.v3</groupId>
         <artifactId>swagger-annotations-jakarta</artifactId>
         <version>${swagger-annotations-version}</version>
-      </dependency>
-
-      <dependency>
-        <groupId>com.colorlight.ccloud</groupId>
-        <artifactId>colorlight-car-rpc-interface</artifactId>
-        <version>${carRPC.version}</version>
       </dependency>
 
       <!-- 地图索引 -->
