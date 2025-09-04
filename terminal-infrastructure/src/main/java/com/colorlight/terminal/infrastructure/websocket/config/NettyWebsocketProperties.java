@@ -1,5 +1,6 @@
 package com.colorlight.terminal.infrastructure.websocket.config;
 
+import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
@@ -30,8 +31,12 @@ public class NettyWebsocketProperties {
         // 播放盒规定的ws连接端口
         private int port = 8443;
 
-        // 播放盒规定的ws连接端点
-        private String path = "/ColorWebSocket/websocket/chat";
+        /**
+         * WebSocket内部处理路径
+         * 所有协议版本的WebSocket连接最终都使用此路径进行处理
+         * 外部协议路径由ProtocolVersion枚举管理
+         */
+        private String websocketPath = "/websocket";
 
         /**
          * Boss线程数 - 接受连接的线程数
@@ -173,5 +178,6 @@ public class NettyWebsocketProperties {
          */
         private int checkInterval = 30;
     }
+
 
 }

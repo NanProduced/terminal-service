@@ -1,8 +1,9 @@
 package com.colorlight.terminal.application.port.inbound.websocket;
 
+import com.colorlight.terminal.application.domain.connection.MessageProcessingContext;
+import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
 import com.colorlight.terminal.application.domain.connection.WebSocketSession;
-import com.colorlight.terminal.application.dto.websocket.WebsocketMessage;
 
 import java.util.List;
 
@@ -14,38 +15,40 @@ import java.util.List;
 public interface WebsocketMessageUseCase {
     
     /**
-     * 处理心跳消息
-     * 
-     * @param connection 终端连接
-     * @return 是否处理成功
-     */
-    boolean handleHeartbeat(TerminalConnection connection);
-    
-    /**
      * 处理文本消息
-     * 
-     * @param connection 终端连接
-     * @param message 消息封装
-     * @return 是否处理成功
+     *
+     * @param context 消息上下文
      */
-    boolean handleTextMessage(TerminalConnection connection, WebsocketMessage message);
+    void handleTextMessageByProcessor(MessageProcessingContext context);
     
     /**
      * 处理连接建立
      * 
      * @param deviceId 设备ID
      * @param session 技术会话对象
+     * @param protocolVersion 协议版本
      * @return 终端连接对象
      */
-    TerminalConnection handleConnectionEstablished(Long deviceId, WebSocketSession session);
+    TerminalConnection handleConnectionEstablished(Long deviceId, WebSocketSession session, ProtocolVersion protocolVersion);
     
     /**
      * 处理连接断开
-     * 
+     *
      * @param deviceId 设备ID
-     * @return 是否处理成功
      */
-    boolean handleConnectionClosed(Long deviceId);
+    void handleConnectionClosed(Long deviceId);
+
+    /**
+     * 处理PING帧
+     * @param terminalConnection 设备连接
+     */
+    void handlePingFrame(TerminalConnection terminalConnection);
+
+    /**
+     * 处理PONG帧
+     * @param terminalConnection 设备连接
+     */
+    void handlePongFrame(TerminalConnection terminalConnection);
     
     /**
      * 发送消息给指定设备

@@ -1,20 +1,19 @@
 package com.colorlight.terminal.application.service;
 
+import com.colorlight.terminal.application.domain.connection.MessageProcessingContext;
+import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
 import com.colorlight.terminal.application.domain.connection.WebSocketSession;
 import com.colorlight.terminal.application.domain.status.ReportSource;
-import com.colorlight.terminal.application.dto.websocket.WebsocketMessage;
 import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
-import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.application.port.inbound.websocket.WebsocketMessageUseCase;
 import com.colorlight.terminal.application.port.outbound.connection.ConnectionManagerPort;
-import com.colorlight.terminal.commons.utils.JsonUtils;
+import com.colorlight.terminal.application.port.outbound.websocket.ProtocolProcessorPort;
+import com.colorlight.terminal.application.port.outbound.websocket.ProtocolMessageProcessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -25,6 +24,19 @@ import java.util.Optional;
  * 
  * @author Nan
  */
+/**
+ * WebSocket消息应用服务 - 协议感知的WebSocket消息处理
+ * 
+ * <p>职责范围：</p>
+ * <ul>
+ *   <li>协议路由：根据连接协议版本选择合适的处理器</li>
+ *   <li>统计协调：通过MessageProcessingContext协调统计更新</li>
+ *   <li>状态管理：维护设备在线状态和连接管理</li>
+ *   <li>错误处理：处理协议路由和业务异常</li>
+ * </ul>
+ * 
+ * @author Nan
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -32,78 +44,49 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
     
     private final ConnectionManagerPort connectionManagerPort;
     private final DeviceOnlineStatusUseCase deviceOnlineStatusUseCase;
-    private final TerminalReportUseCase terminalReportUseCase;
+    private final ProtocolProcessorPort protocolProcessorPort;
 
     /**
-     * 处理心跳消息
-     * @param connection 终端连接
-     * @return
+     * 处理文本消息 - 协议感知版本，支持多协议文本消息处理
+     *
+     * @param context 消息处理上下文
      */
     @Override
-    public boolean handleHeartbeat(TerminalConnection connection) {
+    public void handleTextMessageByProcessor(MessageProcessingContext context) {
+        TerminalConnection connection = context.getConnection();
         try {
-            log.debug("ApplicationService - ws - 处理设备心跳: deviceId={}", connection.getDeviceId());
-            
-            // 更新心跳时间
-            connection.updateLastHeartbeatTime();
-            
-            // 心跳统计
-            connection.incrementReceivedMessageCount();
-            
             // 更新设备在线状态
             deviceOnlineStatusUseCase.updateLastReportTime(
-                    connection.getDeviceId(), 
-                    ReportSource.WEBSOCKET, 
-                    connection.getClientIp()
-            );
-            
-            log.debug("ApplicationService - ws - 设备心跳处理成功: deviceId={}, 最后心跳时间={}",
-                    connection.getDeviceId(), connection.getLastHeartbeatTime());
-
-            connection.sendMessage("PONG");
-
-            return true;
-            
-        } catch (Exception e) {
-            log.error("ApplicationService - ws - 处理设备心跳失败: deviceId={}", connection.getDeviceId(), e);
-            connection.incrementErrorCount();
-            return false;
-        }
-    }
-
-    /**
-     * 处理文本消息
-     * @param connection 终端连接
-     * @param message 消息内容
-     * @return
-     */
-    @Override
-    public boolean handleTextMessage(TerminalConnection connection, WebsocketMessage message) {
-        try {
-            log.debug("ApplicationService - ws - 处理设备文本消息: deviceId={}, message={}", connection.getDeviceId(), message);
-            
-            // 更新活跃时间
-            connection.updateActiveTime();
-            connection.incrementReceivedMessageCount();
-            
-            // 更新设备在线状态
-            deviceOnlineStatusUseCase.updateLastReportTime(
-                    connection.getDeviceId(), 
-                    ReportSource.WEBSOCKET, 
+                    connection.getDeviceId(),
+                    ReportSource.WEBSOCKET,
                     connection.getClientIp()
             );
 
-            if (StringUtils.isNotBlank(message.getGps())) {
-                // 当前websocket只上报GPS信息
-                terminalReportUseCase.asyncHandleSensorReport(connection.getDeviceId(), LocalDateTime.now(), message.getGps());
+            // 协议路由：根据连接协议版本获取对应的处理器
+            ProtocolMessageProcessor processor = protocolProcessorPort.getProcessor(connection.getProtocolVersion());
+            log.debug("ApplicationService - ws - 选择协议处理器: deviceId={}, protocol={}, processor={}", 
+                     connection.getDeviceId(), connection.getProtocolVersion(), 
+                     processor.getClass().getSimpleName());
+
+            // 执行协议特定的文本消息处理
+            ProtocolMessageProcessor.TextMessageProcessResult result = processor.processTextMessage(context);
+            
+            if (result.success()) {
+                context.updateMessageStatistics();
+                
+                log.debug("ApplicationService - ws - 设备文本消息处理成功: deviceId={}, protocol={}", 
+                         connection.getDeviceId(), connection.getProtocolVersion());
+
+            } else {
+                log.error("ApplicationService - ws - 协议处理器消息处理失败: deviceId={}, error={}", 
+                         connection.getDeviceId(), result.errorMessage());
+                context.updateErrorStatistics();
             }
-
-            return true;
             
         } catch (Exception e) {
-            log.error("ApplicationService - ws - 处理设备消息失败: deviceId={}, message={}", connection.getDeviceId(), message, e);
-            connection.incrementErrorCount();
-            return false;
+            log.error("ApplicationService - ws - 处理设备消息异常: deviceId={}, message={}", 
+                     connection.getDeviceId(), context.getRawMessage(), e);
+            context.updateErrorStatistics();
         }
     }
 
@@ -111,15 +94,16 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
      * 处理连接建立
      * @param deviceId 设备ID
      * @param session 技术会话对象
+     * @param protocolVersion 协议版本
      * @return
      */
     @Override
-    public TerminalConnection handleConnectionEstablished(Long deviceId, WebSocketSession session) {
+    public TerminalConnection handleConnectionEstablished(Long deviceId, WebSocketSession session, ProtocolVersion protocolVersion) {
         try {
             log.debug("ApplicationService - ws - 处理设备连接建立: deviceId={}", deviceId);
             
             // 创建业务连接对象
-            TerminalConnection connection = TerminalConnection.create(deviceId, session);
+            TerminalConnection connection = TerminalConnection.create(deviceId, session, protocolVersion);
             
             // 添加到连接管理器
             boolean added = connectionManagerPort.addConnection(deviceId, connection);
@@ -148,11 +132,11 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
 
     /**
      * 处理连接关闭
+     *
      * @param deviceId 设备ID
-     * @return
      */
     @Override
-    public boolean handleConnectionClosed(Long deviceId) {
+    public void handleConnectionClosed(Long deviceId) {
         try {
             log.debug("ApplicationService - ws - 处理设备连接断开: deviceId={}", deviceId);
             
@@ -162,18 +146,37 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
             if (removed != null) {
                 log.info("ApplicationService - ws - 设备连接断开成功: deviceId={}, 剩余连接数={}",
                         deviceId, connectionManagerPort.getConnectionCount());
-                return true;
             } else {
                 log.warn("ApplicationService - ws - 设备连接移除失败: deviceId={}", deviceId);
-                return false;
             }
             
         } catch (Exception e) {
             log.error("ApplicationService - ws - 处理设备连接断开失败: deviceId={}", deviceId, e);
-            return false;
         }
     }
-    
+
+    @Override
+    public void handlePingFrame(TerminalConnection terminalConnection) {
+        terminalConnection.incrementReceivedMessageCount();
+        // 更新在线
+        deviceOnlineStatusUseCase.updateLastReportTime(
+                terminalConnection.getDeviceId(),
+                ReportSource.WEBSOCKET,
+                terminalConnection.getClientIp());
+        terminalConnection.sendMessage("PONG");
+        terminalConnection.incrementSentMessageCount();
+    }
+
+    @Override
+    public void handlePongFrame(TerminalConnection terminalConnection) {
+        terminalConnection.incrementReceivedMessageCount();
+        // 更新在线
+        deviceOnlineStatusUseCase.updateLastReportTime(
+                terminalConnection.getDeviceId(),
+                ReportSource.WEBSOCKET,
+                terminalConnection.getClientIp());
+    }
+
     @Override
     public boolean sendMessage(Long deviceId, String message) {
         try {

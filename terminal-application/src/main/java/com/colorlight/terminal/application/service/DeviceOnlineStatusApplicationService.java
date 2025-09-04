@@ -1,11 +1,13 @@
 package com.colorlight.terminal.application.service;
 
+import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import com.colorlight.terminal.application.domain.status.DeviceOnlineStatus;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 import com.colorlight.terminal.application.domain.status.OnlineStatus;
 import com.colorlight.terminal.application.domain.status.ReportSource;
 import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
 import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort;
+import com.colorlight.terminal.application.port.outbound.connection.ConnectionManagerPort;
 import com.colorlight.terminal.application.port.outbound.status.AsyncDeviceStatusUpdatePort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineStatusPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceStatusEventPort;
@@ -31,6 +33,7 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
     private final DeviceOnlineStatusPort deviceOnlineStatusPort;
     private final DeviceStatusEventPort deviceStatusEventPort;
     private final DeviceConfigPort deviceConfigPort;
+    private final ConnectionManagerPort connectionManagerPort;
     
     // 可选的异步状态更新服务 - 当配置启用时注入
     @Autowired(required = false)
@@ -83,7 +86,8 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
                 }
             } else {
                 // 创建新状态
-                DeviceOnlineStatus newStatus = DeviceOnlineStatus.createGoLive(deviceId, source, clientIp);
+                String version = getProtocolVersionForDevice(deviceId, source);
+                DeviceOnlineStatus newStatus = DeviceOnlineStatus.createGoLive(deviceId, source, clientIp, version);
 
                 updateDeviceStatusWithMode(newStatus);
                 
@@ -153,7 +157,8 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
         
         // 离线 → 重连
         if (currentState == OnlineStatus.OFFLINE) {
-            return DeviceOnlineStatus.createReconnect(currentStatus, source, clientIp);
+            String version = getProtocolVersionForReconnect(currentStatus, source, currentStatus.getDeviceId());
+            return DeviceOnlineStatus.createReconnect(currentStatus, source, clientIp, version);
         }
         
         // GO_LIVE/RECONNECT → ONLINE (第一次转为稳定在线状态)
@@ -166,22 +171,22 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
                 .statusChangeTime(currentTime)
                 .onlineStartTime(currentStatus.getOnlineStartTime()) // 保持原有上线时间
                 .clientIp(clientIp)
+                .version(currentStatus.getVersion()) // 保持协议版本
                 .build();
         }
         
         // ONLINE → 心跳维持 (只更新时间，不更新状态)
-        if (currentState == OnlineStatus.ONLINE) {
-            return DeviceOnlineStatus.builder()
-                .deviceId(currentStatus.getDeviceId())
-                .lastReportTime(currentTime)
-                .lastReportSource(source)
-                .clientIp(clientIp)
-                // ✅ 不设置status，convertToRedisMap会跳过null字段
-                .build();
+        else {
+            String version = source == ReportSource.WEBSOCKET ? getProtocolVersionFromConnection(currentStatus.getDeviceId()) : null;
+            DeviceOnlineStatus refreshStatus = DeviceOnlineStatus.refreshOnline(
+                    currentStatus.getDeviceId(), source, clientIp, version);
+
+            // 版本字段合并（如果是http刷新没有更新version则使用之前的version）
+            if (refreshStatus.getVersion() == null) {
+                refreshStatus.setVersion(currentStatus.getVersion());
+            }
+            return refreshStatus;
         }
-        
-        // 默认情况：刷新在线
-        return DeviceOnlineStatus.refreshOnline(currentStatus.getDeviceId(), source, clientIp);
     }
     
     @Override
@@ -347,6 +352,47 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
             log.error("ApplicationService - 处理离线设备失败", e);
             return 0;
         }
+    }
+    
+    /**
+     * 获取设备协议版本（新建状态时使用）
+     * @param deviceId 设备ID
+     * @param source 上报来源
+     * @return 协议版本字符串，HTTP来源返回null
+     */
+    private String getProtocolVersionForDevice(Long deviceId, ReportSource source) {
+        if (source == ReportSource.WEBSOCKET) {
+            return getProtocolVersionFromConnection(deviceId);
+        }
+        // HTTP来源新建状态时无协议版本信息
+        return null;
+    }
+    
+    /**
+     * 获取设备协议版本（重连状态时使用）
+     * @param currentStatus 当前状态
+     * @param source 上报来源
+     * @param deviceId 设备ID
+     * @return 协议版本字符串
+     */
+    private String getProtocolVersionForReconnect(DeviceOnlineStatus currentStatus, ReportSource source, Long deviceId) {
+        if (source == ReportSource.WEBSOCKET) {
+            // WebSocket: 获取权威版本
+            return getProtocolVersionFromConnection(deviceId);
+        }
+        // HTTP: 保持原版本
+        return currentStatus.getVersion();
+    }
+    
+    /**
+     * 从连接管理器获取协议版本
+     * @param deviceId 设备ID
+     * @return 协议版本字符串，连接不存在时返回默认版本
+     */
+    private String getProtocolVersionFromConnection(Long deviceId) {
+        return connectionManagerPort.getConnection(deviceId)
+            .map(conn -> conn.getProtocolVersion().getVersion())
+            .orElse(ProtocolVersion.V1_0.getVersion());
     }
     
 }

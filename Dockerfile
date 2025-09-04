@@ -18,6 +18,9 @@ ENV JVM_OPTS=""
 ENV JAVA_OPTS=""
 ENV DATA_DIR="/data"
 
+# 给 JDK17 打开 Hessian2 反射用到的模块
+ENV JAVA_TOOL_OPTIONS="--add-opens=java.base/java.math=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED"
+
 RUN echo "https://mirrors.aliyun.com/alpine/v3.22/main/" > /etc/apk/repositories && \
     echo "https://mirrors.aliyun.com/alpine/v3.22/community/" >> /etc/apk/repositories && \
     apk update \

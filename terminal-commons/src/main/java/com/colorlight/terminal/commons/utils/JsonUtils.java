@@ -284,7 +284,379 @@ public class JsonUtils {
         return (T) OBJECT_MAPPER.readValue(json, source.getClass());
     }
 
+    // ========================================
+    // JSON 路径访问 API (新增功能)
+    // ========================================
 
+    /**
+     * 根据路径从JSON字符串中提取字符串值。
+     * 类似 {@code new JSONObject(data).get("data").toString()} 的功能。
+     * 
+     * <p><b>路径格式支持：</b></p>
+     * <ul>
+     * <li><b>简单属性：</b>{@code "name"} - 获取根对象的name属性</li>
+     * <li><b>嵌套属性：</b>{@code "user.profile.name"} - 获取嵌套对象属性</li>
+     * <li><b>数组访问：</b>{@code "users[0].name"} - 获取数组第一个元素的name属性</li>
+     * <li><b>混合路径：</b>{@code "data.items[2].details.title"} - 复杂嵌套路径</li>
+     * </ul>
+     *
+     * <p><b>可靠性设计：</b></p>
+     * <ul>
+     * <li><b>空值安全：</b>路径中任何节点为null时返回默认值而不抛异常</li>
+     * <li><b>类型容错：</b>类型不匹配时返回默认值</li>
+     * <li><b>边界保护：</b>数组越界时返回默认值</li>
+     * </ul>
+     *
+     * <p><b>用法示例：</b></p>
+     * <pre>{@code
+     * String json = "{\"user\":{\"name\":\"张三\",\"age\":25},\"items\":[{\"title\":\"商品1\"}]}";
+     * 
+     * // 简单属性访问
+     * String userName = JsonUtils.getStringValue(json, "user.name", "未知用户");
+     * // 数组访问
+     * String itemTitle = JsonUtils.getStringValue(json, "items[0].title", "无标题");
+     * // 不存在的路径返回默认值
+     * String missing = JsonUtils.getStringValue(json, "user.address", "地址未填写");
+     * }</pre>
+     *
+     * @param json JSON字符串，不能为null
+     * @param path JSON路径表达式，使用点号分隔嵌套属性，数组用方括号表示索引
+     * @param defaultValue 当路径不存在、值为null或类型不匹配时的默认返回值
+     * @return 提取的字符串值，失败时返回默认值
+     * @throws TechnicalException 当JSON格式不正确或路径格式错误时抛出
+     */
+    public static String getStringValue(String json, String path, String defaultValue) {
+        return getValue(json, path, String.class, defaultValue);
+    }
+
+    /**
+     * 根据路径从JSON字符串中提取整数值。
+     * 支持数字类型的自动转换，字符串类型的数字也会尝试解析。
+     *
+     * <p><b>用法示例：</b></p>
+     * <pre>{@code
+     * String json = "{\"user\":{\"age\":25,\"score\":\"95\"},\"counts\":[10,20,30]}";
+     * 
+     * // 数字类型直接提取
+     * int age = JsonUtils.getIntValue(json, "user.age", 0);
+     * // 字符串数字自动转换
+     * int score = JsonUtils.getIntValue(json, "user.score", 0);
+     * // 数组访问
+     * int firstCount = JsonUtils.getIntValue(json, "counts[0]", 0);
+     * }</pre>
+     *
+     * @param json JSON字符串，不能为null
+     * @param path JSON路径表达式
+     * @param defaultValue 当路径不存在、值为null或无法转换为整数时的默认返回值
+     * @return 提取的整数值，失败时返回默认值
+     * @throws TechnicalException 当JSON格式不正确或路径格式错误时抛出
+     */
+    public static int getIntValue(String json, String path, int defaultValue) {
+        try {
+            JsonNode node = navigateToPath(json, path);
+            if (node == null || node.isNull()) {
+                return defaultValue;
+            }
+            if (node.isNumber()) {
+                return node.asInt();
+            }
+            if (node.isTextual()) {
+                return Integer.parseInt(node.asText());
+            }
+            return defaultValue;
+        } catch (NumberFormatException | TechnicalException e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * 根据路径从JSON字符串中提取长整数值。
+     * 支持数字类型的自动转换，字符串类型的数字也会尝试解析。
+     *
+     * @param json JSON字符串，不能为null
+     * @param path JSON路径表达式
+     * @param defaultValue 当路径不存在、值为null或无法转换为长整数时的默认返回值
+     * @return 提取的长整数值，失败时返回默认值
+     * @throws TechnicalException 当JSON格式不正确或路径格式错误时抛出
+     */
+    public static long getLongValue(String json, String path, long defaultValue) {
+        try {
+            JsonNode node = navigateToPath(json, path);
+            if (node == null || node.isNull()) {
+                return defaultValue;
+            }
+            if (node.isNumber()) {
+                return node.asLong();
+            }
+            if (node.isTextual()) {
+                return Long.parseLong(node.asText());
+            }
+            return defaultValue;
+        } catch (NumberFormatException | TechnicalException e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * 根据路径从JSON字符串中提取布尔值。
+     * 支持布尔类型直接提取，字符串类型的布尔值也会尝试解析。
+     *
+     * <p><b>布尔值解析规则：</b></p>
+     * <ul>
+     * <li><b>true值：</b>布尔true、字符串"true"(不区分大小写)、数字1</li>
+     * <li><b>false值：</b>布尔false、字符串"false"(不区分大小写)、数字0</li>
+     * <li><b>其他值：</b>返回默认值</li>
+     * </ul>
+     *
+     * @param json JSON字符串，不能为null
+     * @param path JSON路径表达式
+     * @param defaultValue 当路径不存在、值为null或无法转换为布尔值时的默认返回值
+     * @return 提取的布尔值，失败时返回默认值
+     * @throws TechnicalException 当JSON格式不正确或路径格式错误时抛出
+     */
+    public static boolean getBooleanValue(String json, String path, boolean defaultValue) {
+        try {
+            JsonNode node = navigateToPath(json, path);
+            if (node == null || node.isNull()) {
+                return defaultValue;
+            }
+            if (node.isBoolean()) {
+                return node.asBoolean();
+            }
+            if (node.isTextual()) {
+                String text = node.asText().toLowerCase();
+                if ("true".equals(text)) return true;
+                if ("false".equals(text)) return false;
+                return defaultValue;
+            }
+            if (node.isNumber()) {
+                int value = node.asInt();
+                return value == 1 || (value != 0 && defaultValue);
+            }
+            return defaultValue;
+        } catch (TechnicalException e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * 根据路径从JSON字符串中提取指定类型的值。
+     * 这是一个通用的类型安全访问方法，支持所有Jackson可转换的类型。
+     *
+     * <p><b>支持的类型包括：</b></p>
+     * <ul>
+     * <li><b>基本类型：</b>String, Integer, Long, Boolean, Double等</li>
+     * <li><b>复杂对象：</b>自定义POJO类</li>
+     * <li><b>集合类型：</b>List, Map等（需要配合TypeReference使用）</li>
+     * </ul>
+     *
+     * <p><b>用法示例：</b></p>
+     * <pre>{@code
+     * String json = "{\"user\":{\"name\":\"张三\",\"age\":25},\"tags\":[\"tag1\",\"tag2\"]}";
+     * 
+     * // 基本类型
+     * String name = JsonUtils.getValue(json, "user.name", String.class, "默认名称");
+     * Integer age = JsonUtils.getValue(json, "user.age", Integer.class, 0);
+     * 
+     * // 复杂对象（假设有User类）
+     * User user = JsonUtils.getValue(json, "user", User.class, new User());
+     * }</pre>
+     *
+     * @param <T> 目标类型的泛型
+     * @param json JSON字符串，不能为null
+     * @param path JSON路径表达式
+     * @param clazz 目标类型的Class对象
+     * @param defaultValue 当路径不存在、值为null或类型转换失败时的默认返回值
+     * @return 提取并转换后的值，失败时返回默认值
+     * @throws TechnicalException 当JSON格式不正确或路径格式错误时抛出
+     */
+    public static <T> T getValue(String json, String path, Class<T> clazz, T defaultValue) {
+        try {
+            JsonNode node = navigateToPath(json, path);
+            if (node == null || node.isNull()) {
+                return defaultValue;
+            }
+            return OBJECT_MAPPER.convertValue(node, clazz);
+        } catch (IllegalArgumentException | TechnicalException e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * 检查JSON字符串中指定路径是否存在。
+     * 
+     * <p><b>存在性判断规则：</b></p>
+     * <ul>
+     * <li><b>存在：</b>路径可达且值不为null</li>
+     * <li><b>不存在：</b>路径中任何节点缺失、值为null、数组越界</li>
+     * </ul>
+     *
+     * @param json JSON字符串，不能为null
+     * @param path JSON路径表达式
+     * @return 如果路径存在且值不为null则返回true，否则返回false
+     * @throws TechnicalException 当JSON格式不正确或路径格式错误时抛出
+     */
+    public static boolean hasPath(String json, String path) {
+        try {
+            JsonNode node = navigateToPath(json, path);
+            return node != null && !node.isNull();
+        } catch (TechnicalException e) {
+            return false;
+        }
+    }
+
+    /**
+     * 检查JSON字符串中指定路径的值是否为null。
+     * 与{@link #hasPath}的区别：路径存在但值为JSON null时此方法返回true。
+     *
+     * @param json JSON字符串，不能为null
+     * @param path JSON路径表达式
+     * @return 如果路径存在且值为null则返回true，路径不存在或值不为null则返回false
+     * @throws TechnicalException 当JSON格式不正确或路径格式错误时抛出
+     */
+    public static boolean isNull(String json, String path) {
+        try {
+            JsonNode node = navigateToPath(json, path);
+            return node != null && node.isNull();
+        } catch (TechnicalException e) {
+            return false;
+        }
+    }
+
+    // ========================================
+    // 内部辅助方法
+    // ========================================
+
+    /**
+     * 根据路径导航到JSON节点。
+     * 这是路径访问功能的核心实现，负责解析路径表达式并导航到目标节点。
+     *
+     * <p><b>路径解析逻辑：</b></p>
+     * <ul>
+     * <li><b>属性访问：</b>使用点号分隔，如"user.profile.name"</li>
+     * <li><b>数组访问：</b>使用方括号包围索引，如"items[0]"或"data.users[1].name"</li>
+     * <li><b>混合路径：</b>支持属性和数组的任意组合</li>
+     * </ul>
+     *
+     * <p><b>错误处理策略：</b></p>
+     * <ul>
+     * <li><b>路径不存在：</b>返回null而不抛异常</li>
+     * <li><b>数组越界：</b>返回null而不抛异常</li>
+     * <li><b>类型错误：</b>如尝试在非对象节点访问属性时返回null</li>
+     * </ul>
+     *
+     * @param json JSON字符串
+     * @param path 路径表达式
+     * @return 目标节点，路径不存在时返回null
+     * @throws TechnicalException 当JSON解析失败或路径格式错误时抛出
+     */
+    private static JsonNode navigateToPath(String json, String path) {
+        Objects.requireNonNull(json, "JsonUtils: JSON字符串不能为null");
+        Objects.requireNonNull(path, "JsonUtils: 路径不能为null");
+        
+        if (StringUtils.isBlank(path)) {
+            throw new TechnicalException(TechErrorCode.JSON_SERIALIZATION_EXCEPTION, "路径不能为空");
+        }
+
+        try {
+            JsonNode rootNode = OBJECT_MAPPER.readTree(json);
+            if (rootNode == null) {
+                return null;
+            }
+
+            // 根路径直接返回根节点
+            if (".".equals(path) || "root".equals(path)) {
+                return rootNode;
+            }
+
+            return navigateNode(rootNode, path);
+            
+        } catch (IOException e) {
+            throw new TechnicalException(TechErrorCode.JSON_SERIALIZATION_EXCEPTION, "JSON解析失败", e);
+        }
+    }
+
+    /**
+     * 在给定节点上执行路径导航。
+     * 递归解析路径表达式，支持点号分隔的属性访问和数组索引访问。
+     *
+     * @param currentNode 当前节点
+     * @param remainingPath 剩余路径
+     * @return 目标节点，失败时返回null
+     */
+    private static JsonNode navigateNode(JsonNode currentNode, String remainingPath) {
+        if (currentNode == null || StringUtils.isBlank(remainingPath)) {
+            return currentNode;
+        }
+
+        // 查找下一个分隔符的位置
+        int dotIndex = remainingPath.indexOf('.');
+        int bracketIndex = remainingPath.indexOf('[');
+
+        // 决定下一个要处理的路径部分
+        String nextSegment;
+        String restPath;
+
+        if (bracketIndex != -1 && (dotIndex == -1 || bracketIndex < dotIndex)) {
+            // 处理数组访问，如 "items[0]" 或 "users[1].name"
+            nextSegment = remainingPath.substring(0, bracketIndex);
+            
+            // 查找对应的右括号
+            int rightBracket = remainingPath.indexOf(']', bracketIndex);
+            if (rightBracket == -1) {
+                return null; // 格式错误：缺少右括号
+            }
+            
+            String indexStr = remainingPath.substring(bracketIndex + 1, rightBracket);
+            try {
+                int arrayIndex = Integer.parseInt(indexStr);
+                
+                // 先访问属性（如果有）
+                JsonNode arrayNode = StringUtils.isBlank(nextSegment) ? 
+                    currentNode : currentNode.get(nextSegment);
+                
+                if (arrayNode == null || !arrayNode.isArray() || arrayIndex < 0 || arrayIndex >= arrayNode.size()) {
+                    return null;
+                }
+                
+                JsonNode elementNode = arrayNode.get(arrayIndex);
+                
+                // 处理剩余路径
+                int nextDot = remainingPath.indexOf('.', rightBracket);
+                if (nextDot == -1) {
+                    return elementNode;
+                } else {
+                    return navigateNode(elementNode, remainingPath.substring(nextDot + 1));
+                }
+                
+            } catch (NumberFormatException e) {
+                return null; // 数组索引不是有效数字
+            }
+            
+        } else if (dotIndex != -1) {
+            // 处理属性访问，如 "user.name"
+            nextSegment = remainingPath.substring(0, dotIndex);
+            restPath = remainingPath.substring(dotIndex + 1);
+        } else {
+            // 最后一个属性
+            nextSegment = remainingPath;
+            restPath = null;
+        }
+
+        // 访问属性
+        if (!currentNode.isObject()) {
+            return null; // 无法在非对象节点上访问属性
+        }
+
+        JsonNode nextNode = currentNode.get(nextSegment);
+        
+        // 继续处理剩余路径
+        if (StringUtils.isBlank(restPath)) {
+            return nextNode;
+        } else {
+            return navigateNode(nextNode, restPath);
+        }
+    }
 
 }
 

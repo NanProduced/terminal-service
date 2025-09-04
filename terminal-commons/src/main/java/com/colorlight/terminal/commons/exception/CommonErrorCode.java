@@ -87,7 +87,13 @@ public enum CommonErrorCode implements ErrorCode {
     /**
      * 账号名已存在
      */
-    TERMINAL_ACCOUNT_EXIST("TM2001", "账号名称已存在", ErrorLevel.WARN, HttpStatusCode.BAD_REQUEST);
+    TERMINAL_ACCOUNT_EXIST("TM2001", "账号名称已存在", ErrorLevel.WARN, HttpStatusCode.BAD_REQUEST),
+
+    /*======================= V1.1-websocket协议 TM30XX =======================*/
+
+    WS_INVALID_MESSAGE_TYPE("TM3001", "消息类型不存在", ErrorLevel.WARN, HttpStatusCode.BAD_REQUEST),
+
+    WS_INVALID_MESSAGE_DATA("TM3002", "消息内容存在问题", ErrorLevel.WARN, HttpStatusCode.BAD_REQUEST);
 
     /*======================= 枚举属性 =======================*/
     

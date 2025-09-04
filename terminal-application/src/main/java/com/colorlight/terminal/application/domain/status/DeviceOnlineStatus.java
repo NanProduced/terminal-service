@@ -52,9 +52,20 @@ public class DeviceOnlineStatus {
     private String clientIp;
     
     /**
-     * 创建在线状态
+     * 协议版本 - WebSocket连接的版本信息
+     * null表示未通过WebSocket连接或使用默认版本
      */
-    public static DeviceOnlineStatus createGoLive(Long deviceId, ReportSource source, String clientIp) {
+    private String version;
+    
+    /**
+     * 创建在线状态
+     * @param deviceId 设备ID
+     * @param source 上报来源
+     * @param clientIp 客户端IP
+     * @param version 协议版本（可为null）
+     * @return 在线状态对象
+     */
+    public static DeviceOnlineStatus createGoLive(Long deviceId, ReportSource source, String clientIp, String version) {
         long currentTime = System.currentTimeMillis();
         return DeviceOnlineStatus.builder()
                 .deviceId(deviceId)
@@ -64,35 +75,44 @@ public class DeviceOnlineStatus {
                 .statusChangeTime(currentTime)
                 .onlineStartTime(currentTime)
                 .clientIp(clientIp)
+                .version(version)
                 .build();
     }
 
     /**
      * 刷新在线状态
-     * @param deviceId
-     * @param source
-     * @param clientIp
-     * @return
+     * @param deviceId 设备ID
+     * @param source 上报来源
+     * @param clientIp 客户端IP
+     * @param version 协议版本（WebSocket来源时用于懒更新）
+     * @return 在线状态对象
      */
-    public static DeviceOnlineStatus refreshOnline(Long deviceId, ReportSource source, String clientIp) {
+    public static DeviceOnlineStatus refreshOnline(Long deviceId, ReportSource source, String clientIp, String version) {
         long currentTime = System.currentTimeMillis();
-        return DeviceOnlineStatus.builder()
+        DeviceOnlineStatus.DeviceOnlineStatusBuilder builder = DeviceOnlineStatus.builder()
                 .deviceId(deviceId)
                 .lastReportTime(currentTime)
                 .lastReportSource(source)
                 .status(OnlineStatus.ONLINE)
-                .clientIp(clientIp)
-                .build();
+                .clientIp(clientIp);
+        
+        // 懒版本更新：仅WebSocket来源且提供版本号时设置
+        if (source == ReportSource.WEBSOCKET && version != null) {
+            builder.version(version);
+        }
+        
+        return builder.build();
     }
 
     /**
      * 创建重连状态
-     * @param currentStatus
-     * @param source
-     * @param clientIp
-     * @return
+     * @param currentStatus 当前状态
+     * @param source 上报来源
+     * @param clientIp 客户端IP
+     * @param version 协议版本（可为null）
+     * @return 重连状态对象
      */
-    public static DeviceOnlineStatus createReconnect(DeviceOnlineStatus currentStatus, ReportSource source, String clientIp) {
+    public static DeviceOnlineStatus createReconnect(DeviceOnlineStatus currentStatus, ReportSource source, String clientIp, String version) {
         long currentTime = System.currentTimeMillis();
         return DeviceOnlineStatus.builder()
                 .deviceId(currentStatus.deviceId)
@@ -102,6 +122,7 @@ public class DeviceOnlineStatus {
                 .statusChangeTime(currentTime)
                 .onlineStartTime(currentTime)
                 .clientIp(clientIp)
+                .version(version)
                 .build();
     }
 
@@ -131,9 +152,7 @@ public class DeviceOnlineStatus {
         }
         
         // 对于在线相关状态，检查时间阈值
-        if (this.status == OnlineStatus.GO_LIVE || 
-            this.status == OnlineStatus.ONLINE || 
-            this.status == OnlineStatus.RECONNECT) {
+        if (isOnlineRelatedStatus(this.status)) {
             // 使用默认70秒，但建议调用方使用带配置的重载方法
             long expireThreshold = System.currentTimeMillis() - 70_000; 
             return this.lastReportTime > expireThreshold;
@@ -158,9 +177,7 @@ public class DeviceOnlineStatus {
         }
         
         // 对于在线相关状态，检查时间阈值
-        if (this.status == OnlineStatus.GO_LIVE || 
-            this.status == OnlineStatus.ONLINE || 
-            this.status == OnlineStatus.RECONNECT) {
+        if (isOnlineRelatedStatus(this.status)) {
             long expireThreshold = System.currentTimeMillis() - timeoutThreshold;
             return this.lastReportTime > expireThreshold;
         }
@@ -173,12 +190,28 @@ public class DeviceOnlineStatus {
      */
     public long getCurrentOnlineDuration() {
         // 扩展到所有在线相关状态
-        if ((this.status == OnlineStatus.GO_LIVE || 
-             this.status == OnlineStatus.ONLINE || 
-             this.status == OnlineStatus.RECONNECT) && 
-            this.onlineStartTime != null) {
+        if (isOnlineRelatedStatus(this.status) && this.onlineStartTime != null) {
             return System.currentTimeMillis() - this.onlineStartTime;
         }
         return 0L;
+    }
+    
+    /**
+     * 获取有效协议版本（用于业务逻辑）
+     * @return 协议版本，null时返回默认V1.0版本号
+     */
+    public String getEffectiveVersion() {
+        return version != null ? version : "1.0";
+    }
+    
+    /**
+     * 检查是否为在线相关状态
+     * @param status 状态
+     * @return 是否为在线相关状态
+     */
+    private boolean isOnlineRelatedStatus(OnlineStatus status) {
+        return status == OnlineStatus.GO_LIVE || 
+               status == OnlineStatus.ONLINE || 
+               status == OnlineStatus.RECONNECT;
     }
 }

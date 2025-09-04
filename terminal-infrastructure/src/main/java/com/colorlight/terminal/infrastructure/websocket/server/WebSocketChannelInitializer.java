@@ -46,9 +46,9 @@ public class WebSocketChannelInitializer extends ChannelInitializer<SocketChanne
             pipeline.addLast("websocket-compress", new WebSocketServerCompressionHandler());
         }
 
-        // 5. WebSocket协议处理器 - 处理握手升级
+        // 5. WebSocket协议处理器 - 使用统一内部路径处理所有协议版本
         pipeline.addLast("websocket-protocol", new WebSocketServerProtocolHandler(
-                nettyWebsocketProperties.getServer().getPath(),
+                nettyWebsocketProperties.getServer().getWebsocketPath(),
                 null, // 不限制子协议
                 true, // 允许扩展
                 nettyWebsocketProperties.getMessage().getMaxFrameSize()

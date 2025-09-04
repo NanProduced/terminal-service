@@ -1,9 +1,9 @@
-package com.colorlight.terminal.application.dto.websocket;
+package com.colorlight.terminal.application.dto.websocket.v10;
 
 import lombok.Data;
 
 /**
- * WebSocket消息封装类
+ * v1.0版本-WebSocket消息封装类
  * 用于适配WebSocket协议的嵌套JSON格式
  *
  * <p>消息格式示例:</p>
@@ -16,7 +16,7 @@ import lombok.Data;
  * @author Nan
  */
 @Data
-public class WebsocketMessage {
+public class V10WebsocketMessage {
 
     /**
      * 设备账户名
