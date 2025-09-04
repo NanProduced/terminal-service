@@ -73,6 +73,9 @@
     <!-- google s2 geometry地图索引 -->
     <google.s2.geometry.version>2.0.0</google.s2.geometry.version>
 
+    <!-- 接口版本 -->
+    <carRPC.version>master-master-0.0.1</carRPC.version>
+
   </properties>
 
   <dependencyManagement>
@@ -218,6 +221,12 @@
         <groupId>io.swagger.core.v3</groupId>
         <artifactId>swagger-annotations-jakarta</artifactId>
         <version>${swagger-annotations-version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>com.colorlight.ccloud</groupId>
+        <artifactId>colorlight-car-rpc-interface</artifactId>
+        <version>${carRPC.version}</version>
       </dependency>
 
       <!-- 地图索引 -->

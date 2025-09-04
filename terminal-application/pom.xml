@@ -66,6 +66,15 @@
       <artifactId>slf4j-api</artifactId>
       <scope>provided</scope>
     </dependency>
+
+    <dependency>
+      <groupId>com.colorlight.ccloud</groupId>
+      <artifactId>colorlight-car-rpc-interface</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.dubbo</groupId>
+      <artifactId>dubbo</artifactId>
+    </dependency>
   </dependencies>
   
   <build>
