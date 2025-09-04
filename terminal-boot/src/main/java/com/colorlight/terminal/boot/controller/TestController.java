@@ -5,6 +5,7 @@ import com.colorlight.terminal.application.dto.request.SendCommandRequest;
 import com.colorlight.terminal.application.dto.result.CommandSendResult;
 import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
 import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
+import com.colorlight.terminal.application.service.DeviceReportService;
 import com.colorlight.terminal.rpc.dto.RpcResult;
 import com.colorlight.terminal.rpc.dto.request.CreateTerminalAccountDTO;
 import com.colorlight.terminal.rpc.dto.request.SingleCommandRequestDTO;
@@ -32,9 +33,11 @@ public class TestController {
     private final TerminalAccountRpcService terminalAccountRpcService;
     private final DeviceOnlineStatusUseCase deviceOnlineStatusUseCase;
     private final TerminalCommandRpcService terminalCommandRpcService;
+    private final DeviceReportService deviceReportService;
 
     /**
      * 测试创建终端账号
+     *
      * @param account
      * @param password
      * @return
@@ -48,6 +51,7 @@ public class TestController {
 
     /**
      * 测试检查单个设备是否在线
+     *
      * @param deviceId
      * @return
      */
@@ -64,6 +68,7 @@ public class TestController {
 
     /**
      * 测试批量检查设备在线状态
+     *
      * @param deviceIds
      * @return
      */
@@ -84,6 +89,7 @@ public class TestController {
 
     /**
      * 测试获取设备状态详情
+     *
      * @param deviceId
      * @return
      */
@@ -100,6 +106,7 @@ public class TestController {
 
     /**
      * 批量获取设备状态详情
+     *
      * @param deviceIds
      * @return
      */
@@ -125,6 +132,7 @@ public class TestController {
 
     /**
      * 测试获取所有在线设备Id
+     *
      * @return
      */
     @GetMapping("/online-devices")
@@ -141,6 +149,7 @@ public class TestController {
 
     /**
      * 测试获取在线设备数量统计
+     *
      * @return
      */
     @GetMapping("/online-count")
@@ -156,12 +165,25 @@ public class TestController {
 
     /**
      * 测试RPC下发单个指令
+     *
      * @param request
      * @return
      */
     @PostMapping("/command/single")
     public RpcResult<SingleCommandSendResultDTO> sendCommand(@RequestBody SingleCommandRequestDTO request) {
         return terminalCommandRpcService.sendCommand(request);
+    }
+
+
+    /**
+     * 测试RPC上报
+     *
+     * @return
+     */
+    @PostMapping("/rpc")
+    public RpcResult<Void> rpc() {
+        deviceReportService.reportDeviceStatus();
+        return RpcResult.success();
     }
 
 }
