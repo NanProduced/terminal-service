@@ -61,7 +61,22 @@ public enum V11WebsocketMessageTypeEnum {
     /**
      * 终端日志上报
      */
-    LOG_REPORT(10, "LOG_REPORT");
+    LOG_REPORT(10, "LOG_REPORT"),
+
+    /**
+     * 节目播放上报
+     */
+    PROGRAM_RECORD(11, "PROGRAM_PLAY_RECORD_REPORT"),
+
+    /**
+     * 流量报警
+     */
+    DATA_USAGE_ALERT(12, "DATA_USAGE_ALERT"),
+
+    /**
+     * 围栏状态
+     */
+    FENCE_STATUS_REPORT(13, "FENCE_STATUS_REPORT");
 
     private final Integer id;
 

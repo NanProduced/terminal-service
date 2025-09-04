@@ -81,6 +81,9 @@ public class V11OperationHandleRouter {
             // 终端日志上报
             case LOG_REPORT -> handleTerminalLogReport(context, message);
 
+            // 节目播放记录上报
+            case PROGRAM_RECORD -> handleProgramPlayRecordReport(context, message);
+
             default -> throw new BusinessException(CommonErrorCode.WS_INVALID_MESSAGE_TYPE);
 
         }
@@ -191,8 +194,21 @@ public class V11OperationHandleRouter {
     private void handleMediaPlayRecordReport(MessageProcessingContext context, V11WebsocketMessage message) {
         String dataStr = Objects.isNull(message.getData()) ? EMPTY_JSON : JsonUtils.toJson(message.getData());
         terminalReportUseCase.asyncHandleMediaPlayRecordReport(context.getDeviceId(), dataStr);
-        log.info("V11Router -ws- #MEDIA_PLAY_RECORD_REPORT#【上报素材播放记录】 deviceId:{}", context.getDeviceId() );
+        log.info("V11Router -ws- #MEDIA_PLAY_RECORD_REPORT#【上报素材播放记录】 deviceId:{}", context.getDeviceId());
         context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.MEDIA_RECORD.getId(), message.getMessageId()));
+    }
+
+    /**
+     * 处理节目播放记录报告的命令。
+     *
+     * @param context 消息处理上下文，包含设备ID等信息
+     * @param message 接收到的WebSocket消息对象
+     */
+    private void handleProgramPlayRecordReport(MessageProcessingContext context, V11WebsocketMessage message) {
+        String dataStr = Objects.isNull(message.getData()) ? EMPTY_JSON : JsonUtils.toJson(message.getData());
+        terminalReportUseCase.asyncHandleProgramPlayRecordReport(context.getDeviceId(), dataStr);
+        log.info("V11Router -ws- #PROGRAM_PLAY_RECORD_REPORT#【上报节目播放记录】 deviceId:{}", context.getDeviceId());
+        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.PROGRAM_RECORD.getId(), message.getMessageId()));
     }
 
     /**
@@ -224,5 +240,28 @@ public class V11OperationHandleRouter {
         context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.LOG_REPORT.getId(), message.getMessageId()));
     }
 
+    /**
+     * 处理数据使用警告消息。
+     *
+     * @param context 消息处理上下文，包含设备ID等信息
+     * @param message 接收到的WebSocket消息对象
+     */
+    private void handleDataUsageAlert(MessageProcessingContext context, V11WebsocketMessage message) {
+        // todo: 待实现业务逻辑
+        log.info("V11Router -ws- #DATA_USAGE_ALERT#【流量报警】 deviceId:{}", context.getDeviceId());
+        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.DATA_USAGE_ALERT.getId(), message.getMessageId()));
+    }
+
+    /**
+     * 处理围栏状态报告的命令。
+     *
+     * @param context 消息处理上下文，包含设备ID等信息
+     * @param message 接收到的WebSocket消息对象
+     */
+    private void handleFenceStatusReport(MessageProcessingContext context, V11WebsocketMessage message) {
+        // todo: 待实现业务逻辑
+        log.info("V11Router -ws- #FENCE_STATUS#【围栏状态】 deviceId:{}", context.getDeviceId());
+        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.FENCE_STATUS_REPORT.getId(), message.getMessageId()));
+    }
 
 }

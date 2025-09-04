@@ -47,6 +47,11 @@ public class V10ProtocolMessageProcessor implements ProtocolMessageProcessor {
             log.debug("V10ProtocolMessageProcessor - 处理V1.0文本消息: deviceId={}, message={}",
                      context.getDeviceId(), context.getRawMessage());
 
+            // 心跳
+            if (StringUtils.isBlank(context.getRawMessage())) {
+                return handleHeartbeat(context);
+            }
+
             final V10WebsocketMessage message = JsonUtils.fromJson(context.getRawMessage(), V10WebsocketMessage.class);
 
             // 心跳
