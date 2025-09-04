@@ -1,11 +1,7 @@
 package com.colorlight.terminal.boot.controller;
 
 import com.colorlight.terminal.application.domain.status.DeviceOnlineStatus;
-import com.colorlight.terminal.application.dto.request.SendCommandRequest;
-import com.colorlight.terminal.application.dto.result.CommandSendResult;
-import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
 import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
-import com.colorlight.terminal.application.service.DeviceReportService;
 import com.colorlight.terminal.rpc.dto.RpcResult;
 import com.colorlight.terminal.rpc.dto.request.CreateTerminalAccountDTO;
 import com.colorlight.terminal.rpc.dto.request.SingleCommandRequestDTO;
@@ -33,7 +29,6 @@ public class TestController {
     private final TerminalAccountRpcService terminalAccountRpcService;
     private final DeviceOnlineStatusUseCase deviceOnlineStatusUseCase;
     private final TerminalCommandRpcService terminalCommandRpcService;
-    private final DeviceReportService deviceReportService;
 
     /**
      * 测试创建终端账号
@@ -174,16 +169,5 @@ public class TestController {
         return terminalCommandRpcService.sendCommand(request);
     }
 
-
-    /**
-     * 测试RPC上报
-     *
-     * @return
-     */
-    @PostMapping("/rpc")
-    public RpcResult<Void> rpc() {
-        deviceReportService.reportDeviceStatus();
-        return RpcResult.success();
-    }
 
 }

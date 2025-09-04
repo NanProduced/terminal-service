@@ -1,6 +1,7 @@
 package com.colorlight.terminal.application.service;
 
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
+import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.dto.request.SendCommandRequest;
 import com.colorlight.terminal.application.dto.result.CommandSendResult;
 import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
@@ -8,6 +9,7 @@ import com.colorlight.terminal.application.port.outbound.command.CommandCachePor
 import com.colorlight.terminal.application.port.outbound.command.CommandWebSocketPort;
 import com.colorlight.terminal.application.port.outbound.config.CommandConfigPort;
 import com.colorlight.terminal.application.port.outbound.generator.CommandIdGeneratorPort;
+import com.colorlight.terminal.application.port.outbound.status.CommandConfirmEventPort;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +33,7 @@ public class TerminalCommandApplicationService implements TerminalCommandUseCase
     private final CommandCachePort commandCachePort;
     private final CommandIdGeneratorPort commandIdGeneratorPort;
     private final CommandConfigPort commandConfigPort;
+    private final CommandConfirmEventPort commandConfirmEventPort;
     
     @Override
     public CommandSendResult sendCommandToDevice(SendCommandRequest request) {
@@ -112,9 +115,11 @@ public class TerminalCommandApplicationService implements TerminalCommandUseCase
             } else {
                 log.warn("ApplicationService - 指令确认成功但缓存移除失败, commandId: {}", commandId);
             }
+            commandConfirmEventPort.publishCommandConfirmEvent(CommandConfirmEvent.success(deviceId, commandId));
             
         } catch (Exception e) {
             log.error("ApplicationService - 指令确认异常, deviceId: {}, commandId: {}", deviceId, commandId, e);
+            commandConfirmEventPort.publishCommandConfirmEvent(CommandConfirmEvent.failed(deviceId, commandId));
         }
     }
     
