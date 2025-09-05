@@ -24,6 +24,8 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 3. 异步状态更新器（deviceStatusExecutor）
  * 4. 通用异步处理器（defaultAsyncExecutor）
  * 5. 统计数据处理器（statisticsReportExecutor）
+ * 6. rpc通知调用处理器（rpcNotificationExecutor）
+ * 7. minio上传处理器（minioUploadExecutor）
  * 
  * 所有线程池都配置了守护线程和优雅关闭机制
  * 定时任务支持通过配置控制延迟启动时间，避免启动时资源竞争
@@ -234,7 +236,33 @@ public class ThreadPoolConfig {
         return executor;
     }
 
+    @Bean("minioUploadExecutor")
+    public Executor minioUploadExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
+        // 核心线程数：处理稳定状态上传负载
+        executor.setCorePoolSize(2);
+
+        // 最大线程数：应对突发场景
+        executor.setMaxPoolSize(20);
+
+        // 大队列缓冲上传请求
+        executor.setQueueCapacity(1000);
+
+        executor.setThreadNamePrefix("minio-upload-");
+        executor.setKeepAliveSeconds(300); // 5分钟空闲超时
+
+        // 拒绝策略：记录并丢弃（非关键上传）
+        executor.setRejectedExecutionHandler((task, ext) -> {
+            log.warn("MinIO - 上传任务被拒绝: queue={}, active={}",
+                    ext.getQueue().size(), ext.getActiveCount());
+        });
+
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(60);
+
+        return executor;
+    }
 
     /**
      * 默认异步执行器

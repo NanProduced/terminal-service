@@ -34,7 +34,7 @@
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- rpc-api包独立版本号 -->
-    <terminal-rpc-api.version>0.0.1</terminal-rpc-api.version>
+    <terminal-rpc-api.version>1.0.1</terminal-rpc-api.version>
     <!-- 核心框架版本 -->
     <spring-boot.version>3.3.11</spring-boot.version>
     <spring-cloud.version>2023.0.3</spring-cloud.version>
@@ -72,6 +72,9 @@
 
     <!-- google s2 geometry地图索引 -->
     <google.s2.geometry.version>2.0.0</google.s2.geometry.version>
+
+    <!-- MinIO存储 -->
+    <minio.version>8.5.17</minio.version>
 
   </properties>
 
@@ -227,6 +230,12 @@
         <version>${google.s2.geometry.version}</version>
       </dependency>
 
+      <!-- MinIO存储 -->
+      <dependency>
+        <groupId>io.minio</groupId>
+        <artifactId>minio</artifactId>
+        <version>${minio.version}</version>
+      </dependency>
 
       <!-- 测试框架 -->
       <dependency>

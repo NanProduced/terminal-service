@@ -4,6 +4,7 @@ import com.colorlight.terminal.infrastructure.config.properties.DeviceConfigProp
 import com.colorlight.terminal.infrastructure.config.properties.TerminalCommandConfigProperties;
 import com.colorlight.terminal.infrastructure.config.properties.TerminalStatsConfigProperties;
 import com.colorlight.terminal.infrastructure.config.properties.WebSocketConfigProperties;
+import com.colorlight.terminal.infrastructure.storage.minio.config.MinioProperties;
 import com.colorlight.terminal.infrastructure.websocket.config.NettyWebsocketProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -23,7 +24,8 @@ import org.springframework.context.annotation.Primary;
         TerminalCommandConfigProperties.class,
         TerminalStatsConfigProperties.class,
         DeviceConfigProperties.class,
-        WebSocketConfigProperties.class
+        WebSocketConfigProperties.class,
+        MinioProperties.class
 })
 public class TerminalPropertiesConfiguration {
     

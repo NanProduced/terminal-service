@@ -215,5 +215,11 @@ terminal:
       # 统计任务额外延迟（120秒）- 在基础延迟基础上再延迟120秒
       # 最终延迟 = 60000 + 120000 = 180秒（3分钟）
       statistics-delay-ms: 120000
+  storage:
+    minio:
+      endpoint: http://192.168.51.114:9000
+      access-key: ccloud
+      secret-key: colorlight
+      bucket: device-screenshots
 
 

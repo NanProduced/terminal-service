@@ -136,9 +136,15 @@
       <artifactId>mapstruct</artifactId>
     </dependency>
 
+    <!-- 地图索引 -->
     <dependency>
       <groupId>com.google.geometry</groupId>
       <artifactId>s2-geometry</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.minio</groupId>
+      <artifactId>minio</artifactId>
     </dependency>
 
     <!-- 编译时工具 -->

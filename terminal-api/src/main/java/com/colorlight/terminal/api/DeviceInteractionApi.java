@@ -6,6 +6,7 @@ import com.colorlight.terminal.dto.log.DeviceApiTerminalLog;
 import com.colorlight.terminal.dto.media.DeviceApiMedia;
 import com.colorlight.terminal.dto.program.DeviceApiProgram;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 
@@ -93,5 +94,11 @@ public interface DeviceInteractionApi {
      */
     @PostMapping("/wp-json/led/monitor/log")
     void reportTerminalLog(@RequestBody List<DeviceApiTerminalLog> logs);
+
+    /**
+     * 二进制流上传设备屏幕截图
+     */
+    @PostMapping(value = "/wp-json/wp/v2/media", headers = {"Content-Disposition=attachment;filename=led.jpeg"})
+    void reportScreenshot(HttpServletRequest request);
 
 }

@@ -4,6 +4,7 @@ import com.colorlight.terminal.application.domain.report.MediaPlayRecordReport;
 import com.colorlight.terminal.application.domain.report.ProgramPlayRecordReport;
 import com.colorlight.terminal.application.domain.sensor.GpsReport;
 import com.colorlight.terminal.application.domain.sensor.SensorReport;
+import com.colorlight.terminal.application.dto.record.ScreenshotUploadRecord;
 import com.colorlight.terminal.application.handler.ReportTimePopulator;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
@@ -14,8 +15,10 @@ import com.colorlight.terminal.application.port.outbound.statistics.DeviceGpsHan
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceMediaPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceProgramPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceSwitchRecordPort;
+import com.colorlight.terminal.application.port.outbound.storage.ScreenshotStoragePort;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.business.BusinessException;
+import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
 import com.colorlight.terminal.commons.utils.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +27,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -39,6 +43,7 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     private final DeviceMediaPlayRecordPort  deviceMediaPlayRecordPort;
     private final DeviceProgramPlayRecordPort deviceProgramPlayRecordPort;
     private final DeviceGpsHandlePort deviceGpsHandlePort;
+    private final ScreenshotStoragePort screenshotStoragePort;
 
     /**
      * 保存LED状态报告。
@@ -174,6 +179,14 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
                     deviceId, reportStr != null ? reportStr.substring(0, Math.min(100, reportStr.length())) : "null", e);
             throw new BusinessException(CommonErrorCode.OPERATION_FAILED, "传感器数据处理失败", e);
         }
+    }
+
+    @Override
+    @Async("minioUploadExecutor")
+    public void asyncSaveDeviceScreenshot(ScreenshotUploadRecord uploadRecord) {
+        log.debug("ApplicationService -screenshot- 设备{}开始上传屏幕截图，大小: {}bytes", uploadRecord.getDeviceId(), uploadRecord.getContentLength());
+        screenshotStoragePort.uploadScreenshot(uploadRecord.getDeviceId(), uploadRecord.getInputStream(), uploadRecord.getContentLength(), uploadRecord.getUploadTime());
+        log.info("ApplicationService -screenshot- 设备{}截图上传请求处理完成", uploadRecord.getDeviceId());
     }
 
     /*==================== 传感器上报数据私有辅助方法 ====================*/

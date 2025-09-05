@@ -3,6 +3,7 @@ package com.colorlight.terminal.boot.controller;
 import com.colorlight.terminal.api.DeviceInteractionApi;
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
+import com.colorlight.terminal.application.dto.record.ScreenshotUploadRecord;
 import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.boot.converter.CommandConverter;
@@ -17,12 +18,16 @@ import com.colorlight.terminal.dto.program.DeviceApiProgram;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -256,5 +261,44 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         log.debug("DeviceSchedule - 终端 {} 上报终端日志: {}", principal.getDeviceId(), logs);
         List<TerminalLog> terminalLogs = terminalLogConverter.convertToTerminalLog(logs);
         terminalReportUseCase.asyncSaveTerminalLog(principal.getDeviceId(), terminalLogs);
+    }
+
+    @Operation(
+            summary = "终端上报屏幕截图",
+            description = "二进制流上报屏幕截图",
+            tags = {"终端截图"}
+    )
+    @Override
+    public void reportScreenshot(HttpServletRequest request) {
+        LocalDateTime now = LocalDateTime.now();
+        TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Long deviceId = principal.getDeviceId();
+        
+        try {
+            // 获取内容长度并验证
+            long contentLength = request.getContentLengthLong();
+            
+            // 基本验证
+            if (contentLength <= 0) {
+                log.warn("Screenshot - 设备{}上传的截图内容长度无效: {}", deviceId, contentLength);
+                throw new DeviceResponseException(CommonErrorCode.PARAMETER_MISSING);
+            }
+
+            // 使用try-with-resources确保InputStream正确关闭
+            try (InputStream inputStream = request.getInputStream()) {
+                // 上传
+                terminalReportUseCase.asyncSaveDeviceScreenshot(new ScreenshotUploadRecord(deviceId, inputStream, contentLength, now));
+            }
+            
+        } catch (IOException e) {
+            log.error("Screenshot - 设备{}截图上传IO异常", deviceId, e);
+            throw new DeviceResponseException(CommonErrorCode.SYSTEM_ERROR);
+        } catch (DeviceResponseException e) {
+            // 重新抛出业务异常
+            throw e;
+        } catch (Exception e) {
+            log.error("Screenshot - 设备{}截图上传处理异常", deviceId, e);
+            throw new DeviceResponseException(CommonErrorCode.SYSTEM_ERROR);
+        }
     }
 }

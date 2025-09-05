@@ -17,6 +17,13 @@
       <groupId>org.springframework</groupId>
       <artifactId>spring-web</artifactId>
     </dependency>
+
+    <!-- Jakarta Servlet API - 接口定义 -->
+    <dependency>
+      <groupId>jakarta.servlet</groupId>
+      <artifactId>jakarta.servlet-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
     
     <!-- Swagger注解支持 -->
     <dependency>

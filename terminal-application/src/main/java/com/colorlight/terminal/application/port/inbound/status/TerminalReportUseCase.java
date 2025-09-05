@@ -2,7 +2,9 @@ package com.colorlight.terminal.application.port.inbound.status;
 
 import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
+import com.colorlight.terminal.application.dto.record.ScreenshotUploadRecord;
 
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -55,4 +57,11 @@ public interface TerminalReportUseCase {
      * @param reportStr 上报Json
      */
     void asyncHandleSensorReport(Long deviceId, LocalDateTime reportTime, String reportStr);
+
+    /**
+     * 异步保存设备截图。
+     *
+     * @param uploadRecord 截图信息
+     */
+    void asyncSaveDeviceScreenshot(ScreenshotUploadRecord uploadRecord);
 }

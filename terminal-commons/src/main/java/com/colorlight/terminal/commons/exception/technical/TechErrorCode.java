@@ -36,7 +36,13 @@ public enum TechErrorCode implements ErrorCode {
 
     THREAD_POOL_REJECTED_ERROR("TM0108", "线程池耗尽拒绝任务", ErrorLevel.FATAL, HttpStatusCode.INTERNAL_SERVER_ERROR),
 
-    RPC_EXCEPTION("TM0109", "RPC调用错误", ErrorLevel.CRITICAL, HttpStatusCode.INTERNAL_SERVER_ERROR);
+    RPC_EXCEPTION("TM0109", "RPC调用错误", ErrorLevel.CRITICAL, HttpStatusCode.INTERNAL_SERVER_ERROR),
+
+    MINIO_ERROR("TM0110", "MinIO上传错误", ErrorLevel.CRITICAL, HttpStatusCode.INTERNAL_SERVER_ERROR),
+
+    MINIO_SECURITY_ERROR("TM0111", "MinIO签名异常", ErrorLevel.CRITICAL, HttpStatusCode.INTERNAL_SERVER_ERROR),
+
+    IO_EXCEPTION("TM0112", "I/O流处理异常", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR);
     /**
      * 错误码
      */
