@@ -26,12 +26,14 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
 
-    /** RPC check=false 避免RPC服务影响本服务 */
+    /** RPC check=false 避免RPC服务影响本服务，优化超时时间提升性能 */
 
-    @DubboReference(version = "1.0.0", group = "terminal", check = false, timeout = 5000, retries = 0)
+    @DubboReference(version = "1.0.0", group = "terminal", check = false, timeout = 1000, retries = 0, 
+                   connections = 5, actives = 10, loadbalance = "leastactive")
     private CommandFinishFacade commandFinishFacade;
 
-    @DubboReference(version = "1.0.0", group = "terminal", check = false, timeout = 3000, retries = 0)
+    @DubboReference(version = "1.0.0", group = "terminal", check = false, timeout = 1000, retries = 0,
+                   connections = 5, actives = 10, loadbalance = "leastactive")
     private DeviceReportRpcService deviceReportRpcService;
 
     /**
@@ -40,6 +42,7 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
      */
     @Override
     public void notifyCommandConfirm(CommandConfirmEvent event) {
+        long startTime = System.currentTimeMillis();
         CommandFinishDto dto = new CommandFinishDto();
         dto.setDeviceId(event.getDeviceId());
         dto.setCommandId(event.getCommandId());
@@ -47,9 +50,18 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
 
         try {
             commandFinishFacade.commandFinish(dto);
+            long duration = System.currentTimeMillis() - startTime;
+            log.debug("RpcAdapter - 指令确认RPC调用成功: dto={}, duration={}ms", dto, duration);
+            
+            // 性能监控：记录调用时长
+            if (duration > 500) {
+                log.warn("RpcPerf - 指令确认RPC调用较慢: duration={}ms, dto={}", duration, dto);
+            }
         } catch (RpcException e) {
-            log.error("RpcAdapter - 指令确认RPC调用失败: dto={}", dto, e);
-            throw new TechnicalException(TechErrorCode.RPC_EXCEPTION);
+            long duration = System.currentTimeMillis() - startTime;
+            log.warn("RpcAdapter - 指令确认RPC调用失败，已记录: dto={}, error={}, duration={}ms", 
+                    dto, e.getMessage(), duration);
+            // RPC失败仅记录日志，不中断业务流程
         }
     }
 
@@ -59,6 +71,7 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
      */
     @Override
     public void notifyDeviceLastReportTime(DeviceStatusEvent event) {
+        long startTime = System.currentTimeMillis();
         DeviceOnlineReportRequest request = DeviceOnlineReportRequest.builder()
                 .deviceId(event.getDeviceId())
                 .clientIp(event.getClientIp())
@@ -67,9 +80,18 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
                 .build();
         try {
             deviceReportRpcService.reportDeviceOnlineStatus(request);
-        }catch (RpcException e) {
-            log.error("RpcAdapter - 最后上报时间RPC调用失败: request={}", request, e);
-            throw new TechnicalException(TechErrorCode.RPC_EXCEPTION);
+            long duration = System.currentTimeMillis() - startTime;
+            log.debug("RpcAdapter - 设备状态上报RPC调用成功: request={}, duration={}ms", request, duration);
+            
+            // 性能监控：记录调用时长
+            if (duration > 500) {
+                log.warn("RpcPerf - 设备状态上报RPC调用较慢: duration={}ms, request={}", duration, request);
+            }
+        } catch (RpcException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.warn("RpcAdapter - 设备状态上报RPC调用失败，已记录: request={}, error={}, duration={}ms", 
+                    request, e.getMessage(), duration);
+            // RPC失败仅记录日志，不中断业务流程
         }
     }
 }

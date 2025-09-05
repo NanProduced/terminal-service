@@ -151,6 +151,48 @@ public class ThreadPoolConfig {
     }
 
     /**
+     * RPC通知处理器
+     * 专用于主服务RPC调用，与核心业务线程池隔离
+     * 超时容错，失败仅记录日志不影响业务
+     */
+    @Bean("rpcNotificationExecutor")
+    public Executor rpcNotificationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        
+        // 核心线程数 - 适中配置
+        executor.setCorePoolSize(2);
+        
+        // 最大线程数 - 避免过多RPC连接
+        executor.setMaxPoolSize(8);
+        
+        // 队列容量 - 缓冲RPC调用
+        executor.setQueueCapacity(500);
+        
+        // 线程空闲时间 - 较长保活
+        executor.setKeepAliveSeconds(300);
+        
+        // 线程命名
+        executor.setThreadNamePrefix("rpc-notify-");
+        
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        
+        // 拒绝策略：丢弃任务记录日志（RPC通知非关键）
+        executor.setRejectedExecutionHandler((task, ext) -> {
+            log.warn("ThreadPool - RPC通知任务被拒绝，已丢弃: queue={}, active={}", 
+                    ext.getQueue().size(), ext.getActiveCount());
+            // RPC通知失败不影响核心业务
+        });
+        
+        executor.initialize();
+        
+        log.info("ThreadPool - RPC通知处理器初始化完成: core={}, max={}, queue={}",
+                executor.getCorePoolSize(), executor.getMaxPoolSize(), executor.getQueueCapacity());
+        
+        return executor;
+    }
+
+    /**
      * 统计数据上报处理器
      * 专用于高频次统计数据上报：素材播放、节目播放、GPS、传感器数据
      */

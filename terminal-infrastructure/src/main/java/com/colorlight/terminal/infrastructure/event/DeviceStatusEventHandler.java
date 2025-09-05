@@ -53,8 +53,8 @@ public class DeviceStatusEventHandler {
             
             // 首次上线立即更新登录时间，确保firstLoginTime不丢失
             updateLoginTimeImmediate(event);
-            // 通知主服务（处理设备在线状态上报）
-            mainServerRpcPort.notifyDeviceLastReportTime(event);
+            // 异步通知主服务（使用独立RPC线程池）
+            notifyMainServerAsync(event);
         }
     }
 
@@ -73,8 +73,8 @@ public class DeviceStatusEventHandler {
             updateLoginTimeAsync(event);
             // 记录重连信息
             saveTerminalReconnect(event);
-            // 通知主服务（处理设备在线状态上报）
-            mainServerRpcPort.notifyDeviceLastReportTime(event);
+            // 异步通知主服务（使用独立RPC线程池）
+            notifyMainServerAsync(event);
         }
     }
     
@@ -116,8 +116,8 @@ public class DeviceStatusEventHandler {
             
             // 心跳事件提交到缓冲池异步更新
             updateLoginTimeAsync(event);
-            // 通知主服务（处理设备在线状态上报）
-            mainServerRpcPort.notifyDeviceLastReportTime(event);
+            // 异步通知主服务（使用独立RPC线程池）
+            notifyMainServerAsync(event);
         }
     }
     
@@ -216,5 +216,25 @@ public class DeviceStatusEventHandler {
 
         terminalReconnectRepository.saveReconnectRecord(record);
         log.debug("DeviceReconnect - 设备重连信息保存成功: deviceId={}, info={}", event.getDeviceId(), event);
+    }
+
+    // ==================== RPC通知辅助方法 ====================
+
+    /**
+     * 异步通知主服务
+     * 使用独立RPC线程池，避免阻塞设备事件处理
+     * @param event 设备状态事件
+     */
+    @Async("rpcNotificationExecutor")
+    public void notifyMainServerAsync(DeviceStatusEvent event) {
+        try {
+            mainServerRpcPort.notifyDeviceLastReportTime(event);
+            log.debug("RpcNotify - 主服务通知成功: deviceId={}, eventType={}", 
+                    event.getDeviceId(), event.getEventType());
+        } catch (Exception e) {
+            log.warn("RpcNotify - 主服务通知失败，已记录: deviceId={}, eventType={}, error={}", 
+                    event.getDeviceId(), event.getEventType(), e.getMessage());
+            // RPC失败仅记录日志，不影响业务流程
+        }
     }
 }
