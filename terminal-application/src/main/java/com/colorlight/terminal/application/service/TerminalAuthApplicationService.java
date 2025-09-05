@@ -12,11 +12,13 @@ import com.colorlight.terminal.application.port.outbound.repository.TerminalAcco
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TerminalAuthApplicationService implements TerminalAuthUseCase {
@@ -38,7 +40,8 @@ public class TerminalAuthApplicationService implements TerminalAuthUseCase {
         TerminalAccount terminalAccount = terminalAccountRepository.findTerminalAccountByName(authRequest.getAccountName());
         // 账号不存在
         if (terminalAccount == null) {
-            throw new DeviceResponseException(CommonErrorCode.ACCOUNT_NOT_FOUND, authRequest.getAccountName());
+            log.warn("ApplicationService - 设备账号不存在: accountName={}", authRequest.getAccountName());
+            throw new DeviceResponseException(CommonErrorCode.ACCOUNT_NOT_FOUND);
         }
         // 密码校验失败
         if (!encoderPort.matchesByPasswordEncoder(authRequest.getRawPassword(), terminalAccount.getPasswordHash())) {
