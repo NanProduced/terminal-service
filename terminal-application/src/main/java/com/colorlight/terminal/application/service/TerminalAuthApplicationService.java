@@ -38,7 +38,7 @@ public class TerminalAuthApplicationService implements TerminalAuthUseCase {
         TerminalAccount terminalAccount = terminalAccountRepository.findTerminalAccountByName(authRequest.getAccountName());
         // 账号不存在
         if (terminalAccount == null) {
-            throw new DeviceResponseException(CommonErrorCode.ACCOUNT_NOT_FOUND);
+            throw new DeviceResponseException(CommonErrorCode.ACCOUNT_NOT_FOUND, authRequest.getAccountName());
         }
         // 密码校验失败
         if (!encoderPort.matchesByPasswordEncoder(authRequest.getRawPassword(), terminalAccount.getPasswordHash())) {

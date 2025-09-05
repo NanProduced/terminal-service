@@ -22,7 +22,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,7 +31,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 设备交互控制器 - 实现设备二次开发文档中的必须接口
@@ -60,10 +60,11 @@ public class DeviceInteractionController implements DeviceInteractionApi {
             tags = {"终端上报"}
     )
     @Override
-    public void reportTerminalStatus(String report) {
+    public ResponseEntity<Void> reportTerminalStatus(String report) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceReport - 收到上报消息: deviceId={}, report={}", principal.getDeviceId(), report);
         terminalReportUseCase.saveLedStatus(principal.getDeviceId(), report);
+        return ResponseEntity.status(HttpStatus.OK).build();
     }
 
     /**
@@ -110,7 +111,7 @@ public class DeviceInteractionController implements DeviceInteractionApi {
             tags = {"终端指令"}
     )
     @Override
-    public void confirmCommand(Integer post, DeviceApiCommandConfirm commandConfirm) {
+    public ResponseEntity<Void> confirmCommand(Integer post, DeviceApiCommandConfirm commandConfirm) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Long deviceId = principal.getDeviceId();
         log.info("DeviceCommandConfirm - 设备确认指令执行, deviceId: {}, confirmId: {}, content: {}",
@@ -130,6 +131,7 @@ public class DeviceInteractionController implements DeviceInteractionApi {
             );
             
             log.info("DeviceCommandConfirm - 指令确认处理完成, deviceId: {}, confirmId: {}", deviceId, commandConfirm.getParent());
+            return ResponseEntity.noContent().build();
             
         } catch (Exception e) {
             log.error("DeviceCommandConfirm - 指令确认异常, deviceId: {}, confirmId: {}", deviceId, commandConfirm.getParent(), e);
@@ -187,11 +189,12 @@ public class DeviceInteractionController implements DeviceInteractionApi {
             tags = {"终端节目"}
     )
     @Override
-    public void reportMediaPlayRecords(String report) {
+    public ResponseEntity<Void> reportMediaPlayRecords(String report) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceMedia - 终端 {} 上报素材播放记录: {}", principal.getDeviceId(), report);
-        if (StringUtils.isBlank(report)) return;
+        if (StringUtils.isBlank(report)) return ResponseEntity.status(HttpStatus.CREATED).build();
         terminalReportUseCase.asyncHandleMediaPlayRecordReport(principal.getDeviceId(), report);
+        return ResponseEntity.status(HttpStatus.OK).build();
     }
 
     /**
@@ -206,11 +209,12 @@ public class DeviceInteractionController implements DeviceInteractionApi {
             tags = {"终端节目"}
     )
     @Override
-    public void reportProgramPlayRecords(String report) {
+    public ResponseEntity<Void> reportProgramPlayRecords(String report) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceProgram - 终端 {} 上报节目播放记录: {}", principal.getDeviceId(), report);
-        if (StringUtils.isBlank(report)) return;
+        if (StringUtils.isBlank(report)) return ResponseEntity.status(HttpStatus.CREATED).build();
         terminalReportUseCase.asyncHandleProgramPlayRecordReport(principal.getDeviceId(), report);
+        return ResponseEntity.status(HttpStatus.OK).build();
     }
 
     /**
@@ -236,12 +240,13 @@ public class DeviceInteractionController implements DeviceInteractionApi {
             tags = {"终端节目"}
     )
     @Override
-    public void reportSensorData(String report) {
+    public ResponseEntity<Void> reportSensorData(String report) {
         LocalDateTime now = LocalDateTime.now();
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceSensorData - 终端 {} 上报传感器数据: {}", principal.getDeviceId(), report);
-        if (StringUtils.isBlank(report)) return;
+        if (StringUtils.isBlank(report)) return ResponseEntity.status(HttpStatus.CREATED).build();
         terminalReportUseCase.asyncHandleSensorReport(principal.getDeviceId(), now, report);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     /**
@@ -256,11 +261,12 @@ public class DeviceInteractionController implements DeviceInteractionApi {
 
     )
     @Override
-    public void reportTerminalLog(List<DeviceApiTerminalLog> logs) {
+    public ResponseEntity<Void> reportTerminalLog(List<DeviceApiTerminalLog> logs) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceSchedule - 终端 {} 上报终端日志: {}", principal.getDeviceId(), logs);
         List<TerminalLog> terminalLogs = terminalLogConverter.convertToTerminalLog(logs);
         terminalReportUseCase.asyncSaveTerminalLog(principal.getDeviceId(), terminalLogs);
+        return ResponseEntity.status(HttpStatus.OK).build();
     }
 
     @Operation(
@@ -269,7 +275,7 @@ public class DeviceInteractionController implements DeviceInteractionApi {
             tags = {"终端截图"}
     )
     @Override
-    public void reportScreenshot(HttpServletRequest request) {
+    public ResponseEntity<Void> reportScreenshot(HttpServletRequest request) {
         LocalDateTime now = LocalDateTime.now();
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Long deviceId = principal.getDeviceId();
@@ -300,5 +306,6 @@ public class DeviceInteractionController implements DeviceInteractionApi {
             log.error("Screenshot - 设备{}截图上传处理异常", deviceId, e);
             throw new DeviceResponseException(CommonErrorCode.SYSTEM_ERROR);
         }
+        return ResponseEntity.status(HttpStatus.OK).build();
     }
 }

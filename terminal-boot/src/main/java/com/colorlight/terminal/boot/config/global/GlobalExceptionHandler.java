@@ -13,9 +13,9 @@ public class GlobalExceptionHandler {
 
     /**
      * 设备请求响应处理，设备只需要HttpStatus
-     * @param ex
-     * @param request
-     * @return
+     * @param ex 异常
+     * @param request 请求
+     * @return ResponseEntity
      */
     @ExceptionHandler(DeviceResponseException.class)
     public ResponseEntity<Void> handleDeviceException( DeviceResponseException ex, HttpServletRequest request) {
