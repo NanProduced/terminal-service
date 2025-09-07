@@ -1,9 +1,14 @@
 package com.colorlight.terminal.infrastructure.config.properties;
 
 import com.colorlight.terminal.application.properties.DeviceProperties;
+import com.colorlight.terminal.rpc.dto.enums.CleanupMode;
+import com.colorlight.terminal.rpc.dto.enums.DataType;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
+
+import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * 设备配置属性
@@ -45,6 +50,11 @@ public class DeviceConfigProperties {
      * 定时任务启动配置
      */
     private TaskStartup taskStartup = new TaskStartup();
+    
+    /**
+     * 设备数据清理配置
+     */
+    private DataCleanup cleanup = new DataCleanup();
     
     /**
      * 离线检测配置
@@ -268,5 +278,31 @@ public class DeviceConfigProperties {
          * 统计和监控任务的延迟
          */
         private long statisticsDelayMs = 120_000; // 2分钟
+    }
+    
+    /**
+     * 设备数据清理配置
+     */
+    @Data
+    public static class DataCleanup {
+        
+        /**
+         * 是否启用设备数据清理
+         */
+        private boolean enabled = true;
+        
+        /**
+         * 默认清理模式: ALL/INCLUDE/EXCLUDE
+         */
+        private CleanupMode mode = CleanupMode.EXCLUDE;
+        
+        /**
+         * 数据类型配置
+         * - 当mode=INCLUDE时，仅清理列表中的数据类型
+         * - 当mode=EXCLUDE时，清理除列表外的所有数据类型  
+         * - 当mode=ALL时，忽略此配置，清理所有数据类型
+         * 注意: DEVICE_ACCOUNT(设备账号)始终会被删除，不受此配置影响
+         */
+        private Set<DataType> dataTypes = EnumSet.of(DataType.TERMINAL_LOG);
     }
 }

@@ -7,6 +7,7 @@ import com.colorlight.terminal.infrastructure.persistence.mysql.repository.Mysql
 import com.colorlight.terminal.infrastructure.storage.minio.config.MinioProperties;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import io.minio.errors.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -83,6 +84,35 @@ public class MinioScreenshotStorageService implements ScreenshotStoragePort {
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             log.error("Screenshot - 签名异常: deviceId={}, object={}", deviceId, objectName, e);
             throw new TechnicalException(TechErrorCode.MINIO_SECURITY_ERROR, "MinIO签名异常: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 删除MinIO中的对象
+     * @param objectKey 对象键名
+     */
+    public void deleteObject(String objectKey) {
+        try {
+            log.debug("MinIO - 删除对象: objectKey={}", objectKey);
+            
+            minioClient.removeObject(
+                RemoveObjectArgs.builder()
+                    .bucket(minioProperties.getBucket())
+                    .object(objectKey)
+                    .build()
+            );
+            
+            log.debug("MinIO - 对象删除成功: objectKey={}", objectKey);
+            
+        } catch (MinioException e) {
+            log.error("MinIO - 删除对象失败: objectKey={}, error={}", objectKey, e.getMessage(), e);
+            throw new TechnicalException(TechErrorCode.MINIO_ERROR, "MinIO删除失败: " + e.getMessage());
+        } catch (IOException e) {
+            log.error("MinIO - IO异常: objectKey={}", objectKey, e);
+            throw new TechnicalException(TechErrorCode.IO_EXCEPTION, "MinIO删除IO异常: " + e.getMessage());
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            log.error("MinIO - 签名异常: objectKey={}", objectKey, e);
+            throw new TechnicalException(TechErrorCode.MINIO_SECURITY_ERROR, "MinIO删除签名异常: " + e.getMessage());
         }
     }
 
