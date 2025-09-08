@@ -118,6 +118,7 @@ public class CommandWebSocketAdapter implements CommandWebSocketPort {
         WebsocketTerminalCommand.WebsocketCommand data = new WebsocketTerminalCommand.WebsocketCommand(command.getCommandId(),
                 command.getDeviceId().intValue(),
                 command.getAuthorUrl(),
+                command.getKarma(),
                 content);
         return new WebsocketTerminalCommand(List.of(data), command.getDeviceId().intValue());
     }

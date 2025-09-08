@@ -27,6 +27,7 @@ public class WebsocketTerminalCommand {
         private Integer id;
         private Integer post;
         private String authorUrl;
+        private Integer karma;
         private WebsocketContent content;
     }
 
