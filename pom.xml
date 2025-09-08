@@ -75,6 +75,8 @@
 
     <!-- MinIO存储 -->
     <minio.version>8.5.17</minio.version>
+    <!-- 接口版本 -->
+    <carRPC.version>master-master-0.0.2</carRPC.version>
 
   </properties>
 
