@@ -62,6 +62,8 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     @Override
     public void saveLedStatus(Long deviceId, String reportStr) {
         try {
+            // 通知主服务led_status
+            mainServerRpcPort.notifyLedStatus(deviceId, reportStr);
             // 尝试反序列化为led_status
             TerminalStatusReport terminalStatusReport = JsonUtils.fromJson(reportStr, TerminalStatusReport.class);
             // 自动填充reportTime
