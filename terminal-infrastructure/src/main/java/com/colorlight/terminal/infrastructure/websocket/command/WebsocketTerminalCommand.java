@@ -26,6 +26,7 @@ public class WebsocketTerminalCommand {
     public static class WebsocketCommand {
         private Integer id;
         private Integer post;
+        @JsonProperty("author_url")
         private String authorUrl;
         private Integer karma;
         private WebsocketContent content;
