@@ -269,6 +269,12 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         return ResponseEntity.status(HttpStatus.OK).build();
     }
 
+    /**
+     * 终端上报屏幕截图。此方法允许设备通过二进制流的形式上传其屏幕截图到服务器。
+     *
+     * @param request 包含了要上传的屏幕截图数据的HTTP请求对象，其中截图数据应作为请求体以二进制流形式提供。
+     * @return ResponseEntity<Void> 返回一个表示操作结果的状态码，成功时返回200 OK，若发生错误则根据具体异常情况返回相应的状态码。
+     */
     @Operation(
             summary = "终端上报屏幕截图",
             description = "二进制流上报屏幕截图",
@@ -306,6 +312,30 @@ public class DeviceInteractionController implements DeviceInteractionApi {
             log.error("Screenshot - 设备{}截图上传处理异常", deviceId, e);
             throw new DeviceResponseException(CommonErrorCode.SYSTEM_ERROR);
         }
+        return ResponseEntity.status(HttpStatus.OK).build();
+    }
+
+    /**
+     * 设备下载进度上报
+     *
+     * 终端通过此方法上报节目或升级包的下载进度。
+     *
+     * @param report 一个字符串，表示终端上报的下载进度信息。如果为空或者空白，则会抛出异常。
+     * @return 返回一个ResponseEntity<Void>对象，HTTP状态码为200 OK，表示请求已成功处理但没有返回内容。
+     */
+    @Operation(
+            summary = "设备下载进度上报",
+            description = "终端上报节目或升级包下载进度",
+            tags = {"下载进度"}
+    )
+    @Override
+    public ResponseEntity<Void> reportDownloading(String report) {
+        TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        log.debug("DeviceDownloading - 终端 {} 上报下载进度: {}", principal.getDeviceId(), report);
+        if (StringUtils.isBlank(report)) {
+            throw new DeviceResponseException(CommonErrorCode.PARAMETER_MISSING);
+        }
+        terminalReportUseCase.asyncSaveDownloadingReport(principal.getDeviceId(), report);
         return ResponseEntity.status(HttpStatus.OK).build();
     }
 }

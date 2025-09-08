@@ -47,6 +47,10 @@ public class RedisKeyConstant {
 
     public static final String DEVICE_TIME_ZONE_KEY = "device:timezone:%d";
 
+    /*=================== 设备下载进度状态 ===================*/
+
+    public static final String DEVICE_DOWNLOADING_STATUS_KEY = "device:download:%d";
+
     /*===================  分布式锁 ====================== */
 
     /**

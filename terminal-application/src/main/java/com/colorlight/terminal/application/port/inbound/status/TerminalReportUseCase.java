@@ -64,4 +64,11 @@ public interface TerminalReportUseCase {
      * @param uploadRecord 截图信息
      */
     void asyncSaveDeviceScreenshot(ScreenshotUploadRecord uploadRecord);
+
+    /**
+     * 异步保存下载进度
+     * @param deviceId 设备Id
+     * @param reportStr 上报数据
+     */
+    void asyncSaveDownloadingReport(Long deviceId, String reportStr);
 }

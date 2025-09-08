@@ -9,13 +9,16 @@ import com.colorlight.terminal.application.handler.ReportTimePopulator;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
+import com.colorlight.terminal.application.port.outbound.repository.DownloadingRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalLogRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalStatusReportRepository;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceGpsHandlePort;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceMediaPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceProgramPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceSwitchRecordPort;
+import com.colorlight.terminal.application.port.outbound.status.DeviceDownloadingPort;
 import com.colorlight.terminal.application.port.outbound.storage.ScreenshotStoragePort;
+import com.colorlight.terminal.application.domain.report.DownloadingReport;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.business.BusinessException;
 import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
@@ -44,6 +47,8 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     private final DeviceProgramPlayRecordPort deviceProgramPlayRecordPort;
     private final DeviceGpsHandlePort deviceGpsHandlePort;
     private final ScreenshotStoragePort screenshotStoragePort;
+    private final DeviceDownloadingPort deviceDownloadingPort;
+    private final DownloadingRepository downloadingRepository;
 
     /**
      * 保存LED状态报告。
@@ -187,6 +192,28 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
         log.debug("ApplicationService -screenshot- 设备{}开始上传屏幕截图，大小: {}bytes", uploadRecord.getDeviceId(), uploadRecord.getContentLength());
         screenshotStoragePort.uploadScreenshot(uploadRecord.getDeviceId(), uploadRecord.getInputStream(), uploadRecord.getContentLength(), uploadRecord.getUploadTime());
         log.info("ApplicationService -screenshot- 设备{}截图上传请求处理完成", uploadRecord.getDeviceId());
+    }
+
+    @Override
+    @Async("statisticsReportExecutor") 
+    public void asyncSaveDownloadingReport(Long deviceId, String reportStr) {
+        try {
+            // 反序列化下载状态报告
+            DownloadingReport report = JsonUtils.fromJson(reportStr, DownloadingReport.class);
+
+            // 缓存
+            deviceDownloadingPort.saveDownloadingStatus(deviceId, report);
+            // 持久化
+            downloadingRepository.saveDeviceDownloadingStatus(deviceId, report);
+            
+            log.info("ApplicationService - 异步保存下载进度成功: deviceId={}, type={}", 
+                    deviceId, report.getWhat());
+            
+        } catch (Exception e) {
+            log.error("ApplicationService - 异步保存下载进度失败: deviceId={}, reportStr={}", 
+                    deviceId, reportStr != null ? reportStr.substring(0, Math.min(100, reportStr.length())) : "null", e);
+            throw new BusinessException(CommonErrorCode.OPERATION_FAILED, "下载进度保存失败", e);
+        }
     }
 
     /*==================== 传感器上报数据私有辅助方法 ====================*/

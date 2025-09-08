@@ -109,4 +109,11 @@ public interface DeviceInteractionApi {
     @PostMapping(value = "/wp-json/wp/v2/media", headers = {"Content-Disposition=attachment;filename=led.jpeg"})
     ResponseEntity<Void> reportScreenshot(HttpServletRequest request);
 
+    /**
+     * 终端上报节目或升级包下载进度
+     * @param report 上报
+     * @return 200 Ok - 进度上报成功
+     */
+    @PostMapping("/wp-json/screen/v1/info")
+    ResponseEntity<Void> reportDownloading(@RequestBody String report);
 }
