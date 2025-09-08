@@ -59,8 +59,8 @@ public class CommandWebSocketAdapter implements CommandWebSocketPort {
                 boolean sent = websocketSession.sendMessage(messageJson);
                 
                 if (sent) {
-                    log.info("CommandWebSocketAdapter - WebSocket指令发送成功, deviceId: {}, commandId: {}",
-                            command.getDeviceId(), command.getCommandId());
+                    log.info("CommandWebSocketAdapter - WebSocket指令发送成功, deviceId: {}, command: {}",
+                            command.getDeviceId(), messageJson);
                     return true;
                 } else {
                     log.warn("CommandWebSocketAdapter - WebSocket指令发送失败, deviceId: {}, commandId: {}",
