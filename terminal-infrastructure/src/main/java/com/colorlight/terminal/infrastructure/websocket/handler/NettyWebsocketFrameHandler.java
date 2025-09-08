@@ -210,12 +210,23 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
     }
 
     /**
-     * 获取客户端IP
+     * 获取客户端IP - 统一格式与HTTP保持一致
      */
     private String getClientIp(ChannelHandlerContext ctx) {
         try {
-            return ctx.channel().remoteAddress().toString();
+            String remoteAddress = ctx.channel().remoteAddress().toString();
+            // 格式: "/192.168.0.163:35188" -> "192.168.0.163"
+            // 移除前缀斜杠和端口号，保持与HTTP格式一致
+            if (remoteAddress.startsWith("/")) {
+                remoteAddress = remoteAddress.substring(1);
+            }
+            int colonIndex = remoteAddress.indexOf(':');
+            if (colonIndex != -1) {
+                remoteAddress = remoteAddress.substring(0, colonIndex);
+            }
+            return remoteAddress;
         } catch (Exception e) {
+            log.warn("NettyWebsocketFrameHandler - 获取客户端IP失败", e);
             return "unknown";
         }
     }

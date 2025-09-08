@@ -165,14 +165,27 @@ public class DeviceOfflineCheckScheduler {
     }
     
     /**
-     * 从状态key提取设备ID
+     * 从状态key提取设备ID - 排除索引缓存
      */
     private Long extractDeviceIdFromStatusKey(String statusKey) {
         try {
             // device:status:123 -> 123
             if (statusKey.startsWith("device:status:")) {
                 String deviceIdStr = statusKey.substring("device:status:".length());
-                return Long.valueOf(deviceIdStr);
+                
+                // 排除索引缓存key: device:status:index
+                if ("index".equals(deviceIdStr)) {
+                    log.debug("DeviceStatusScheduler - 跳过索引缓存key: {}", statusKey);
+                    return null;
+                }
+                
+                // 验证是否为有效的数字格式
+                if (deviceIdStr.matches("\\d+")) {
+                    return Long.valueOf(deviceIdStr);
+                } else {
+                    log.debug("DeviceStatusScheduler - 跳过非数字设备ID key: {}", statusKey);
+                    return null;
+                }
             }
         } catch (NumberFormatException e) {
             log.warn("DeviceStatusScheduler - 无效的状态key格式: {}", statusKey);
