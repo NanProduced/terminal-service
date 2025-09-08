@@ -23,4 +23,13 @@ public interface MainServerRpcPort {
      */
     void notifyDeviceLastReportTime(DeviceStatusEvent event);
 
+    /**
+     * 发送led_status上报
+     * @param deviceId 设备Id
+     * @param report 上报
+     */
+    void notifyLedStatus(Long deviceId, String report);
+
+    String getScheduleByDeviceId(Long deviceId);
+
 }

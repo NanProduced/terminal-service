@@ -5,6 +5,7 @@ import com.colorlight.terminal.application.domain.command.TerminalCommand;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.dto.record.ScreenshotUploadRecord;
 import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
+import com.colorlight.terminal.application.port.inbound.program.TerminalProgramUseCase;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.boot.converter.CommandConverter;
 import com.colorlight.terminal.boot.converter.TerminalLogConverter;
@@ -46,6 +47,7 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     
     private final TerminalCommandUseCase terminalCommandUseCase;
     private final TerminalReportUseCase terminalReportUseCase;
+    private final TerminalProgramUseCase terminalProgramUseCase;
     private final CommandConverter commandConverter;
     private final TerminalLogConverter terminalLogConverter;
 
@@ -231,7 +233,7 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     public String getSchedule() {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.info("DeviceSchedule - 终端 {} 请求获取排程", principal.getDeviceId());
-        return null;
+        return terminalProgramUseCase.getSchedule(principal.getDeviceId());
     }
 
     @Operation(

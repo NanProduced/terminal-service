@@ -5,16 +5,23 @@ import com.colorlight.ccloud.command.dto.entity.DeviceOnlineReportRequest;
 import com.colorlight.ccloud.command.enums.CommandStatusEnum;
 import com.colorlight.ccloud.command.interfaces.CommandFinishFacade;
 import com.colorlight.ccloud.command.interfaces.DeviceReportRpcService;
+import com.colorlight.ccloud.schedule.dto.Schedule;
+import com.colorlight.ccloud.schedule.interfaces.TerminalScheduleRpcService;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
 import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
 import com.colorlight.terminal.commons.exception.technical.TechnicalException;
+import com.colorlight.terminal.commons.utils.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.apache.dubbo.rpc.RpcException;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.Objects;
 
 /**
  * 主服务rpc接口dubbo实现类
@@ -28,13 +35,17 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
 
     /** RPC check=false 避免RPC服务影响本服务，优化超时时间提升性能 */
 
-    @DubboReference(version = "1.0.0", group = "terminal", check = false, timeout = 1000, retries = 0, 
+    @DubboReference(version = "1.0.0", group = "terminal", check = false, timeout = 3000, retries = 0,
                    connections = 5, actives = 10, loadbalance = "leastactive")
     private CommandFinishFacade commandFinishFacade;
 
-    @DubboReference(version = "1.0.0", group = "terminal", check = false, timeout = 1000, retries = 0,
+    @DubboReference(version = "1.0.0", group = "terminal", check = false, timeout = 3000, retries = 0,
                    connections = 5, actives = 10, loadbalance = "leastactive")
     private DeviceReportRpcService deviceReportRpcService;
+
+    @DubboReference(version = "1.0.0", group = "terminal", check = false, timeout = 5000, retries = 0,
+                    connections = 5, actives = 10, loadbalance = "leastactive")
+    private TerminalScheduleRpcService terminalScheduleRpcService;
 
     /**
      * 通知主服务指令确认状态
@@ -72,26 +83,65 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
     @Override
     public void notifyDeviceLastReportTime(DeviceStatusEvent event) {
         long startTime = System.currentTimeMillis();
-        DeviceOnlineReportRequest request = DeviceOnlineReportRequest.builder()
-                .deviceId(event.getDeviceId())
-                .clientIp(event.getClientIp())
-                .reportSource(event.getReportSource().name())
-                .reportTime(event.getEventTime())
-                .build();
         try {
-            deviceReportRpcService.reportDeviceOnlineStatus(request);
+            deviceReportRpcService.reportDeviceHeartbeat(event.getDeviceId(), event.getEventTime(), event.getClientIp(), event.getReportSource().name());
             long duration = System.currentTimeMillis() - startTime;
-            log.debug("RpcAdapter - 设备状态上报RPC调用成功: request={}, duration={}ms", request, duration);
+            log.debug("RpcAdapter - 设备状态上报RPC调用成功: duration={}ms", duration);
             
             // 性能监控：记录调用时长
             if (duration > 500) {
-                log.warn("RpcPerf - 设备状态上报RPC调用较慢: duration={}ms, request={}", duration, request);
+                log.warn("RpcPerf - 设备状态上报RPC调用较慢: duration={}ms", duration);
             }
         } catch (RpcException e) {
             long duration = System.currentTimeMillis() - startTime;
-            log.warn("RpcAdapter - 设备状态上报RPC调用失败，已记录: request={}, error={}, duration={}ms", 
-                    request, e.getMessage(), duration);
+            log.warn("RpcAdapter - 设备状态上报RPC调用失败，已记录: error={}, duration={}ms",
+                    e.getMessage(), duration);
             // RPC失败仅记录日志，不中断业务流程
+        }
+    }
+
+    /**
+     * led_status上报
+     * @param deviceId 设备Id
+     * @param report 上报
+     */
+    @Override
+    @Async("rpcNotificationExecutor")
+    public void notifyLedStatus(Long deviceId, String report) {
+        long startTime = System.currentTimeMillis();
+        try {
+            deviceReportRpcService.reportDeviceLedStatus(deviceId, System.currentTimeMillis(), report);
+            long duration = System.currentTimeMillis() - startTime;
+            log.debug("RpcAdapter - Led_status上报RPC调用成功: duration={}ms", duration);
+
+            // 性能监控：记录调用时长
+            if (duration > 500) {
+                log.warn("RpcPerf - Led_status上报RPC调用较慢: duration={}ms", duration);
+            }
+        } catch (RpcException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.warn("RpcAdapter - Led_statusRPC调用失败，已记录: error={}, duration={}ms",
+                    e.getMessage(), duration);
+            // RPC失败仅记录日志，不中断业务流程
+        }
+    }
+
+    /**
+     * 根据设备Id获取排程
+     * @param deviceId 设备Id
+     * @return 排程JSON
+     */
+    @Override
+    public String getScheduleByDeviceId(Long deviceId) {
+        long startTime = System.currentTimeMillis();
+        final Schedule schedule = terminalScheduleRpcService.getScheduleByLedId(deviceId);
+        long duration = System.currentTimeMillis() - startTime;
+        log.debug("RpcAdapter - 获取设备排程成功: 耗时={} ms, {}", duration, schedule);
+        if (Objects.isNull(schedule)) {
+            return null;
+        }
+        else {
+            return JsonUtils.toJson(schedule);
         }
     }
 }

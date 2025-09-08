@@ -12,6 +12,7 @@ import com.colorlight.terminal.application.port.inbound.status.TerminalReportUse
 import com.colorlight.terminal.application.port.outbound.repository.DownloadingRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalLogRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalStatusReportRepository;
+import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceGpsHandlePort;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceMediaPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceProgramPlayRecordPort;
@@ -49,6 +50,7 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     private final ScreenshotStoragePort screenshotStoragePort;
     private final DeviceDownloadingPort deviceDownloadingPort;
     private final DownloadingRepository downloadingRepository;
+    private final MainServerRpcPort mainServerRpcPort;
 
     /**
      * 保存LED状态报告。

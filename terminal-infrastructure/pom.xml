@@ -33,7 +33,7 @@
     <dependency>
       <groupId>com.colorlight.ccloud</groupId>
       <artifactId>colorlight-car-rpc-interface</artifactId>
-      <version>master-master-0.0.1</version>
+      <version>master-master-0.0.2</version>
     </dependency>
 
     <!-- Spring框架核心 -->
