@@ -193,9 +193,37 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     @Override
     @Async("minioUploadExecutor")
     public void asyncSaveDeviceScreenshot(ScreenshotUploadRecord uploadRecord) {
-        log.debug("ApplicationService -screenshot- 设备{}开始上传屏幕截图，大小: {}bytes", uploadRecord.getDeviceId(), uploadRecord.getContentLength());
-        screenshotStoragePort.uploadScreenshot(uploadRecord.getDeviceId(), uploadRecord.getInputStream(), uploadRecord.getContentLength(), uploadRecord.getUploadTime());
-        log.info("ApplicationService -screenshot- 设备{}截图上传请求处理完成", uploadRecord.getDeviceId());
+        Long deviceId = uploadRecord.getDeviceId();
+        String sizeInfo = uploadRecord.getContentLength() > 0 ? 
+                uploadRecord.getContentLength() + "字节" : "未知大小(流式传输)";
+        
+        try {
+            log.debug("ApplicationService -screenshot- 设备{}开始上传屏幕截图，大小: {}", deviceId, sizeInfo);
+            
+            // 参数验证
+            if (uploadRecord.getInputStream() == null) {
+                throw new BusinessException(CommonErrorCode.PARAMETER_MISSING, "截图数据流不能为空");
+            }
+            
+            // 执行上传
+            screenshotStoragePort.uploadScreenshot(
+                    deviceId, 
+                    uploadRecord.getInputStream(), 
+                    uploadRecord.getContentLength(), 
+                    uploadRecord.getUploadTime()
+            );
+            
+            log.info("ApplicationService -screenshot- 设备{}截图上传请求处理完成", deviceId);
+            
+        } catch (BusinessException e) {
+            // 重新抛出业务异常
+            log.error("ApplicationService -screenshot- 设备{}截图上传业务异常: {}", deviceId, e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            // 包装为业务异常
+            log.error("ApplicationService -screenshot- 设备{}截图上传异常", deviceId, e);
+            throw new BusinessException(CommonErrorCode.OPERATION_FAILED, "截图上传失败: " + e.getMessage(), e);
+        }
     }
 
     @Override

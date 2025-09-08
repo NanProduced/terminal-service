@@ -58,12 +58,14 @@ public class MinioScreenshotStorageService implements ScreenshotStoragePort {
             );
             
             long duration = System.currentTimeMillis() - startTime;
-            log.info("Screenshot - 设备{}截图上传成功: object={}, size={}bytes, duration={}ms", 
-                    deviceId, objectName, contentLength, duration);
+            String sizeInfo = contentLength > 0 ? contentLength + "字节" : "未知大小(流式传输)";
+            log.info("Screenshot - 设备{}截图上传成功: object={}, size={}, duration={}ms", 
+                    deviceId, objectName, sizeInfo, duration);
             // 性能监控
             if (duration > 1000) {
-                log.warn("ScreenshotPerf - 上传较慢: deviceId={}, duration={}ms, size={}bytes",
-                        deviceId, duration, contentLength);
+                String perfSizeInfo = contentLength > 0 ? contentLength + "字节" : "未知大小";
+                log.warn("ScreenshotPerf - 上传较慢: deviceId={}, duration={}ms, size={}",
+                        deviceId, duration, perfSizeInfo);
             }
 
             // 保存上传记录

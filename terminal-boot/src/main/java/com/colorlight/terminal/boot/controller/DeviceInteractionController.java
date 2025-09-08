@@ -273,13 +273,14 @@ public class DeviceInteractionController implements DeviceInteractionApi {
 
     /**
      * 终端上报屏幕截图。此方法允许设备通过二进制流的形式上传其屏幕截图到服务器。
+     * 支持标准HTTP和分块传输编码(chunked)两种上传方式。
      *
      * @param request 包含了要上传的屏幕截图数据的HTTP请求对象，其中截图数据应作为请求体以二进制流形式提供。
      * @return ResponseEntity<Void> 返回一个表示操作结果的状态码，成功时返回200 OK，若发生错误则根据具体异常情况返回相应的状态码。
      */
     @Operation(
             summary = "终端上报屏幕截图",
-            description = "二进制流上报屏幕截图",
+            description = "二进制流上报屏幕截图，支持标准HTTP和分块传输编码",
             tags = {"终端截图"}
     )
     @Override
@@ -287,21 +288,25 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         LocalDateTime now = LocalDateTime.now();
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Long deviceId = principal.getDeviceId();
+
+        // 配置上传限制
+        final long MAX_SCREENSHOT_SIZE = 10 * 1024 * 1024; // 10MB
+        final long MIN_SCREENSHOT_SIZE = 1024; // 1KB 最小有效图片大小
         
         try {
-            // 获取内容长度并验证
-            long contentLength = request.getContentLengthLong();
-            
-            // 基本验证
-            if (contentLength <= 0) {
-                log.warn("Screenshot - 设备{}上传的截图内容长度无效: {}", deviceId, contentLength);
-                throw new DeviceResponseException(CommonErrorCode.PARAMETER_MISSING);
-            }
+            // 获取声明的内容长度（可能为-1，表示未知或使用chunked编码）
+            long declaredContentLength = request.getContentLengthLong();
 
             // 使用try-with-resources确保InputStream正确关闭
             try (InputStream inputStream = request.getInputStream()) {
-                // 上传
-                terminalReportUseCase.asyncSaveDeviceScreenshot(new ScreenshotUploadRecord(deviceId, inputStream, contentLength, now));
+
+                log.info("Screenshot - 设备{}开始处理截图上传，声明大小: {}字节", deviceId, 
+                        declaredContentLength > 0 ? declaredContentLength + "" : "未知(chunked)");
+                
+                // 上传到MinIO，传递实际的contentLength（可能为-1表示未知大小）
+                terminalReportUseCase.asyncSaveDeviceScreenshot(
+                        new ScreenshotUploadRecord(deviceId, inputStream, declaredContentLength, now)
+                );
             }
             
         } catch (IOException e) {
