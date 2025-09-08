@@ -10,11 +10,16 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.core.RedisCallback;
 
 import static com.colorlight.terminal.infrastructure.cache.redis.constant.RedisKeyConstant.*;
 
@@ -75,7 +80,80 @@ public class TerminalCommandRedisService implements CommandCachePort {
     
     @Override
     public List<TerminalCommand> getPendingCommands(Long deviceId) {
-        log.debug("TerminalCommandCache - 获取设备待执行指令, deviceId: {}", deviceId);
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            // 尝试Pipeline优化方案
+            List<TerminalCommand> result = getPendingCommandsWithPipeline(deviceId);
+            
+            long duration = System.currentTimeMillis() - startTime;
+            log.debug("Pipeline获取指令完成, deviceId: {}, count: {}, duration: {}ms", 
+                     deviceId, result.size(), duration);
+            return result;
+            
+        } catch (Exception e) {
+            log.warn("Pipeline获取指令失败，降级到原始方案, deviceId: {}, error: {}", deviceId, e.getMessage());
+            // 降级到原始实现
+            return getPendingCommandsFallback(deviceId);
+        }
+    }
+    
+    /**
+     * Pipeline优化版本 - 减少网络往返次数
+     */
+    private List<TerminalCommand> getPendingCommandsWithPipeline(Long deviceId) {
+        log.debug("TerminalCommandCache - Pipeline获取设备待执行指令, deviceId: {}", deviceId);
+        
+        String queueKey = String.format(COMMAND_QUEUE_KEY, deviceId);
+        
+        // 使用Pipeline执行两步操作：1)获取ID队列 2)批量获取详情
+        List<Object> pipelineResults = redisTemplate.executePipelined(
+            new RedisCallback<Object>() {
+                @Override
+                public Object doInRedis(RedisConnection connection) throws DataAccessException {
+                    // 第一步：获取指令ID队列
+                    connection.lRange(queueKey.getBytes(StandardCharsets.UTF_8), 0, -1);
+                    return null;
+                }
+            }
+        );
+        
+        if (pipelineResults.isEmpty()) {
+            return List.of();
+        }
+        
+        @SuppressWarnings("unchecked")
+        List<Object> commandIds = (List<Object>) pipelineResults.get(0);
+        if (commandIds == null || commandIds.isEmpty()) {
+            return List.of();
+        }
+        
+        // 第二个Pipeline：批量获取指令详情
+        List<String> detailKeys = commandIds.stream()
+                .map(id -> String.format(COMMAND_DETAIL_KEY, Integer.valueOf(id.toString())))
+                .collect(Collectors.toList());
+        
+        List<Object> detailResults = redisTemplate.executePipelined(
+            new RedisCallback<Object>() {
+                @Override
+                public Object doInRedis(RedisConnection connection) throws DataAccessException {
+                    // 批量获取所有指令详情
+                    for (String detailKey : detailKeys) {
+                        connection.get(detailKey.getBytes(StandardCharsets.UTF_8));
+                    }
+                    return null;
+                }
+            }
+        );
+        
+        return parseCommandResults(detailResults, deviceId);
+    }
+    
+    /**
+     * 原始实现作为降级方案
+     */
+    private List<TerminalCommand> getPendingCommandsFallback(Long deviceId) {
+        log.debug("TerminalCommandCache - 降级获取设备待执行指令, deviceId: {}", deviceId);
         
         try {
             String queueKey = String.format(COMMAND_QUEUE_KEY, deviceId);
@@ -94,26 +172,46 @@ public class TerminalCommandRedisService implements CommandCachePort {
             List<Object> commandJsons = redisTemplate.opsForValue().multiGet(detailKeys);
             if (CollectionUtils.isEmpty(commandJsons)) return Collections.emptyList();
             
-            List<TerminalCommand> commands = new ArrayList<>();
-            for (Object commandJson : commandJsons) {
-                if (commandJson != null) {
-                    TerminalCommand command = JsonUtils.fromJson(
-                            commandJson.toString(), TerminalCommand.class);
-
+            return parseCommandResults(commandJsons, deviceId);
+            
+        } catch (Exception e) {
+            log.error("降级获取待执行指令异常, deviceId: {}", deviceId, e);
+            return Collections.emptyList();
+        }
+    }
+    
+    /**
+     * 解析指令结果的通用方法
+     */
+    private List<TerminalCommand> parseCommandResults(List<Object> commandResults, Long deviceId) {
+        List<TerminalCommand> commands = new ArrayList<>();
+        
+        for (Object commandData : commandResults) {
+            if (commandData != null) {
+                try {
+                    String commandJson;
+                    if (commandData instanceof byte[]) {
+                        // Pipeline返回的是byte[]格式
+                        commandJson = new String((byte[]) commandData, StandardCharsets.UTF_8);
+                    } else {
+                        // multiGet返回的是String格式
+                        commandJson = commandData.toString();
+                    }
+                    
+                    TerminalCommand command = JsonUtils.fromJson(commandJson, TerminalCommand.class);
+                    
                     // 检查指令是否过期
                     if (!command.isExpired()) {
                         commands.add(command);
                     }
+                } catch (Exception e) {
+                    log.warn("解析指令数据失败, deviceId: {}, data: {}", deviceId, commandData, e);
                 }
             }
-            
-            log.debug("获取到 {} 条有效指令, deviceId: {}", commands.size(), deviceId);
-            return commands;
-            
-        } catch (Exception e) {
-            log.error("获取待执行指令异常, deviceId: {}", deviceId, e);
-            return Collections.emptyList();
         }
+        
+        log.debug("获取到 {} 条有效指令, deviceId: {}", commands.size(), deviceId);
+        return commands;
     }
     
     @Override

@@ -14,6 +14,7 @@ import com.colorlight.terminal.application.port.outbound.status.DeviceStatusEven
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -40,6 +41,7 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
     private AsyncDeviceStatusUpdatePort asyncDeviceStatusUpdatePort;
     
     @Override
+    @Async("deviceStatusExecutor")
     public void updateLastReportTime(Long deviceId, ReportSource source, String clientIp) {
         // 使用基础设施层的分布式锁防止并发竞态
         Boolean acquired = false;

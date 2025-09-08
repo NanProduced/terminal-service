@@ -123,10 +123,10 @@ public class ThreadPoolConfig {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         
         // 核心线程数
-        executor.setCorePoolSize(5);
+        executor.setCorePoolSize(8);
         
         // 最大线程数
-        executor.setMaxPoolSize(20);
+        executor.setMaxPoolSize(30);
         
         // 队列容量
         executor.setQueueCapacity(5000);
@@ -203,7 +203,7 @@ public class ThreadPoolConfig {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
         // 核心线程数 - 基于数据库连接池设计
-        executor.setCorePoolSize(8);
+        executor.setCorePoolSize(5);
 
         // 最大线程数 - 支持突发高峰
         executor.setMaxPoolSize(30);
