@@ -51,7 +51,7 @@ public class MinioScreenshotStorageService implements ScreenshotStoragePort {
                 PutObjectArgs.builder()
                     .bucket(minioProperties.getBucket())
                     .object(objectName)
-                    .stream(in, contentLength, -1) // -1表示未知part size，让MinIO自动处理
+                    .stream(in, contentLength, 5 * 1024 * 1024)
                     .contentType("image/jpeg")
                     .userMetadata(metadata)
                     .build()
