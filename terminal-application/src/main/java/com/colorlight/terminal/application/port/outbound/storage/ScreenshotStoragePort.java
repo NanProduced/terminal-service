@@ -1,6 +1,5 @@
 package com.colorlight.terminal.application.port.outbound.storage;
 
-import java.io.InputStream;
 import java.time.LocalDateTime;
 
 /**
@@ -13,9 +12,9 @@ public interface ScreenshotStoragePort {
     /**
      * 上传设备屏幕截图
      * @param deviceId 设备Id
-     * @param in 二进制流
-     * @param contentLength 文件大小（-1）
+     * @param screenshotData 截图二进制数据
+     * @param contentLength 文件大小
      * @param uploadTime 上传时间
      */
-    void uploadScreenshot(Long deviceId, InputStream in, long contentLength, LocalDateTime uploadTime);
+    void uploadScreenshot(Long deviceId, byte[] screenshotData, long contentLength, LocalDateTime uploadTime);
 }

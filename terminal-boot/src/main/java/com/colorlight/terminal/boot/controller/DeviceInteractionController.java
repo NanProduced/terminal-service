@@ -288,24 +288,21 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         LocalDateTime now = LocalDateTime.now();
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Long deviceId = principal.getDeviceId();
-
-        // 配置上传限制
-        final long MAX_SCREENSHOT_SIZE = 10 * 1024 * 1024; // 10MB
-        final long MIN_SCREENSHOT_SIZE = 1024; // 1KB 最小有效图片大小
         
         try {
             // 获取声明的内容长度（可能为-1，表示未知或使用chunked编码）
             long declaredContentLength = request.getContentLengthLong();
 
-            // 使用try-with-resources确保InputStream正确关闭
+            // 在HTTP请求线程中读取完整数据，避免跨线程传递Servlet InputStream
             try (InputStream inputStream = request.getInputStream()) {
 
-                log.info("Screenshot - 设备{}开始处理截图上传，声明大小: {}字节", deviceId, 
-                        declaredContentLength > 0 ? declaredContentLength + "" : "未知(chunked)");
+                byte[] screenshotData = inputStream.readAllBytes();
                 
-                // 上传到MinIO，传递实际的contentLength（可能为-1表示未知大小）
+                log.info("Screenshot - 设备{}数据读取完成，实际大小: {}字节", deviceId, screenshotData.length);
+                
+                // 传递字节数组给异步线程，避免跨线程InputStream问题
                 terminalReportUseCase.asyncSaveDeviceScreenshot(
-                        new ScreenshotUploadRecord(deviceId, inputStream, declaredContentLength, now)
+                        new ScreenshotUploadRecord(deviceId, screenshotData, declaredContentLength, now)
                 );
             }
             

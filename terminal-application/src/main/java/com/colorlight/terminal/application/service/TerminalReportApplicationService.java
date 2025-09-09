@@ -31,7 +31,6 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -194,26 +193,25 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     @Async("minioUploadExecutor")
     public void asyncSaveDeviceScreenshot(ScreenshotUploadRecord uploadRecord) {
         Long deviceId = uploadRecord.getDeviceId();
-        String sizeInfo = uploadRecord.getContentLength() > 0 ? 
-                uploadRecord.getContentLength() + "字节" : "未知大小(流式传输)";
+        long actualSize = uploadRecord.getActualDataSize();
         
         try {
-            log.debug("ApplicationService -screenshot- 设备{}开始上传屏幕截图，大小: {}", deviceId, sizeInfo);
+            log.debug("ApplicationService -screenshot- 设备{}开始上传屏幕截图，大小: {}字节", deviceId, actualSize);
             
             // 参数验证
-            if (uploadRecord.getInputStream() == null) {
-                throw new BusinessException(CommonErrorCode.PARAMETER_MISSING, "截图数据流不能为空");
+            if (uploadRecord.getScreenshotData() == null) {
+                throw new BusinessException(CommonErrorCode.PARAMETER_MISSING, "截图数据不能为空");
             }
             
             // 执行上传
             screenshotStoragePort.uploadScreenshot(
                     deviceId, 
-                    uploadRecord.getInputStream(), 
-                    uploadRecord.getContentLength(), 
+                    uploadRecord.getScreenshotData(), 
+                    actualSize, 
                     uploadRecord.getUploadTime()
             );
             
-            log.info("ApplicationService -screenshot- 设备{}截图上传请求处理完成", deviceId);
+            log.info("ApplicationService -screenshot- 设备{}截图上传请求处理完成，实际大小: {}字节", deviceId, actualSize);
             
         } catch (BusinessException e) {
             // 重新抛出业务异常

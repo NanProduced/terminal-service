@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.InvalidKeyException;
@@ -38,38 +39,40 @@ public class MinioScreenshotStorageService implements ScreenshotStoragePort {
     private final MysqlScreenshotRecordRepository screenshotRecordRepository;
 
     @Override
-    public void uploadScreenshot(Long deviceId, InputStream in, long contentLength, LocalDateTime uploadTime) {
+    public void uploadScreenshot(Long deviceId, byte[] screenshotData, long contentLength, LocalDateTime uploadTime) {
         long startTime = System.currentTimeMillis();
-        String objectName = deviceId + "/screenshot.jpeg";
+        String objectName = deviceId + ".jpeg";
         
         try {
             // 构建元数据 - 包含上传时间信息
             Map<String, String> metadata = buildMetadata(deviceId);
+            
+            // 创建ByteArrayInputStream用于MinIO上传
+            InputStream inputStream = new ByteArrayInputStream(screenshotData);
+            long actualSize = screenshotData.length;
             
             // 上传到MinIO
             minioClient.putObject(
                 PutObjectArgs.builder()
                     .bucket(minioProperties.getBucket())
                     .object(objectName)
-                    .stream(in, contentLength, 5 * 1024 * 1024)
+                    .stream(inputStream, actualSize, 5 * 1024 * 1024)
                     .contentType("image/jpeg")
                     .userMetadata(metadata)
                     .build()
             );
             
             long duration = System.currentTimeMillis() - startTime;
-            String sizeInfo = contentLength > 0 ? contentLength + "字节" : "未知大小(流式传输)";
-            log.info("Screenshot - 设备{}截图上传成功: object={}, size={}, duration={}ms", 
-                    deviceId, objectName, sizeInfo, duration);
+            log.info("Screenshot - 设备{}截图上传成功: object={}, size={}字节, duration={}ms", 
+                    deviceId, objectName, actualSize, duration);
             // 性能监控
             if (duration > 1000) {
-                String perfSizeInfo = contentLength > 0 ? contentLength + "字节" : "未知大小";
-                log.warn("ScreenshotPerf - 上传较慢: deviceId={}, duration={}ms, size={}",
-                        deviceId, duration, perfSizeInfo);
+                log.warn("ScreenshotPerf - 上传较慢: deviceId={}, duration={}ms, size={}字节",
+                        deviceId, duration, actualSize);
             }
 
             // 保存上传记录
-            screenshotRecordRepository.saveScreenshotRecord(deviceId, uploadTime, objectName, contentLength);
+            screenshotRecordRepository.saveScreenshotRecord(deviceId, uploadTime, objectName, actualSize);
             
         } catch (MinioException e) {
             long duration = System.currentTimeMillis() - startTime;
