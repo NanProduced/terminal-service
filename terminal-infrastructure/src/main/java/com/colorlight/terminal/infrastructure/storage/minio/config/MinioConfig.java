@@ -3,6 +3,7 @@ package com.colorlight.terminal.infrastructure.storage.minio.config;
 import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
+import io.minio.SetBucketPolicyArgs;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,6 +43,39 @@ public class MinioConfig {
         }
 
         return client;
+    }
+
+    /**
+     * 设置bucket为公共读取策略，允许所有人读取bucket中的对象
+     * 
+     * @param client MinIO客户端
+     * @throws Exception 设置策略失败时抛出异常
+     */
+    private void setBucketPublicReadPolicy(MinioClient client) throws Exception {
+        String bucketName = minioProperties.getBucket();
+        
+        // 定义公共读取策略JSON
+        String policy = String.format(
+            "{"
+            + "\"Version\": \"2012-10-17\","
+            + "\"Statement\": ["
+            + "{"
+            + "\"Effect\": \"Allow\","
+            + "\"Principal\": \"*\","
+            + "\"Action\": [\"s3:GetObject\"],"
+            + "\"Resource\": \"arn:aws:s3:::%s/*\""
+            + "}"
+            + "]"
+            + "}", bucketName);
+        
+        // 应用策略到bucket
+        client.setBucketPolicy(
+            SetBucketPolicyArgs.builder()
+                .bucket(bucketName)
+                .config(policy)
+                .build()
+        );
+
     }
 
 }
