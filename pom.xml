@@ -34,7 +34,7 @@
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- rpc-api包独立版本号 -->
-    <terminal-rpc-api.version>1.0.1</terminal-rpc-api.version>
+    <terminal-rpc-api.version>1.0.2</terminal-rpc-api.version>
     <!-- 核心框架版本 -->
     <spring-boot.version>3.3.11</spring-boot.version>
     <spring-cloud.version>2023.0.3</spring-cloud.version>
@@ -75,8 +75,6 @@
 
     <!-- MinIO存储 -->
     <minio.version>8.5.17</minio.version>
-    <!-- 接口版本 -->
-    <carRPC.version>master-master-0.0.2</carRPC.version>
 
   </properties>
 
