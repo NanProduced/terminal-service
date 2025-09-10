@@ -178,21 +178,6 @@ class DeviceOnlineStatusApplicationServiceTest {
                 public Long getDeviceId() {
                     return deviceId;
                 }
-                
-                @Override
-                public long getSentMessageCount() {
-                    return 0;
-                }
-                
-                @Override
-                public long getReceivedMessageCount() {
-                    return 0;
-                }
-                
-                @Override
-                public long getErrorCount() {
-                    return 0;
-                }
             };
             
             // 创建TerminalConnection

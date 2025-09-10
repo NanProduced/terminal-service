@@ -77,9 +77,7 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
         // 需要增加引用计数，防止在异步处理期间被释放
         ReferenceCountUtil.retain(request);
         
-        websocketAuthExecutor.execute(() -> {
-            handleWebSocketAuthentication(ctx, request);
-        });
+        websocketAuthExecutor.execute(() -> handleWebSocketAuthentication(ctx, request));
     }
 
     /**
@@ -101,8 +99,6 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
                 return;
             }
 
-            ProtocolVersion protocolVersion = ctx.channel().attr(PROTOCOL_VERSION).get();
-
             // 认证成功后将请求URI转换为内部统一路径
             // 使所有协议版本都使用统一的内部WebSocket路径进行处理
             request.setUri(nettyWebsocketProperties.getServer().getWebsocketPath());
@@ -121,9 +117,7 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
         } catch (Exception e) {
             log.error("NettyWebsocketAuthHandler - Websocket认证异常", e);
             // 异步发送错误响应
-            ctx.channel().eventLoop().execute(() -> {
-                sendErrorResponse(ctx);
-            });
+            ctx.channel().eventLoop().execute(() -> sendErrorResponse(ctx));
         } finally {
             // 释放引用计数
             ReferenceCountUtil.release(request);

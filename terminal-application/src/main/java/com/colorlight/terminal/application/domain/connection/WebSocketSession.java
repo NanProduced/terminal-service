@@ -48,25 +48,5 @@ public interface WebSocketSession {
      * @return 客户端IP
      */
     String getClientIp();
-    
-    /**
-     * 获取发送消息计数
-     * 
-     * @return 发送消息数量
-     */
-    long getSentMessageCount();
-    
-    /**
-     * 获取接收消息计数
-     * 
-     * @return 接收消息数量
-     */
-    long getReceivedMessageCount();
-    
-    /**
-     * 获取错误计数
-     * 
-     * @return 错误数量
-     */
-    long getErrorCount();
+
 }
