@@ -18,6 +18,13 @@ public interface MainServerRpcPort {
     void notifyCommandConfirm(CommandConfirmEvent event);
 
     /**
+     * 通知主服务指令过期
+     * @param deviceId 设备Id
+     * @param commandId 指令Id
+     */
+    void notifyCommandExpiration(Long deviceId, Integer commandId);
+
+    /**
      * 通知主服务设备最后上报时间
      * @param event 设备状态事件
      */

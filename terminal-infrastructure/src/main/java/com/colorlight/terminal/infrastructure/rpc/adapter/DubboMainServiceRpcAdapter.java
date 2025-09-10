@@ -74,6 +74,29 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
     }
 
     /**
+     * 通知主服务指令过期
+     * @param deviceId 设备Id
+     * @param commandId 指令Id
+     */
+    @Override
+    public void notifyCommandExpiration(Long deviceId, Integer commandId) {
+        CommandFinishDto dto = new CommandFinishDto();
+        dto.setDeviceId(deviceId);
+        dto.setCommandId(commandId.toString());
+        dto.setStatus(CommandStatusEnum.TIMEOUT);
+        try {
+            commandFinishFacade.commandFinish(dto);
+            log.debug("RpcAdapter - 指令过期通知RPC调用成功: dto={}", dto);
+
+        } catch (RpcException e) {
+            log.warn("RpcAdapter - 指令过期通知RPC调用失败，已记录: dto={}, error={}",
+                    dto, e.getMessage());
+            // RPC失败仅记录日志，不中断业务流程
+        }
+
+    }
+
+    /**
      * 通知主服务设备最后上报时间
      * @param event 设备状态事件
      */

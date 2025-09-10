@@ -1,6 +1,13 @@
 package com.colorlight.terminal.infrastructure.cache.redis.constant;
 
+import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
+import com.colorlight.terminal.commons.exception.technical.TechnicalException;
+
 public class RedisKeyConstant {
+
+    private RedisKeyConstant() {
+        throw new TechnicalException(TechErrorCode.INSTANTIATION_IS_PROHIBITED);
+    }
 
     /*===================  终端指令模板 ====================== */
 
@@ -17,7 +24,7 @@ public class RedisKeyConstant {
     /**
      * 指令详情 - String
      */
-    public static final String COMMAND_DETAIL_KEY = "terminal:command:detail:%d";   // 指令详情
+    public static final String COMMAND_DETAIL_KEY = "terminal:command:detail:%d:%d";   // 指令详情 deviceId:commandId
 
     /*===================  设备在线状态模板 ====================== */
 

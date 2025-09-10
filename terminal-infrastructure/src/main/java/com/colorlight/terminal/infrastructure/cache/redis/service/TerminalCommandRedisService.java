@@ -7,15 +7,14 @@ import com.colorlight.terminal.commons.utils.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.RedisConnection;
@@ -45,7 +44,7 @@ public class TerminalCommandRedisService implements CommandCachePort {
 
         String queueKey = String.format(COMMAND_QUEUE_KEY, command.getDeviceId());
         String indexKey = String.format(COMMAND_INDEX_KEY, command.getDeviceId());
-        String detailKey = String.format(COMMAND_DETAIL_KEY, command.getCommandId());
+        String detailKey = String.format(COMMAND_DETAIL_KEY, command.getDeviceId(), command.getCommandId());
 
         // 1. 检查是否存在相同类型的指令(去重逻辑)
         Object existingCommandIdObj = redisTemplate.opsForHash().get(indexKey, command.getAuthorUrl());
@@ -110,9 +109,9 @@ public class TerminalCommandRedisService implements CommandCachePort {
         List<Object> pipelineResults = redisTemplate.executePipelined(
             new RedisCallback<Object>() {
                 @Override
-                public Object doInRedis(RedisConnection connection) throws DataAccessException {
+                public Object doInRedis(@NotNull RedisConnection connection) throws DataAccessException {
                     // 第一步：获取指令ID队列
-                    connection.lRange(queueKey.getBytes(StandardCharsets.UTF_8), 0, -1);
+                    connection.listCommands().lRange(queueKey.getBytes(StandardCharsets.UTF_8), 0, -1);
                     return null;
                 }
             }
@@ -130,16 +129,16 @@ public class TerminalCommandRedisService implements CommandCachePort {
         
         // 第二个Pipeline：批量获取指令详情
         List<String> detailKeys = commandIds.stream()
-                .map(id -> String.format(COMMAND_DETAIL_KEY, Integer.valueOf(id.toString())))
-                .collect(Collectors.toList());
+                .map(id -> String.format(COMMAND_DETAIL_KEY, deviceId, Integer.valueOf(id.toString())))
+                .toList();
         
         List<Object> detailResults = redisTemplate.executePipelined(
             new RedisCallback<Object>() {
                 @Override
-                public Object doInRedis(RedisConnection connection) throws DataAccessException {
+                public Object doInRedis(@NotNull RedisConnection connection) throws DataAccessException {
                     // 批量获取所有指令详情
                     for (String detailKey : detailKeys) {
-                        connection.get(detailKey.getBytes(StandardCharsets.UTF_8));
+                        connection.stringCommands().get(detailKey.getBytes(StandardCharsets.UTF_8));
                     }
                     return null;
                 }
@@ -166,8 +165,8 @@ public class TerminalCommandRedisService implements CommandCachePort {
             
             // 批量获取指令详情
             List<String> detailKeys = commandIds.stream()
-                    .map(id -> String.format(COMMAND_DETAIL_KEY, Integer.valueOf(id.toString())))
-                    .collect(Collectors.toList());
+                    .map(id -> String.format(COMMAND_DETAIL_KEY, deviceId, Integer.valueOf(id.toString())))
+                    .toList();
             
             List<Object> commandJsons = redisTemplate.opsForValue().multiGet(detailKeys);
             if (CollectionUtils.isEmpty(commandJsons)) return Collections.emptyList();
@@ -190,9 +189,9 @@ public class TerminalCommandRedisService implements CommandCachePort {
             if (commandData != null) {
                 try {
                     String commandJson;
-                    if (commandData instanceof byte[]) {
+                    if (commandData instanceof byte[] byteArray) {
                         // Pipeline返回的是byte[]格式
-                        commandJson = new String((byte[]) commandData, StandardCharsets.UTF_8);
+                        commandJson = new String(byteArray, StandardCharsets.UTF_8);
                     } else {
                         // multiGet返回的是String格式
                         commandJson = commandData.toString();
@@ -215,9 +214,9 @@ public class TerminalCommandRedisService implements CommandCachePort {
     }
     
     @Override
-    public Optional<TerminalCommand> getCommand(Integer commandId) {
+    public Optional<TerminalCommand> getCommand(Long deviceId, Integer commandId) {
         try {
-            String detailKey = String.format(COMMAND_DETAIL_KEY, commandId);
+            String detailKey = String.format(COMMAND_DETAIL_KEY, deviceId, commandId);
             Object commandJson = redisTemplate.opsForValue().get(detailKey);
             
             if (commandJson != null) {
@@ -241,10 +240,10 @@ public class TerminalCommandRedisService implements CommandCachePort {
         try {
             String queueKey = String.format(COMMAND_QUEUE_KEY, deviceId);
             String indexKey = String.format(COMMAND_INDEX_KEY, deviceId);
-            String detailKey = String.format(COMMAND_DETAIL_KEY, commandId);
+            String detailKey = String.format(COMMAND_DETAIL_KEY, deviceId, commandId);
             
             // 1. 获取指令详情以确定authorUrl
-            Optional<TerminalCommand> commandOpt = getCommand(commandId);
+            Optional<TerminalCommand> commandOpt = getCommand(deviceId, commandId);
             
             // 2. 从队列中移除
             Long removedCount = redisTemplate.opsForList().remove(queueKey, 1, commandId);
@@ -287,7 +286,7 @@ public class TerminalCommandRedisService implements CommandCachePort {
             
             for (Object commandIdObj : commandIds) {
                 Integer commandId = Integer.valueOf(commandIdObj.toString());
-                Optional<TerminalCommand> commandOpt = getCommand(commandId);
+                Optional<TerminalCommand> commandOpt = getCommand(deviceId, commandId);
                 
                 if (commandOpt.isPresent() && commandOpt.get().isExpired()) {
                     if (removeCommand(deviceId, commandId)) {
@@ -331,7 +330,7 @@ public class TerminalCommandRedisService implements CommandCachePort {
     private void removeOldCommand(Long deviceId, Integer oldCommandId) {
         try {
             String queueKey = String.format(COMMAND_QUEUE_KEY, deviceId);
-            String detailKey = String.format(COMMAND_DETAIL_KEY, oldCommandId);
+            String detailKey = String.format(COMMAND_DETAIL_KEY, deviceId, oldCommandId);
             
             // 从队列移除
             redisTemplate.opsForList().remove(queueKey, 1, oldCommandId);
