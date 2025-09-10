@@ -11,6 +11,8 @@
 # Claude Code配置
 .claude/
 
+CLAUDE.md
+
 # 本地文档
 .doc/
 

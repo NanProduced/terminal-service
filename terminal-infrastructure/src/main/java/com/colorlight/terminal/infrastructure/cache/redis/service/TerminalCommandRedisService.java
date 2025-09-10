@@ -284,7 +284,6 @@ public class TerminalCommandRedisService implements CommandCachePort {
             }
             
             int cleanedCount = 0;
-            LocalDateTime now = LocalDateTime.now();
             
             for (Object commandIdObj : commandIds) {
                 Integer commandId = Integer.valueOf(commandIdObj.toString());

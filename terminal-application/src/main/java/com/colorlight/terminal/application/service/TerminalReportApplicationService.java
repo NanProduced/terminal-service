@@ -22,7 +22,6 @@ import com.colorlight.terminal.application.port.outbound.storage.ScreenshotStora
 import com.colorlight.terminal.application.domain.report.DownloadingReport;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.business.BusinessException;
-import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
 import com.colorlight.terminal.commons.utils.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.RequiredArgsConstructor;
@@ -59,7 +58,8 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
      * @param reportStr JSON格式的终端状态报告字符串
      */
     @Override
-    public void saveLedStatus(Long deviceId, String reportStr) {
+    @Async("deviceStatusExecutor")
+    public void asyncSaveStatusReport(Long deviceId, String reportStr) {
         try {
             // 通知主服务led_status
             mainServerRpcPort.notifyLedStatus(deviceId, reportStr);
@@ -68,7 +68,7 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
             // 自动填充reportTime
             ReportTimePopulator.populateReportTime(terminalStatusReport, System.currentTimeMillis() / 1000);
             // 反序列化成功则异步持久化
-            asyncSaveTerminalStatusReport(deviceId, terminalStatusReport);
+            saveLedStatus(deviceId, terminalStatusReport);
             // 处理开机时间戳记录
             if (Objects.nonNull(terminalStatusReport.getInfo())) {
                 deviceSwitchRecordPort.asyncHandlerSwitchOnRecord(deviceId, terminalStatusReport.getInfo());
@@ -88,8 +88,7 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
      * @param report 终端状态报告对象
      */
     @Override
-    @Async("deviceStatusExecutor")
-    public void asyncSaveTerminalStatusReport(Long deviceId, TerminalStatusReport report) {
+    public void saveLedStatus(Long deviceId, TerminalStatusReport report) {
         try {
             terminalStatusReportRepository.saveTerminalStatusReport(deviceId, report);
 
@@ -175,8 +174,8 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
                     continue;
                 }
                 
-                if ("gps".equals(report.getSensorType()) && report instanceof GpsReport) {
-                    processGpsReport(deviceId, reportTime, (GpsReport) report);
+                if ("gps".equals(report.getSensorType()) && report instanceof GpsReport gpsReport) {
+                    processGpsReport(deviceId, reportTime, gpsReport);
                 } else {
                     processOtherReport(deviceId, report);
                 }

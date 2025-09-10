@@ -20,11 +20,6 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * WebSocket消息应用服务
- * 
- * @author Nan
- */
-/**
  * WebSocket消息应用服务 - 协议感知的WebSocket消息处理
  * 
  * <p>职责范围：</p>
@@ -95,7 +90,7 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
      * @param deviceId 设备ID
      * @param session 技术会话对象
      * @param protocolVersion 协议版本
-     * @return
+     * @return 设备ws连接封装
      */
     @Override
     public TerminalConnection handleConnectionEstablished(Long deviceId, WebSocketSession session, ProtocolVersion protocolVersion) {
@@ -231,14 +226,10 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
             int failureCount = 0;
             
             for (Long deviceId : deviceIds) {
-                try {
-                    if (sendMessage(deviceId, message)) {
-                        successList.add(deviceId);
-                    } else {
-                        failureCount++;
-                    }
-                } catch (Exception e) {
-                    log.warn("ApplicationService - ws - 批量发送中单个设备失败: deviceId={}", deviceId, e);
+                boolean sendResult = sendSingleMessage(deviceId, message);
+                if (sendResult) {
+                    successList.add(deviceId);
+                } else {
                     failureCount++;
                 }
             }
@@ -251,6 +242,22 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
         } catch (Exception e) {
             log.error("ApplicationService - ws - 批量发送消息异常: targetDevices={}", deviceIds.size(), e);
             return Collections.emptyList();
+        }
+    }
+    
+    /**
+     * 发送单条消息给指定设备
+     *
+     * @param deviceId 设备ID
+     * @param message 消息内容
+     * @return 发送是否成功
+     */
+    private boolean sendSingleMessage(Long deviceId, String message) {
+        try {
+            return sendMessage(deviceId, message);
+        } catch (Exception e) {
+            log.warn("ApplicationService - ws - 批量发送中单个设备失败: deviceId={}", deviceId, e);
+            return false;
         }
     }
 }

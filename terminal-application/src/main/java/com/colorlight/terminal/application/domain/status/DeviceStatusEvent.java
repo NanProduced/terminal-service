@@ -100,7 +100,7 @@ public class DeviceStatusEvent {
      * @param deviceId 设备ID
      * @param source 上报源
      * @param clientIp IP
-     * @return
+     * @return 重连事件
      */
     public static DeviceStatusEvent createReconnectEvent(Long deviceId, ReportSource source, String clientIp, Long onlineStartTime, Long lastReportTime) {
         return DeviceStatusEvent.builder()
@@ -134,7 +134,7 @@ public class DeviceStatusEvent {
     /**
      * 创建确认设备离线事件（状态键过期）
      * @param deviceId 设备Id
-     * @return
+     * @return 设备状态事件
      */
     public static DeviceStatusEvent createConfirmOfflineEvent(Long deviceId) {
         return DeviceStatusEvent.builder()
@@ -156,24 +156,5 @@ public class DeviceStatusEvent {
                 .clientIp(clientIp)
                 .build();
     }
-    
-    /**
-     * 计算在线时长（毫秒）
-     * 仅适用于离线事件
-     * @return 在线时长(毫秒)，如果无法计算则返回0
-     */
-    public long calculateOnlineDuration() {
-        if (onlineStartTime != null && lastReportTime != null && lastReportTime > onlineStartTime) {
-            return lastReportTime - onlineStartTime;
-        }
-        return 0L;
-    }
-    
-    /**
-     * 检查事件是否包含有效的时间范围数据
-     * @return 是否有效
-     */
-    public boolean hasValidTimeRange() {
-        return onlineStartTime != null && lastReportTime != null && lastReportTime >= onlineStartTime;
-    }
+
 }

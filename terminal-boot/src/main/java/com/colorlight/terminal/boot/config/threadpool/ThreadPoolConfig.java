@@ -162,7 +162,7 @@ public class ThreadPoolConfig {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         
         // 核心线程数 - 适中配置
-        executor.setCorePoolSize(2);
+        executor.setCorePoolSize(4);
         
         // 最大线程数 - 避免过多RPC连接
         executor.setMaxPoolSize(8);

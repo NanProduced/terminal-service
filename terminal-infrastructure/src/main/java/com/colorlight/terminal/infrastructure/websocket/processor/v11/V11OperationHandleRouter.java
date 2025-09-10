@@ -166,7 +166,7 @@ public class V11OperationHandleRouter {
      */
     private void handleLedStatusReport(MessageProcessingContext context, V11WebsocketMessage message) {
         String dataStr = Objects.isNull(message.getData()) ? EMPTY_JSON : JsonUtils.toJson(message.getData());
-        terminalReportUseCase.saveLedStatus(context.getDeviceId(), dataStr);
+        terminalReportUseCase.asyncSaveStatusReport(context.getDeviceId(), dataStr);
         log.info("V11Router -ws- #STATUS_REPORT#【上报终端状态】deviceId:{}", context.getDeviceId());
         context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.STATUS_REPORT.getId(), message.getMessageId()));
     }

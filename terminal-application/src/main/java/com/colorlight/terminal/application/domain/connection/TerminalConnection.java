@@ -138,16 +138,6 @@ public class TerminalConnection {
     }
 
     /**
-     * 检查连接是否过期 - 基于最后活跃时间（统一WebSocket通信时间）
-     *
-     * @param expireThreshold 过期时间阈值
-     * @return 是否过期
-     */
-    public boolean isExpired(LocalDateTime expireThreshold) {
-        return lastActiveTime != null && lastActiveTime.isBefore(expireThreshold);
-    }
-
-    /**
      * 获取连接持续时间（秒）
      *
      * @return 连接持续时间

@@ -131,6 +131,43 @@
           </annotationProcessorPaths>
         </configuration>
       </plugin>
+      
+      <!-- JaCoCo 代码覆盖率插件 - 业务逻辑专用配置 -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <configuration>
+          <!-- 排除非业务逻辑代码，提升真实覆盖率准确性 -->
+          <excludes>
+            <!-- DTO数据传输对象 - 无业务逻辑 -->
+            <exclude>**/dto/request/**/*</exclude>
+            <exclude>**/dto/result/**/*</exclude>
+            <exclude>**/dto/record/**/*</exclude>
+            <exclude>**/dto/cache/**/*</exclude>
+            <exclude>**/dto/websocket/**/*</exclude>
+            
+            <!-- 端口接口定义 - 无实现逻辑 -->
+            <exclude>**/port/inbound/**/*UseCase</exclude>
+            <exclude>**/port/outbound/**/*Port</exclude>
+            
+            <!-- 配置属性类 - Spring配置绑定 -->
+            <exclude>**/properties/**/*</exclude>
+            
+            <!-- 枚举类 - 常量定义 -->
+            <exclude>**/enums/**/*</exclude>
+            
+            <!-- 纯数据模型 - 贫血模型，仅数据容器 -->
+            <exclude>**/domain/report/**/*</exclude>
+            <exclude>**/domain/sensor/**/*</exclude>
+            <exclude>**/domain/command/**/*</exclude>
+            <exclude>**/domain/status/**/*</exclude>
+
+            <!-- Lombok生成代码 -->
+            <exclude>**/*Builder</exclude>
+            <exclude>**/*$Builder</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 </project>
