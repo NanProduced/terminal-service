@@ -1,13 +1,19 @@
 package com.colorlight.terminal.application.domain.connection;
 
 import com.colorlight.terminal.commons.utils.JsonUtils;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
 public class TerminalConnection {
 
     /**
