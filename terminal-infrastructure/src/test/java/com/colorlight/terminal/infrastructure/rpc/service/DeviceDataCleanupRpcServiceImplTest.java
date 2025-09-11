@@ -464,7 +464,7 @@ class DeviceDataCleanupRpcServiceImplTest {
             DeviceDataCleanupRequestDTO request = new DeviceDataCleanupRequestDTO(TEST_DEVICE_ID);
             
             // 模拟异步方法执行（实际上不会阻塞RPC调用）
-            doReturn(CompletableFuture.completedFuture(null)).when(deviceDataCleanupService).cleanupDeviceDataAsync(any(), any());
+            doNothing().when(deviceDataCleanupService).cleanupDeviceDataAsync(any(), any());
 
             // When - 记录执行时间
             long startTime = System.currentTimeMillis();

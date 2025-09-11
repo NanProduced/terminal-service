@@ -66,7 +66,7 @@ class DeviceOnlineStatusTest {
             // Then
             assertThat(deviceOnlineStatus.getStatus()).isEqualTo(OnlineStatus.OFFLINE);
             assertThat(deviceOnlineStatus.getStatusChangeTime()).isNotNull();
-            assertThat(deviceOnlineStatus.getStatusChangeTime()).isNotEqualTo(originalStatusChangeTime);
+            assertThat(deviceOnlineStatus.getStatusChangeTime()).isNotEqualTo( newStatusChangeTime);
         }
 
         @Test
