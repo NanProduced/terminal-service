@@ -4,14 +4,14 @@ import com.colorlight.terminal.application.dto.record.LoginUpdateRecord;
 import com.colorlight.terminal.application.port.outbound.status.AsyncTerminalLoginUpdatePort;
 import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalAccountRepository;
+import com.colorlight.terminal.infrastructure.event.AsyncBufferFlushEvent;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +22,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 异步终端登录时间更新服务
- * 
+ * <p>
  * 基于缓冲池机制，提供高性能的登录时间批量更新
  * 自动去重：每设备仅保留最新的登录记录
  * 
@@ -35,6 +35,7 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
     
     private final TerminalAccountRepository terminalAccountRepository;
     private final DeviceConfigPort deviceConfigPort;
+    private final ApplicationEventPublisher eventPublisher;
     
     // 去重缓冲池 - 使用ConcurrentHashMap自动去重，每设备仅保留最新记录
     private final ConcurrentHashMap<Long, LoginUpdateRecord> bufferPool = new ConcurrentHashMap<>();
@@ -86,10 +87,10 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
         
         try {
             // 创建登录更新记录
-            LoginUpdateRecord record = LoginUpdateRecord.create(deviceId, clientIp, updateTime);
+            LoginUpdateRecord loginUpdateRecord = LoginUpdateRecord.create(deviceId, clientIp, updateTime);
             
             // 添加到缓冲池（自动去重，相同deviceId会被覆盖）
-            LoginUpdateRecord previous = bufferPool.put(deviceId, record);
+            LoginUpdateRecord previous = bufferPool.put(deviceId, loginUpdateRecord);
             totalProcessed.incrementAndGet();
             
             if (previous != null) {
@@ -116,9 +117,9 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
         
         try {
             // 批量添加到缓冲池（自动去重）
-            for (LoginUpdateRecord record : records) {
-                if (record != null && record.getDeviceId() != null) {
-                    bufferPool.put(record.getDeviceId(), record);
+            for (LoginUpdateRecord loginUpdateRecord : records) {
+                if (loginUpdateRecord != null && loginUpdateRecord.getDeviceId() != null) {
+                    bufferPool.put(loginUpdateRecord.getDeviceId(), loginUpdateRecord);
                     totalProcessed.incrementAndGet();
                 }
             }
@@ -159,7 +160,7 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
             
             // 从ConcurrentHashMap中批量取出记录
             var iterator = bufferPool.entrySet().iterator();
-            while (iterator.hasNext() && isRunning.get()) {
+            while (iterator.hasNext()) {
                 var entry = iterator.next();
                 batch.add(entry.getValue());
                 iterator.remove(); // 从缓冲池中移除
@@ -201,20 +202,14 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
         try {
             if (!bufferPool.isEmpty()) {
                 log.debug("AsyncTerminalLoginUpdate - 定时刷新缓冲池: bufferSize={}", bufferPool.size());
-                flushBufferAsync();
+                // 发布异步刷新事件
+                eventPublisher.publishEvent(AsyncBufferFlushEvent.createLoginUpdateFlushEvent(this, bufferPool.size()));
             }
         } catch (Exception e) {
             log.error("AsyncTerminalLoginUpdate - 定时刷新失败", e);
         }
     }
     
-    /**
-     * 异步刷新缓冲池
-     */
-    @Async("deviceStatusExecutor")
-    public void flushBufferAsync() {
-        flushBuffer();
-    }
     
     /**
      * 检查是否需要紧急刷新
@@ -236,8 +231,8 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
                         "currentSize={}, maxSize={}, utilizationRate={}%, threshold={}%",
                         currentSize, maxSize, (int)(utilizationRate * 100), (int)(threshold * 100));
                 
-                // 异步执行紧急刷新
-                flushBufferAsync();
+                // 发布紧急刷新事件
+                eventPublisher.publishEvent(AsyncBufferFlushEvent.createLoginUpdateFlushEvent(this, currentSize));
             }
         }
     }
@@ -250,22 +245,27 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
             return;
         }
         
-        try {
-            // 批量更新登录时间
-            for (LoginUpdateRecord record : batch) {
+        int successCount = 0;
+        int failureCount = 0;
+        
+        // 逐个处理记录，单个失败不影响其他记录
+        for (LoginUpdateRecord loginUpdateRecord : batch) {
+            try {
                 terminalAccountRepository.updateLoginTime(
-                        record.getDeviceId(), 
-                        record.getClientIp(), 
-                        record.getUpdateTime()
+                        loginUpdateRecord.getDeviceId(),
+                        loginUpdateRecord.getClientIp(),
+                        loginUpdateRecord.getUpdateTime()
                 );
+                successCount++;
+            } catch (Exception e) {
+                failureCount++;
+                log.error("AsyncTerminalLoginUpdate - 单个记录处理失败: deviceId={}, clientIp={}", 
+                        loginUpdateRecord.getDeviceId(), loginUpdateRecord.getClientIp(), e);
             }
-            
-            log.debug("AsyncTerminalLoginUpdate - 批处理完成: batchSize={}", batch.size());
-            
-        } catch (Exception e) {
-            log.error("AsyncTerminalLoginUpdate - 批处理失败: batchSize={}", batch.size(), e);
-            // 这里可以考虑重试机制或者降级处理
         }
+        
+        log.debug("AsyncTerminalLoginUpdate - 批处理完成: batchSize={}, 成功={}, 失败={}", 
+                batch.size(), successCount, failureCount);
     }
 
 }

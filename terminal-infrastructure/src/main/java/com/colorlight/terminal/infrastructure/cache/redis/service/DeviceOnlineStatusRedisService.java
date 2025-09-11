@@ -8,6 +8,7 @@ import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineStat
 import com.colorlight.terminal.infrastructure.cache.redis.constant.RedisKeyConstant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.function.LongConsumer;
 import java.util.stream.Collectors;
 import java.util.function.Consumer;
 
@@ -33,6 +35,16 @@ import static com.colorlight.terminal.infrastructure.cache.redis.constant.RedisK
 @Service
 @RequiredArgsConstructor
 public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
+    
+    private static final String LOCKED_VALUE = "locked";
+    private static final String STATUS_FIELD = "status";
+    private static final String LAST_REPORT_TIME_FIELD = "lastReportTime";
+    private static final String LAST_REPORT_SOURCE_FIELD = "lastReportSource";
+    private static final String CLIENT_IP_FIELD = "clientIp";
+    private static final String DEVICE_ID_FIELD = "deviceId";
+    private static final String VERSION_FIELD = "version";
+    private static final String STATUS_CHANGE_TIME_FIELD = "statusChangeTime";
+    private static final String ONLINE_START_TIME_FIELD = "onlineStartTime";
     
     private final RedisTemplate<String, Object> redisTemplate;
     private final DeviceConfigPort deviceConfigPort;
@@ -58,8 +70,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             updateDeviceStatus(status);
         } else {
             switch (status.getStatus()) {
-                case GO_LIVE:
-                case RECONNECT:
+                case GO_LIVE, RECONNECT:
                     saveDeviceStatus(status);
                     break;
                 case ONLINE:
@@ -89,7 +100,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             // 使用Redis事务保证原子性
             redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
-                public Object execute(RedisOperations operations) throws DataAccessException {
+                public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                     operations.multi();
                     
                     // 保存设备状态详情
@@ -132,7 +143,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             // 4. 执行原子更新
             redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
-                public Object execute(RedisOperations operations) throws DataAccessException {
+                public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                     operations.multi();
 
                     // 更新状态字段
@@ -188,7 +199,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             List<Object> results = redisTemplate.executePipelined(
                 new SessionCallback<Object>() {
                     @Override
-                    public Object execute(RedisOperations operations) throws DataAccessException {
+                    public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                         for (Long deviceId : deviceIds) {
                             String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
                             operations.opsForHash().entries(statusKey);
@@ -243,7 +254,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         try {
             redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
-                public Object execute(RedisOperations operations) throws DataAccessException {
+                public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                     operations.multi();
                     
                     // 删除状态详情
@@ -334,7 +345,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
      * 
      * @param consumer 设备ID消费者
      */
-    public void streamAllDeviceIds(Consumer<Long> consumer) {
+    public void streamAllDeviceIds(LongConsumer consumer) {
         if (consumer == null) {
             return;
         }
@@ -366,7 +377,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                     Object deviceIdObj = cursor.next();
                     if (deviceIdObj != null) {
                         try {
-                            Long deviceId = Long.valueOf(deviceIdObj.toString());
+                            long deviceId = Long.parseLong(deviceIdObj.toString());
                             consumer.accept(deviceId);
                         } catch (NumberFormatException e) {
                             log.warn("DeviceOnlineStatus - 无效设备ID格式: {}", deviceIdObj);
@@ -502,7 +513,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         try {
             redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
-                public Object execute(RedisOperations operations) throws DataAccessException {
+                public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                     operations.multi();
 
                     // 删除状态详情（不影响计数器）
@@ -556,12 +567,12 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             // 使用Redis事务原子化执行离线操作
             redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
-                public Object execute(RedisOperations operations) throws DataAccessException {
+                public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                     operations.multi();
 
                     // 更新状态为离线
-                    operations.opsForHash().put(statusKey, "status", OnlineStatus.OFFLINE.name());
-                    operations.opsForHash().put(statusKey, "statusChangeTime", System.currentTimeMillis());
+                    operations.opsForHash().put(statusKey, STATUS_FIELD, OnlineStatus.OFFLINE.name());
+                    operations.opsForHash().put(statusKey, STATUS_CHANGE_TIME_FIELD, System.currentTimeMillis());
 
                     // 重置TTL为重连窗口时间
                     operations.expire(statusKey, getReconnectTtl());
@@ -617,25 +628,25 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         Map<String, Object> map = new HashMap<>();
 
         /* --------------------- 必更新字段 ---------------------*/
-        map.put("lastReportTime", status.getLastReportTime());
-        map.put("lastReportSource", status.getLastReportSource() != null ? status.getLastReportSource().name() : null);
-        map.put("clientIp", status.getClientIp());
+        map.put(LAST_REPORT_TIME_FIELD, status.getLastReportTime());
+        map.put(LAST_REPORT_SOURCE_FIELD, status.getLastReportSource() != null ? status.getLastReportSource().name() : null);
+        map.put(CLIENT_IP_FIELD, status.getClientIp());
 
         /* --------------------- 动态更新字段 ---------------------*/
         if (status.getDeviceId() != null) {
-            map.put("deviceId", status.getDeviceId());
+            map.put(DEVICE_ID_FIELD, status.getDeviceId());
         }
         if (status.getStatus() != null) {
-            map.put("status", status.getStatus().name());
+            map.put(STATUS_FIELD, status.getStatus().name());
         }
         if (status.getVersion() != null) {
-            map.put("version", status.getVersion());
+            map.put(VERSION_FIELD, status.getVersion());
         }
         if (status.getStatusChangeTime() != null) {
-            map.put("statusChangeTime", status.getStatusChangeTime());
+            map.put(STATUS_CHANGE_TIME_FIELD, status.getStatusChangeTime());
         }
         if (status.getOnlineStartTime() != null) {
-            map.put("onlineStartTime", status.getOnlineStartTime());
+            map.put(ONLINE_START_TIME_FIELD, status.getOnlineStartTime());
         }
         
         return map;
@@ -648,17 +659,17 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         DeviceOnlineStatus status = new DeviceOnlineStatus();
         
         status.setDeviceId(deviceId);
-        status.setLastReportTime(getLongValue(map.get("lastReportTime")));
+        status.setLastReportTime(getLongValue(map.get(LAST_REPORT_TIME_FIELD)));
         
-        String sourceStr = (String) map.get("lastReportSource");
+        String sourceStr = (String) map.get(LAST_REPORT_SOURCE_FIELD);
         status.setLastReportSource(sourceStr != null ? ReportSource.valueOf(sourceStr) : null);
         
-        String statusStr = (String) map.get("status");
+        String statusStr = (String) map.get(STATUS_FIELD);
         status.setStatus(statusStr != null ? OnlineStatus.valueOf(statusStr) : OnlineStatus.OFFLINE);
         
-        status.setStatusChangeTime(getLongValue(map.get("statusChangeTime")));
-        status.setOnlineStartTime(getLongValue(map.get("onlineStartTime")));
-        status.setClientIp((String) map.get("clientIp"));
+        status.setStatusChangeTime(getLongValue(map.get(STATUS_CHANGE_TIME_FIELD)));
+        status.setOnlineStartTime(getLongValue(map.get(ONLINE_START_TIME_FIELD)));
+        status.setClientIp((String) map.get(CLIENT_IP_FIELD));
         
         return status;
     }
@@ -671,12 +682,12 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             return null;
         }
         
-        if (value instanceof Long) {
-            return (Long) value;
+        if (value instanceof Long longValue) {
+            return longValue;
         }
         
-        if (value instanceof Number) {
-            return ((Number) value).longValue();
+        if (value instanceof Number numberValue) {
+            return numberValue.longValue();
         }
         
         try {
@@ -694,7 +705,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         try {
             // 使用SET NX PX命令实现分布式锁
             Duration timeout = Duration.ofMillis(timeoutMs);
-            Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", timeout);
+            Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, LOCKED_VALUE, timeout);
             
             if (Boolean.TRUE.equals(acquired)) {
                 log.debug("DeviceOnlineStatus - 获取分布式锁成功: deviceId={}, timeout={}ms", deviceId, timeoutMs);
@@ -713,7 +724,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     public void releaseDeviceUpdateLock(Long deviceId) {
         String lockKey = String.format(RedisKeyConstant.DEVICE_STATUS_UPDATE_LOCK_KEY, deviceId);
         try {
-            Boolean deleted = redisTemplate.delete(lockKey);
+            boolean deleted = redisTemplate.delete(lockKey);
             if (deleted) {
                 log.debug("DeviceOnlineStatus - 释放分布式锁成功: deviceId={}", deviceId);
             } else {

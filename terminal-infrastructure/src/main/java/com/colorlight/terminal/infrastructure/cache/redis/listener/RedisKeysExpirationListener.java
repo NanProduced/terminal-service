@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Component
-public class DeviceStatusExpirationListener implements MessageListener {
+public class RedisKeysExpirationListener implements MessageListener {
     
     private final DeviceOnlineStatusPort deviceOnlineStatusPort;
     private final DeviceStatusEventPort deviceStatusEventPort;
@@ -44,11 +44,11 @@ public class DeviceStatusExpirationListener implements MessageListener {
     /**
      * 构造函数，注入必要依赖
      */
-    public DeviceStatusExpirationListener(RedisMessageListenerContainer listenerContainer,
-                                         DeviceOnlineStatusPort deviceOnlineStatusPort,
-                                         DeviceStatusEventPort deviceStatusEventPort,
-                                         PatternTopic keyExpirationTopic,
-                                         MainServerRpcPort mainServerRpcPort) {
+    public RedisKeysExpirationListener(RedisMessageListenerContainer listenerContainer,
+                                       DeviceOnlineStatusPort deviceOnlineStatusPort,
+                                       DeviceStatusEventPort deviceStatusEventPort,
+                                       PatternTopic keyExpirationTopic,
+                                       MainServerRpcPort mainServerRpcPort) {
         this.listenerContainer = listenerContainer;
         this.deviceOnlineStatusPort = deviceOnlineStatusPort;
         this.deviceStatusEventPort = deviceStatusEventPort;
