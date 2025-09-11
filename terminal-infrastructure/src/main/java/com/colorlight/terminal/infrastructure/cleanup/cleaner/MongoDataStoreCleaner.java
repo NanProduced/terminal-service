@@ -1,5 +1,7 @@
 package com.colorlight.terminal.infrastructure.cleanup.cleaner;
 
+import com.colorlight.terminal.commons.exception.CommonErrorCode;
+import com.colorlight.terminal.commons.exception.business.BusinessException;
 import com.colorlight.terminal.infrastructure.persistence.mongodb.document.*;
 import com.colorlight.terminal.rpc.dto.enums.DataType;
 import lombok.RequiredArgsConstructor;
@@ -103,7 +105,7 @@ public class MongoDataStoreCleaner implements DataStoreCleaner {
             
         } catch (Exception e) {
             log.error("设备 {} 清理MongoDB集合 {} 失败", deviceId, dataType.name(), e);
-            throw new RuntimeException("MongoDB集合清理失败: " + dataType.name(), e);
+            throw new BusinessException(CommonErrorCode.SYSTEM_ERROR, e);
         }
     }
 }
