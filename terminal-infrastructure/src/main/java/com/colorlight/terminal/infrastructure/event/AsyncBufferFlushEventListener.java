@@ -3,6 +3,7 @@ package com.colorlight.terminal.infrastructure.event;
 import com.colorlight.terminal.infrastructure.async.AsyncDeviceStatusUpdateService;
 import com.colorlight.terminal.infrastructure.async.AsyncGpsRecordService;
 import com.colorlight.terminal.infrastructure.async.AsyncTerminalLoginUpdateService;
+import com.colorlight.terminal.infrastructure.cleanup.DeviceDataCleanupService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -97,6 +98,34 @@ public class AsyncBufferFlushEventListener {
             
         } catch (Exception e) {
             log.error("AsyncBufferFlush - 终端登录缓冲池异步刷新失败: bufferSize={}", 
+                    event.getBufferSize(), e);
+        }
+    }
+    
+    /**
+     * 处理设备数据清理缓冲池刷新事件
+     * 使用默认异步执行器执行设备数据清理任务
+     */
+    @EventListener
+    @Async("defaultAsyncExecutor")
+    public void handleDeviceCleanupBufferFlush(AsyncBufferFlushEvent event) {
+        if (event.getBufferType() != AsyncBufferFlushEvent.BufferType.DEVICE_CLEANUP) {
+            return;
+        }
+        
+        try {
+            DeviceDataCleanupService service = (DeviceDataCleanupService) event.getServiceInstance();
+            
+            log.debug("AsyncBufferFlush - 开始执行设备数据清理异步任务: deviceId={}, eventTime={}", 
+                    event.getDeviceId(), event.getEventTime());
+            
+            // 调用具体的清理方法
+            service.cleanupDeviceDataAsync(event.getDeviceId(), event.getCustomConfig());
+            
+            log.debug("AsyncBufferFlush - 设备数据清理异步任务完成: deviceId={}", event.getDeviceId());
+            
+        } catch (Exception e) {
+            log.error("AsyncBufferFlush - 设备数据清理异步任务失败: bufferSize={}", 
                     event.getBufferSize(), e);
         }
     }

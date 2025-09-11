@@ -3,6 +3,10 @@ package com.colorlight.terminal.infrastructure.event;
 import com.colorlight.terminal.infrastructure.async.AsyncDeviceStatusUpdateService;
 import com.colorlight.terminal.infrastructure.async.AsyncGpsRecordService;
 import com.colorlight.terminal.infrastructure.async.AsyncTerminalLoginUpdateService;
+import com.colorlight.terminal.infrastructure.cleanup.DeviceDataCleanupService;
+import com.colorlight.terminal.rpc.dto.config.DataCleanupConfigDTO;
+import com.colorlight.terminal.rpc.dto.enums.CleanupMode;
+import com.colorlight.terminal.rpc.dto.enums.DataType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.mockito.Mockito.*;
@@ -35,6 +40,9 @@ class AsyncBufferFlushEventListenerTest {
     
     @Mock
     private AsyncTerminalLoginUpdateService loginUpdateService;
+    
+    @Mock
+    private DeviceDataCleanupService deviceCleanupService;
 
     @InjectMocks
     private AsyncBufferFlushEventListener eventListener;
@@ -66,6 +74,16 @@ class AsyncBufferFlushEventListenerTest {
         }
         
         /**
+         * 创建设备数据清理刷新事件
+         */
+        static AsyncBufferFlushEvent createDeviceCleanupEvent(DeviceDataCleanupService service, Long deviceId) {
+            DataCleanupConfigDTO config = new DataCleanupConfigDTO();
+            config.setMode(CleanupMode.INCLUDE);
+            config.setDataTypes(Set.of(DataType.DEVICE_ACCOUNT));
+            return AsyncBufferFlushEvent.createDeviceCleanupFlushEvent(service, deviceId, config);
+        }
+        
+        /**
          * 创建错误类型的事件
          */
         static AsyncBufferFlushEvent createWrongTypeEvent() {
@@ -94,10 +112,12 @@ class AsyncBufferFlushEventListenerTest {
                     @Override
                     public void verifyCalls(AsyncDeviceStatusUpdateService deviceStatusService,
                                        AsyncGpsRecordService gpsRecordService,
-                                       AsyncTerminalLoginUpdateService loginUpdateService) {
+                                       AsyncTerminalLoginUpdateService loginUpdateService,
+                                       DeviceDataCleanupService deviceCleanupService) {
                         verify(deviceStatusService, times(1)).flushBuffer();
                         verifyNoInteractions(gpsRecordService);
                         verifyNoInteractions(loginUpdateService);
+                        verifyNoInteractions(deviceCleanupService);
                     }
                 }),
                 
@@ -110,10 +130,12 @@ class AsyncBufferFlushEventListenerTest {
                     @Override
                     public void verifyCalls(AsyncDeviceStatusUpdateService deviceStatusService,
                                        AsyncGpsRecordService gpsRecordService,
-                                       AsyncTerminalLoginUpdateService loginUpdateService) {
+                                       AsyncTerminalLoginUpdateService loginUpdateService,
+                                       DeviceDataCleanupService deviceCleanupService) {
                         verify(gpsRecordService, times(1)).flushBuffer();
                         verifyNoInteractions(deviceStatusService);
                         verifyNoInteractions(loginUpdateService);
+                        verifyNoInteractions(deviceCleanupService);
                     }
                 }),
                 
@@ -126,10 +148,12 @@ class AsyncBufferFlushEventListenerTest {
                     @Override
                     public void verifyCalls(AsyncDeviceStatusUpdateService deviceStatusService,
                                        AsyncGpsRecordService gpsRecordService,
-                                       AsyncTerminalLoginUpdateService loginUpdateService) {
+                                       AsyncTerminalLoginUpdateService loginUpdateService,
+                                       DeviceDataCleanupService deviceCleanupService) {
                         verify(loginUpdateService, times(1)).flushBuffer();
                         verifyNoInteractions(deviceStatusService);
                         verifyNoInteractions(gpsRecordService);
+                        verifyNoInteractions(deviceCleanupService);
                     }
                 })
         );
@@ -155,7 +179,7 @@ class AsyncBufferFlushEventListenerTest {
         handler.handle(eventListener, event);
 
         // Then - 验证服务调用
-        handler.verifyCalls(deviceStatusService, gpsRecordService, loginUpdateService);
+        handler.verifyCalls(deviceStatusService, gpsRecordService, loginUpdateService, deviceCleanupService);
     }
 
     // 定义测试事件处理器接口
@@ -163,7 +187,8 @@ class AsyncBufferFlushEventListenerTest {
         void handle(AsyncBufferFlushEventListener listener, AsyncBufferFlushEvent event);
         void verifyCalls(AsyncDeviceStatusUpdateService deviceStatusService,
                     AsyncGpsRecordService gpsRecordService,
-                    AsyncTerminalLoginUpdateService loginUpdateService);
+                    AsyncTerminalLoginUpdateService loginUpdateService,
+                    DeviceDataCleanupService deviceCleanupService);
     }
 
     @Test
@@ -179,6 +204,7 @@ class AsyncBufferFlushEventListenerTest {
         verifyNoInteractions(deviceStatusService);
         verifyNoInteractions(gpsRecordService);
         verifyNoInteractions(loginUpdateService);
+        verifyNoInteractions(deviceCleanupService);
     }
 
     @Test
@@ -194,6 +220,7 @@ class AsyncBufferFlushEventListenerTest {
         verifyNoInteractions(deviceStatusService);
         verifyNoInteractions(gpsRecordService);
         verifyNoInteractions(loginUpdateService);
+        verifyNoInteractions(deviceCleanupService);
     }
 
     @Test
@@ -209,6 +236,7 @@ class AsyncBufferFlushEventListenerTest {
         verifyNoInteractions(deviceStatusService);
         verifyNoInteractions(gpsRecordService);
         verifyNoInteractions(loginUpdateService);
+        verifyNoInteractions(deviceCleanupService);
     }
 
     @Test
@@ -266,6 +294,7 @@ class AsyncBufferFlushEventListenerTest {
         verifyNoInteractions(deviceStatusService);
         verifyNoInteractions(gpsRecordService);
         verifyNoInteractions(loginUpdateService);
+        verifyNoInteractions(deviceCleanupService);
     }
 
     @Test
@@ -285,6 +314,7 @@ class AsyncBufferFlushEventListenerTest {
         verifyNoInteractions(deviceStatusService);
         verifyNoInteractions(gpsRecordService);
         verifyNoInteractions(loginUpdateService);
+        verifyNoInteractions(deviceCleanupService);
     }
 
     @Test
@@ -297,6 +327,7 @@ class AsyncBufferFlushEventListenerTest {
         verifyNoInteractions(deviceStatusService);
         verifyNoInteractions(gpsRecordService);
         verifyNoInteractions(loginUpdateService);
+        verifyNoInteractions(deviceCleanupService);
     }
 
     @Test
@@ -345,5 +376,85 @@ class AsyncBufferFlushEventListenerTest {
 
         // Then - 验证服务被调用
         verify(deviceStatusService, times(1)).flushBuffer();
+    }
+
+    @Test
+    @DisplayName("应该正确处理设备数据清理缓冲池刷新事件")
+    void should_handle_device_cleanup_buffer_flush_event() {
+        // Given - 创建设备清理事件
+        Long deviceId = 12345L;
+        doNothing().when(deviceCleanupService).cleanupDeviceDataAsync(eq(deviceId), any(DataCleanupConfigDTO.class));
+        AsyncBufferFlushEvent event = TestEventBuilder.createDeviceCleanupEvent(deviceCleanupService, deviceId);
+
+        // When - 处理事件
+        eventListener.handleDeviceCleanupBufferFlush(event);
+
+        // Then - 验证服务调用
+        verify(deviceCleanupService, times(1)).cleanupDeviceDataAsync(eq(deviceId), any(DataCleanupConfigDTO.class));
+        verifyNoInteractions(deviceStatusService);
+        verifyNoInteractions(gpsRecordService);
+        verifyNoInteractions(loginUpdateService);
+    }
+
+    @Test
+    @DisplayName("应该忽略不匹配类型的设备清理事件")
+    void should_ignore_mismatched_device_cleanup_event() {
+        // Given - 创建GPS类型的事件但传给设备清理处理器
+        AsyncBufferFlushEvent event = TestEventBuilder.createGpsRecordEvent(gpsRecordService);
+
+        // When - 用设备清理处理器处理
+        eventListener.handleDeviceCleanupBufferFlush(event);
+
+        // Then - 验证没有服务调用
+        verifyNoInteractions(deviceStatusService);
+        verifyNoInteractions(gpsRecordService);
+        verifyNoInteractions(loginUpdateService);
+        verifyNoInteractions(deviceCleanupService);
+    }
+
+    @Test
+    @DisplayName("应该处理设备清理服务异常")
+    void should_handle_device_cleanup_service_exception() {
+        // Given - 设置服务抛出异常
+        Long deviceId = 99999L;
+        doThrow(new RuntimeException("设备清理失败")).when(deviceCleanupService)
+                .cleanupDeviceDataAsync(eq(deviceId), any(DataCleanupConfigDTO.class));
+        AsyncBufferFlushEvent event = TestEventBuilder.createDeviceCleanupEvent(deviceCleanupService, deviceId);
+
+        // When - 处理事件（不应该抛出异常）
+        eventListener.handleDeviceCleanupBufferFlush(event);
+
+        // Then - 验证服务被调用了
+        verify(deviceCleanupService, times(1)).cleanupDeviceDataAsync(eq(deviceId), any(DataCleanupConfigDTO.class));
+    }
+
+    @Test
+    @DisplayName("应该处理null设备ID的清理事件")
+    void should_handle_null_device_id_cleanup_event() {
+        // Given - 创建设备ID为null的清理事件
+        doNothing().when(deviceCleanupService).cleanupDeviceDataAsync(isNull(), any(DataCleanupConfigDTO.class));
+        AsyncBufferFlushEvent event = TestEventBuilder.createDeviceCleanupEvent(deviceCleanupService, null);
+
+        // When - 处理事件
+        eventListener.handleDeviceCleanupBufferFlush(event);
+
+        // Then - 验证服务被调用
+        verify(deviceCleanupService, times(1)).cleanupDeviceDataAsync(isNull(), any(DataCleanupConfigDTO.class));
+    }
+
+    @Test
+    @DisplayName("应该处理null清理配置的设备清理事件")
+    void should_handle_null_config_device_cleanup_event() {
+        // Given - 创建清理配置为null的事件
+        Long deviceId = 55555L;
+        AsyncBufferFlushEvent event = AsyncBufferFlushEvent.createDeviceCleanupFlushEvent(
+                deviceCleanupService, deviceId, null);
+        doNothing().when(deviceCleanupService).cleanupDeviceDataAsync(eq(deviceId), isNull());
+
+        // When - 处理事件
+        eventListener.handleDeviceCleanupBufferFlush(event);
+
+        // Then - 验证服务被调用
+        verify(deviceCleanupService, times(1)).cleanupDeviceDataAsync(eq(deviceId), isNull());
     }
 }

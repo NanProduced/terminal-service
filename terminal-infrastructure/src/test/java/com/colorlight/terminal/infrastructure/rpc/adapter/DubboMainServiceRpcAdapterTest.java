@@ -230,10 +230,10 @@ class DubboMainServiceRpcAdapterTest {
 
             // Then
             verify(deviceReportRpcService).reportDeviceHeartbeat(
-                    eq(TEST_DEVICE_ID),
-                    eq(eventTime),
-                    eq(TEST_CLIENT_IP),
-                    eq("WEBSOCKET")
+                    TEST_DEVICE_ID,
+                    eventTime,
+                    TEST_CLIENT_IP,
+                    "WEBSOCKET"
             );
         }
 

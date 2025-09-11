@@ -13,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+
 /**
  * 终端指令RPC服务实现
  * 依赖倒置: Infrastructure层实现依赖Application层接口
@@ -38,7 +40,7 @@ public class TerminalCommandRpcServiceImpl implements TerminalCommandRpcService 
             SendCommandRequest appRequest = SendCommandRequest.builder()
                     .deviceId(request.getDeviceId())
                     .authorUrl(request.getCommand().getAuthorUrl())
-                    .contentRaw(request.getCommand().getContent().getRaw())
+                    .contentRaw(Objects.isNull(request.getCommand().getContent()) ? "" : request.getCommand().getContent().getRaw())
                     .karma(request.getCommand().getKarma())
                     .build();
             

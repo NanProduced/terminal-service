@@ -1,10 +1,9 @@
 package com.colorlight.terminal.infrastructure.rpc.adapter;
 
 import com.colorlight.ccloud.command.dto.CommandFinishDto;
-
+import com.colorlight.ccloud.command.enums.CommandStatusEnum;
 import com.colorlight.ccloud.command.interfaces.CommandFinishFacade;
 import com.colorlight.ccloud.command.interfaces.DeviceReportRpcService;
-import com.colorlight.ccloud.common.command.enums.CommandStatusEnum;
 import com.colorlight.ccloud.schedule.dto.Schedule;
 import com.colorlight.ccloud.schedule.interfaces.TerminalScheduleRpcService;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;

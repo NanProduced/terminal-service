@@ -36,14 +36,13 @@ class IncrementalCommandIdGeneratorTest {
 
     private IncrementalCommandIdGenerator generator;
     private ListAppender<ILoggingEvent> listAppender;
-    private Logger logger;
 
     @BeforeEach
     void setUp() {
         generator = new IncrementalCommandIdGenerator();
         
         // 设置日志监听器用于验证日志输出
-        logger = (Logger) LoggerFactory.getLogger(IncrementalCommandIdGenerator.class);
+        Logger logger = (Logger) LoggerFactory.getLogger(IncrementalCommandIdGenerator.class);
         listAppender = new ListAppender<>();
         listAppender.start();
         logger.addAppender(listAppender);
@@ -96,7 +95,7 @@ class IncrementalCommandIdGeneratorTest {
             Integer initialId = generator.getCurrentId();
             
             // Then
-            assertThat(initialId).isEqualTo(0);
+            assertThat(initialId).isZero();
         }
     }
 
@@ -155,7 +154,7 @@ class IncrementalCommandIdGeneratorTest {
             
             // When & Then - 第一次重置
             generator.reset();
-            assertThat(generator.getCurrentId()).isEqualTo(0);
+            assertThat(generator.getCurrentId()).isZero();
             
             // 生成一些ID
             generator.generateCommandId(); // 1
@@ -164,7 +163,7 @@ class IncrementalCommandIdGeneratorTest {
             
             // When & Then - 第二次重置
             generator.reset();
-            assertThat(generator.getCurrentId()).isEqualTo(0);
+            assertThat(generator.getCurrentId()).isZero();
         }
     }
 
@@ -339,11 +338,11 @@ class IncrementalCommandIdGeneratorTest {
             executor.shutdown();
             
             // Then
-            assertThat(generatedIds).hasSize(threadCount);
-            assertThat(generatedIds).allMatch(id -> id > 0);
-            // 应该包含重置前的ID和重置后的ID
-            assertThat(generatedIds).anyMatch(id -> id >= resetThreshold - 9);
-            assertThat(generatedIds).anyMatch(id -> id <= 10);
+            assertThat(generatedIds)
+                    .hasSize(threadCount)
+                    .allMatch(id -> id > 0)
+                    .anyMatch(id -> id >= resetThreshold - 9)
+                    .anyMatch(id -> id <= 10);
         }
     }
 
@@ -378,7 +377,7 @@ class IncrementalCommandIdGeneratorTest {
             
             // Then
             assertAll(
-                () -> assertThat(stats.currentId()).isEqualTo(0),
+                () -> assertThat(stats.currentId()).isZero(),
                 () -> assertThat(stats.maxId()).isEqualTo(Integer.MAX_VALUE - 1000),
                 () -> assertThat(stats.usagePercentage()).isEqualTo(0.0)
             );
@@ -395,11 +394,12 @@ class IncrementalCommandIdGeneratorTest {
             String statsString = stats.toString();
             
             // Then
-            assertThat(statsString).contains("CommandIdGenerator - GeneratorStats");
-            assertThat(statsString).contains("currentId=1");
-            assertThat(statsString).contains("maxId=" + (Integer.MAX_VALUE - 1000));
-            assertThat(statsString).contains("usage=");
-            assertThat(statsString).contains("%");
+            assertThat(statsString)
+                    .contains("CommandIdGenerator - GeneratorStats")
+                    .contains("currentId=1")
+                    .contains("maxId=" + (Integer.MAX_VALUE - 1000))
+                    .contains("usage=")
+                    .contains("%");
         }
 
         @Test
@@ -415,7 +415,7 @@ class IncrementalCommandIdGeneratorTest {
             
             // Then
             assertAll(
-                () -> assertThat(stats.currentId()).isEqualTo(0),
+                () -> assertThat(stats.currentId()).isZero(),
                 () -> assertThat(stats.usagePercentage()).isEqualTo(0.0)
             );
         }

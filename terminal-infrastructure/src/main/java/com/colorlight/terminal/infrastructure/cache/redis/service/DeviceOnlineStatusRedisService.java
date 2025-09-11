@@ -36,15 +36,9 @@ import static com.colorlight.terminal.infrastructure.cache.redis.constant.RedisK
 @RequiredArgsConstructor
 public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     
-    private static final String LOCKED_VALUE = "locked";
-    private static final String STATUS_FIELD = "status";
-    private static final String LAST_REPORT_TIME_FIELD = "lastReportTime";
-    private static final String LAST_REPORT_SOURCE_FIELD = "lastReportSource";
-    private static final String CLIENT_IP_FIELD = "clientIp";
-    private static final String DEVICE_ID_FIELD = "deviceId";
-    private static final String VERSION_FIELD = "version";
+    // 定义常量以避免重复字符串字面量
     private static final String STATUS_CHANGE_TIME_FIELD = "statusChangeTime";
-    private static final String ONLINE_START_TIME_FIELD = "onlineStartTime";
+    private static final String STATUS_FIELD = "status";
     
     private final RedisTemplate<String, Object> redisTemplate;
     private final DeviceConfigPort deviceConfigPort;
@@ -376,12 +370,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                     
                     Object deviceIdObj = cursor.next();
                     if (deviceIdObj != null) {
-                        try {
-                            long deviceId = Long.parseLong(deviceIdObj.toString());
-                            consumer.accept(deviceId);
-                        } catch (NumberFormatException e) {
-                            log.warn("DeviceOnlineStatus - 无效设备ID格式: {}", deviceIdObj);
-                        }
+                        processDeviceIdObject(deviceIdObj, consumer);
                     }
                     
                     iterationCount++;
@@ -394,6 +383,20 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 流式迭代设备ID失败", e);
             throw e;
+        }
+    }
+    
+    /**
+     * 处理设备ID对象
+     * @param deviceIdObj 设备ID对象
+     * @param consumer 设备ID消费者
+     */
+    private void processDeviceIdObject(Object deviceIdObj, LongConsumer consumer) {
+        try {
+            long deviceId = Long.parseLong(deviceIdObj.toString());
+            consumer.accept(deviceId);
+        } catch (NumberFormatException e) {
+            log.warn("DeviceOnlineStatus - 无效设备ID格式: {}", deviceIdObj);
         }
     }
     
@@ -628,25 +631,25 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         Map<String, Object> map = new HashMap<>();
 
         /* --------------------- 必更新字段 ---------------------*/
-        map.put(LAST_REPORT_TIME_FIELD, status.getLastReportTime());
-        map.put(LAST_REPORT_SOURCE_FIELD, status.getLastReportSource() != null ? status.getLastReportSource().name() : null);
-        map.put(CLIENT_IP_FIELD, status.getClientIp());
+        map.put("lastReportTime", status.getLastReportTime());
+        map.put("lastReportSource", status.getLastReportSource() != null ? status.getLastReportSource().name() : null);
+        map.put("clientIp", status.getClientIp());
 
         /* --------------------- 动态更新字段 ---------------------*/
         if (status.getDeviceId() != null) {
-            map.put(DEVICE_ID_FIELD, status.getDeviceId());
+            map.put("deviceId", status.getDeviceId());
         }
         if (status.getStatus() != null) {
             map.put(STATUS_FIELD, status.getStatus().name());
         }
         if (status.getVersion() != null) {
-            map.put(VERSION_FIELD, status.getVersion());
+            map.put("version", status.getVersion());
         }
         if (status.getStatusChangeTime() != null) {
             map.put(STATUS_CHANGE_TIME_FIELD, status.getStatusChangeTime());
         }
         if (status.getOnlineStartTime() != null) {
-            map.put(ONLINE_START_TIME_FIELD, status.getOnlineStartTime());
+            map.put("onlineStartTime", status.getOnlineStartTime());
         }
         
         return map;
@@ -659,17 +662,17 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         DeviceOnlineStatus status = new DeviceOnlineStatus();
         
         status.setDeviceId(deviceId);
-        status.setLastReportTime(getLongValue(map.get(LAST_REPORT_TIME_FIELD)));
+        status.setLastReportTime(getLongValue(map.get("lastReportTime")));
         
-        String sourceStr = (String) map.get(LAST_REPORT_SOURCE_FIELD);
+        String sourceStr = (String) map.get("lastReportSource");
         status.setLastReportSource(sourceStr != null ? ReportSource.valueOf(sourceStr) : null);
         
         String statusStr = (String) map.get(STATUS_FIELD);
         status.setStatus(statusStr != null ? OnlineStatus.valueOf(statusStr) : OnlineStatus.OFFLINE);
         
         status.setStatusChangeTime(getLongValue(map.get(STATUS_CHANGE_TIME_FIELD)));
-        status.setOnlineStartTime(getLongValue(map.get(ONLINE_START_TIME_FIELD)));
-        status.setClientIp((String) map.get(CLIENT_IP_FIELD));
+        status.setOnlineStartTime(getLongValue(map.get("onlineStartTime")));
+        status.setClientIp((String) map.get("clientIp"));
         
         return status;
     }
@@ -705,7 +708,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         try {
             // 使用SET NX PX命令实现分布式锁
             Duration timeout = Duration.ofMillis(timeoutMs);
-            Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, LOCKED_VALUE, timeout);
+            Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", timeout);
             
             if (Boolean.TRUE.equals(acquired)) {
                 log.debug("DeviceOnlineStatus - 获取分布式锁成功: deviceId={}, timeout={}ms", deviceId, timeoutMs);

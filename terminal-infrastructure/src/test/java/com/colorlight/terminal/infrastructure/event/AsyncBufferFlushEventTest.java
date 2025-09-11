@@ -1,7 +1,12 @@
 package com.colorlight.terminal.infrastructure.event;
 
+import com.colorlight.terminal.rpc.dto.config.DataCleanupConfigDTO;
+import com.colorlight.terminal.rpc.dto.enums.CleanupMode;
+import com.colorlight.terminal.rpc.dto.enums.DataType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -161,6 +166,7 @@ class AsyncBufferFlushEventTest {
         assertThat(AsyncBufferFlushEvent.BufferType.DEVICE_STATUS.getDescription()).isEqualTo("设备状态更新");
         assertThat(AsyncBufferFlushEvent.BufferType.GPS_RECORD.getDescription()).isEqualTo("GPS记录");
         assertThat(AsyncBufferFlushEvent.BufferType.LOGIN_UPDATE.getDescription()).isEqualTo("终端登录更新");
+        assertThat(AsyncBufferFlushEvent.BufferType.DEVICE_CLEANUP.getDescription()).isEqualTo("设备数据清理");
     }
 
     @Test
@@ -169,11 +175,12 @@ class AsyncBufferFlushEventTest {
         // Then - 验证枚举包含所有类型
         AsyncBufferFlushEvent.BufferType[] types = AsyncBufferFlushEvent.BufferType.values();
 
-        assertThat(types).hasSize(3)
+        assertThat(types).hasSize(4)
                 .containsExactlyInAnyOrder(
                 AsyncBufferFlushEvent.BufferType.DEVICE_STATUS,
                 AsyncBufferFlushEvent.BufferType.GPS_RECORD,
-                AsyncBufferFlushEvent.BufferType.LOGIN_UPDATE
+                AsyncBufferFlushEvent.BufferType.LOGIN_UPDATE,
+                AsyncBufferFlushEvent.BufferType.DEVICE_CLEANUP
         );
     }
 
@@ -293,5 +300,82 @@ class AsyncBufferFlushEventTest {
         // Then - 验证时间在合理范围内
         assertThat(event1.getEventTime()).isBetween(beforeTime, afterTime);
         assertThat(event2.getEventTime()).isBetween(beforeTime, afterTime);
+    }
+
+    @Test
+    @DisplayName("应该正确创建设备数据清理刷新事件")
+    void should_create_device_cleanup_flush_event() {
+        // Given - 准备测试数据
+        Object serviceInstance = new Object();
+        Long deviceId = 12345L;
+        DataCleanupConfigDTO customConfig = new DataCleanupConfigDTO();
+        customConfig.setMode(CleanupMode.INCLUDE);
+        customConfig.setDataTypes(Set.of(DataType.DEVICE_ACCOUNT, DataType.GPS_RECORD));
+        long beforeTime = System.currentTimeMillis();
+
+        // When - 创建设备数据清理刷新事件
+        AsyncBufferFlushEvent event = AsyncBufferFlushEvent.createDeviceCleanupFlushEvent(
+                serviceInstance, deviceId, customConfig);
+        long afterTime = System.currentTimeMillis();
+
+        // Then - 验证事件属性
+        assertThat(event.getBufferType()).isEqualTo(AsyncBufferFlushEvent.BufferType.DEVICE_CLEANUP);
+        assertThat(event.getServiceInstance()).isSameAs(serviceInstance);
+        assertThat(event.getBufferSize()).isEqualTo(1); // 单个设备清理
+        assertThat(event.getDeviceId()).isEqualTo(deviceId);
+        assertThat(event.getCustomConfig()).isSameAs(customConfig);
+        assertThat(event.getEventTime()).isBetween(beforeTime, afterTime);
+    }
+
+    @Test
+    @DisplayName("应该支持null自定义配置的设备清理事件")
+    void should_create_device_cleanup_event_with_null_config() {
+        // Given - 准备测试数据
+        Object serviceInstance = new Object();
+        Long deviceId = 67890L;
+
+        // When - 创建设备数据清理刷新事件，配置为null
+        AsyncBufferFlushEvent event = AsyncBufferFlushEvent.createDeviceCleanupFlushEvent(
+                serviceInstance, deviceId, null);
+
+        // Then - 验证事件可以正常创建
+        assertThat(event.getBufferType()).isEqualTo(AsyncBufferFlushEvent.BufferType.DEVICE_CLEANUP);
+        assertThat(event.getServiceInstance()).isSameAs(serviceInstance);
+        assertThat(event.getDeviceId()).isEqualTo(deviceId);
+        assertThat(event.getCustomConfig()).isNull();
+        assertThat(event.getEventTime()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("设备清理事件应该正确实现equals和hashCode")
+    void should_implement_equals_and_hashcode_for_device_cleanup_event() {
+        // Given - 创建两个相同的设备清理事件
+        Object serviceInstance = new Object();
+        Long deviceId = 11111L;
+        DataCleanupConfigDTO customConfig = new DataCleanupConfigDTO();
+        customConfig.setMode(CleanupMode.ALL);
+        Long eventTime = 2000L;
+
+        AsyncBufferFlushEvent event1 = AsyncBufferFlushEvent.builder()
+                .bufferType(AsyncBufferFlushEvent.BufferType.DEVICE_CLEANUP)
+                .serviceInstance(serviceInstance)
+                .eventTime(eventTime)
+                .bufferSize(1)
+                .deviceId(deviceId)
+                .customConfig(customConfig)
+                .build();
+
+        AsyncBufferFlushEvent event2 = AsyncBufferFlushEvent.builder()
+                .bufferType(AsyncBufferFlushEvent.BufferType.DEVICE_CLEANUP)
+                .serviceInstance(serviceInstance)
+                .eventTime(eventTime)
+                .bufferSize(1)
+                .deviceId(deviceId)
+                .customConfig(customConfig)
+                .build();
+
+        // Then - 验证equals和hashCode
+        assertThat(event1).isEqualTo(event2);
+        assertThat(event1.hashCode()).hasSameHashCodeAs(event2.hashCode());
     }
 }

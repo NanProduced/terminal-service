@@ -109,7 +109,7 @@ public class DeviceOnlineStatusRpcServiceImpl implements DeviceOnlineStatusRpcSe
             }
             
             // 统计信息
-            long onlineCount = onlineStatusMap.values().stream().mapToLong(online -> online ? 1 : 0).sum();
+            long onlineCount = onlineStatusMap.values().stream().mapToLong(online -> Boolean.TRUE.equals(online) ? 1 : 0).sum();
             long queryTime = System.currentTimeMillis() - startTime;
             
             BatchDeviceStatusResultDTO.QueryStatistics statistics = BatchDeviceStatusResultDTO.QueryStatistics.builder()

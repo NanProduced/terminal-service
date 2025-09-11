@@ -1,6 +1,7 @@
 package com.colorlight.terminal.infrastructure.event;
 
 import lombok.*;
+import com.colorlight.terminal.rpc.dto.config.DataCleanupConfigDTO;
 
 /**
  * 异步缓冲区刷新事件
@@ -35,6 +36,16 @@ public class AsyncBufferFlushEvent {
     private Integer bufferSize;
     
     /**
+     * 设备ID（设备数据清理专用）
+     */
+    private Long deviceId;
+    
+    /**
+     * 自定义清理配置（设备数据清理专用）
+     */
+    private DataCleanupConfigDTO customConfig;
+    
+    /**
      * 缓冲区类型枚举
      */
     @Getter
@@ -52,7 +63,12 @@ public class AsyncBufferFlushEvent {
         /**
          * 终端登录更新缓冲池
          */
-        LOGIN_UPDATE("终端登录更新");
+        LOGIN_UPDATE("终端登录更新"),
+        
+        /**
+         * 设备数据清理缓冲池
+         */
+        DEVICE_CLEANUP("设备数据清理");
         
         private final String description;
         
@@ -95,6 +111,22 @@ public class AsyncBufferFlushEvent {
                 .serviceInstance(serviceInstance)
                 .eventTime(System.currentTimeMillis())
                 .bufferSize(bufferSize)
+                .build();
+    }
+    
+    /**
+     * 创建设备数据清理刷新事件
+     */
+    public static AsyncBufferFlushEvent createDeviceCleanupFlushEvent(Object serviceInstance, 
+                                                                     Long deviceId, 
+                                                                     DataCleanupConfigDTO customConfig) {
+        return AsyncBufferFlushEvent.builder()
+                .bufferType(BufferType.DEVICE_CLEANUP)
+                .serviceInstance(serviceInstance)
+                .eventTime(System.currentTimeMillis())
+                .bufferSize(1) // 单个设备清理
+                .deviceId(deviceId)
+                .customConfig(customConfig)
                 .build();
     }
 }

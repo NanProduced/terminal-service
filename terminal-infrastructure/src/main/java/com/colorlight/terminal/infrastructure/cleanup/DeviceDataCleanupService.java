@@ -1,15 +1,19 @@
 package com.colorlight.terminal.infrastructure.cleanup;
 
+import com.colorlight.terminal.commons.exception.CommonErrorCode;
+import com.colorlight.terminal.commons.exception.business.BusinessException;
 import com.colorlight.terminal.infrastructure.config.properties.DeviceConfigProperties;
 import com.colorlight.terminal.infrastructure.persistence.mysql.entity.DeviceDeletionRecordDO;
 import com.colorlight.terminal.infrastructure.persistence.mysql.mapper.DeviceDeletionRecordMapper;
 import com.colorlight.terminal.infrastructure.cleanup.cleaner.DataStoreCleaner;
+import com.colorlight.terminal.infrastructure.event.AsyncBufferFlushEvent;
 import com.colorlight.terminal.rpc.dto.config.DataCleanupConfigDTO;
 import com.colorlight.terminal.rpc.dto.enums.CleanupMode;
 import com.colorlight.terminal.rpc.dto.enums.DataType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -32,24 +36,25 @@ public class DeviceDataCleanupService {
     private final DeviceDeletionRecordMapper deletionRecordMapper;
     private final List<DataStoreCleaner> cleaners;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
     
     /**
      * 异步清理单个设备数据
-     * @param deviceId 设备ID
+     *
+     * @param deviceId     设备ID
      * @param customConfig 自定义配置 (可为null)
-     * @return CompletableFuture
      */
     @Async("defaultAsyncExecutor")
-    public CompletableFuture<Void> cleanupDeviceDataAsync(Long deviceId, DataCleanupConfigDTO customConfig) {
+    public void cleanupDeviceDataAsync(Long deviceId, DataCleanupConfigDTO customConfig) {
         log.info("开始清理设备数据: deviceId={}", deviceId);
         
         // 创建删除记录
-        DeviceDeletionRecordDO record = createDeletionRecord(deviceId, customConfig);
-        deletionRecordMapper.insert(record);
+        DeviceDeletionRecordDO deletionRecord = createDeletionRecord(deviceId, customConfig);
+        deletionRecordMapper.insert(deletionRecord);
         
         try {
             // 更新状态为运行中
-            updateRecordStatus(record.getId(), "RUNNING", null, null, LocalDateTime.now());
+            updateRecordStatus(deletionRecord.getId(), "RUNNING", null, null, LocalDateTime.now());
             
             // 解析需要清理的数据类型
             Set<DataType> dataTypesToCleanup = resolveDataTypesToCleanup(customConfig);
@@ -59,64 +64,67 @@ public class DeviceDataCleanupService {
             Map<String, Integer> deletedCounts = performCleanup(deviceId, dataTypesToCleanup);
             
             // 更新为成功状态
-            updateRecordStatus(record.getId(), "SUCCESS", deletedCounts, null, LocalDateTime.now());
+            updateRecordStatus(deletionRecord.getId(), "SUCCESS", deletedCounts, null, LocalDateTime.now());
             
             log.info("设备数据清理完成: deviceId={}, 清理统计={}", deviceId, deletedCounts);
             
         } catch (Exception e) {
             log.error("设备数据清理失败: deviceId={}", deviceId, e);
-            updateRecordStatus(record.getId(), "FAILED", null, e.getMessage(), LocalDateTime.now());
+            updateRecordStatus(deletionRecord.getId(), "FAILED", null, e.getMessage(), LocalDateTime.now());
             throw e;
         }
-        
-        return CompletableFuture.completedFuture(null);
+
+        CompletableFuture.completedFuture(null);
     }
     
     /**
      * 异步批量清理设备数据
-     * @param deviceIds 设备ID列表
+     * 使用事件发布机制解决@Async自调用代理失效问题
+     *
+     * @param deviceIds    设备ID列表
      * @param customConfig 自定义配置 (可为null)
-     * @return CompletableFuture
      */
     @Async("defaultAsyncExecutor")
-    public CompletableFuture<Void> batchCleanupDeviceDataAsync(List<Long> deviceIds, DataCleanupConfigDTO customConfig) {
+    public void batchCleanupDeviceDataAsync(List<Long> deviceIds, DataCleanupConfigDTO customConfig) {
         log.info("开始批量清理设备数据: count={}", deviceIds.size());
         
-        // 并行处理每个设备
-        List<CompletableFuture<Void>> futures = deviceIds.stream()
-                .map(deviceId -> cleanupDeviceDataAsync(deviceId, customConfig))
-                .toList();
+        try {
+            // 通过事件发布机制触发每个设备的清理任务
+            for (Long deviceId : deviceIds) {
+                AsyncBufferFlushEvent event = AsyncBufferFlushEvent.createDeviceCleanupFlushEvent(
+                    this, deviceId, customConfig);
+                eventPublisher.publishEvent(event);
                 
-        // 等待所有任务完成
-        CompletableFuture<Void> allOf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-        
-        return allOf.thenRun(() -> {
-            log.info("批量设备数据清理完成: count={}", deviceIds.size());
-        }).exceptionally(throwable -> {
-            log.error("批量设备数据清理失败: count={}", deviceIds.size(), throwable);
-            throw new RuntimeException(throwable);
-        });
+                log.debug("DeviceDataCleanup - 发布设备清理事件: deviceId={}", deviceId);
+            }
+            
+            log.info("批量设备数据清理事件发布完成: count={}", deviceIds.size());
+            
+        } catch (Exception e) {
+            log.error("批量设备数据清理事件发布失败: count={}", deviceIds.size(), e);
+            throw new BusinessException(CommonErrorCode.SYSTEM_ERROR, e);
+        }
     }
     
     /**
      * 创建删除记录
      */
     private DeviceDeletionRecordDO createDeletionRecord(Long deviceId, DataCleanupConfigDTO customConfig) {
-        DeviceDeletionRecordDO record = new DeviceDeletionRecordDO();
-        record.setDeviceId(deviceId);
-        record.setStatus("PENDING");
-        record.setCreateTime(LocalDateTime.now());
+        DeviceDeletionRecordDO deletionRecordDO = new DeviceDeletionRecordDO();
+        deletionRecordDO.setDeviceId(deviceId);
+        deletionRecordDO.setStatus("PENDING");
+        deletionRecordDO.setCreateTime(LocalDateTime.now());
         
         if (customConfig != null) {
-            record.setCleanupMode(customConfig.getMode().name());
-            record.setDataTypes(convertDataTypesToJson(customConfig.getDataTypes()));
+            deletionRecordDO.setCleanupMode(customConfig.getMode().name());
+            deletionRecordDO.setDataTypes(convertDataTypesToJson(customConfig.getDataTypes()));
         } else {
             var defaultConfig = deviceConfig.getCleanup();
-            record.setCleanupMode(defaultConfig.getMode().name());
-            record.setDataTypes(convertDataTypesToJson(defaultConfig.getDataTypes()));
+            deletionRecordDO.setCleanupMode(defaultConfig.getMode().name());
+            deletionRecordDO.setDataTypes(convertDataTypesToJson(defaultConfig.getDataTypes()));
         }
         
-        return record;
+        return deletionRecordDO;
     }
     
     /**
@@ -182,21 +190,21 @@ public class DeviceDataCleanupService {
      */
     private void updateRecordStatus(Long recordId, String status, Map<String, Integer> deletedCounts, 
                                    String errorMessage, LocalDateTime endTime) {
-        DeviceDeletionRecordDO record = new DeviceDeletionRecordDO();
-        record.setId(recordId);
-        record.setStatus(status);
-        record.setErrorMessage(errorMessage);
+        DeviceDeletionRecordDO deletionRecordDO = new DeviceDeletionRecordDO();
+        deletionRecordDO.setId(recordId);
+        deletionRecordDO.setStatus(status);
+        deletionRecordDO.setErrorMessage(errorMessage);
         
         if ("RUNNING".equals(status)) {
-            record.setStartTime(endTime);
+            deletionRecordDO.setStartTime(endTime);
         } else if (Arrays.asList("SUCCESS", "FAILED", "PARTIAL").contains(status)) {
-            record.setEndTime(endTime);
+            deletionRecordDO.setEndTime(endTime);
             if (deletedCounts != null) {
-                record.setDeletedCounts(convertDeletedCountsToJson(deletedCounts));
+                deletionRecordDO.setDeletedCounts(convertDeletedCountsToJson(deletedCounts));
             }
         }
         
-        deletionRecordMapper.updateById(record);
+        deletionRecordMapper.updateById(deletionRecordDO);
     }
     
     /**
