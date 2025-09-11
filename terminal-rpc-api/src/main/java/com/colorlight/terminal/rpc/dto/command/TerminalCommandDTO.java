@@ -58,7 +58,9 @@ public class TerminalCommandDTO implements Serializable {
         this.karma = karma;
     }
 
-    public static class Content {
+    public static class Content implements Serializable{
+
+        private static final long serialVersionUID = 2240447139583945473L;
 
         private String raw;
 
