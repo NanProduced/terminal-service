@@ -10,8 +10,8 @@ import java.util.Objects;
  * @version 1.0.0
  */
 public class SingleCommandSendResultDTO implements Serializable {
-    
-    private static final long serialVersionUID = 1L;
+
+    private static final long serialVersionUID = -21589711770021271L;
 
     /**
      * 是否下发成功

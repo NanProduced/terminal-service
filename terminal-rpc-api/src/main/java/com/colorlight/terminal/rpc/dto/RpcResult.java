@@ -12,9 +12,8 @@ import java.util.Objects;
  * @author Nan
  */
 public class RpcResult<T> implements Serializable {
-    
-    private static final long serialVersionUID = 1L;
-    
+
+    private static final long serialVersionUID = 4003729994395502714L;
     /**
      * 是否成功
      */

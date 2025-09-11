@@ -2,12 +2,16 @@ package com.colorlight.terminal.rpc.dto.request;
 
 import com.colorlight.terminal.rpc.dto.command.TerminalCommandDTO;
 
+import java.io.Serializable;
+
 /**
  * 单个指令下发请求DTO
  *
  * @author Nan
  */
-public class SingleCommandRequestDTO {
+public class SingleCommandRequestDTO implements Serializable {
+
+    private static final long serialVersionUID = 3662221073422166623L;
 
     private Long deviceId;
 

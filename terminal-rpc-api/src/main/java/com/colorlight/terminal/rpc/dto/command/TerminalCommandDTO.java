@@ -1,11 +1,15 @@
 package com.colorlight.terminal.rpc.dto.command;
 
+import java.io.Serializable;
+
 /**
  * 指令封装
  *
  * @author Nan
  */
-public class TerminalCommandDTO {
+public class TerminalCommandDTO implements Serializable {
+
+    private static final long serialVersionUID = 6538191347998699017L;
 
     /**
      * 指令操作类型
