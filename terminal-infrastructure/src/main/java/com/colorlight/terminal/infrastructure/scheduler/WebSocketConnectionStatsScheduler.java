@@ -78,7 +78,7 @@ public class WebSocketConnectionStatsScheduler {
     private void logBasicStatistics(Map<String, Object> stats) {
         Integer totalShards = (Integer) stats.get("totalShards");
         Integer totalConnections = (Integer) stats.get("totalConnections");
-        Boolean running = (Boolean) stats.get("running");
+        boolean running = (boolean) stats.get("running");
         
         log.info("================ WebSocket连接统计 ================");
         log.info("WebSocketStats - 系统状态: {}", running ? "运行中" : "已停止");
@@ -156,11 +156,8 @@ public class WebSocketConnectionStatsScheduler {
         // 每个方块代表10个连接
         int blocks = Math.max(1, connections / 10);
         blocks = Math.min(blocks, 50); // 最多50个方块，避免日志过长
-        
-        StringBuilder bar = new StringBuilder();
-        bar.append("█".repeat(blocks));
-        
-        return bar.toString();
+
+        return "█".repeat(blocks);
     }
     
     /**
