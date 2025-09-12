@@ -5,6 +5,7 @@ import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort
 import com.colorlight.terminal.application.port.outbound.status.DeviceStatusEventPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
@@ -27,6 +28,10 @@ public class DeviceStatusEventPublisher implements DeviceStatusEventPort {
     private final ApplicationEventPublisher applicationEventPublisher;
     private final DeviceConfigPort deviceConfigPort;
     
+    // 注入自身以支持@Async方法的调用
+    @Autowired
+    private DeviceStatusEventPublisher self;
+    
     @Override
     public void publishStatusEvent(DeviceStatusEvent event) {
         try {
@@ -35,7 +40,7 @@ public class DeviceStatusEventPublisher implements DeviceStatusEventPort {
             
             if (deviceConfigPort.isSpringEventAsync()) {
                 // 异步发布事件
-                publishEventAsync(event);
+                self.publishEventAsync(event);
             } else {
                 // 同步发布事件
                 applicationEventPublisher.publishEvent(event);
@@ -64,7 +69,7 @@ public class DeviceStatusEventPublisher implements DeviceStatusEventPort {
             
             if (deviceConfigPort.isSpringEventAsync()) {
                 // 异步批量发布
-                batchPublishEventsAsync(events);
+                self.batchPublishEventsAsync(events);
             } else {
                 // 同步批量发布
                 for (DeviceStatusEvent event : events) {
