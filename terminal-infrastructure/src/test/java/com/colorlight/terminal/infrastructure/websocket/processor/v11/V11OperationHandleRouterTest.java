@@ -76,9 +76,6 @@ class V11OperationHandleRouterTest {
     private ArgumentCaptor<V11WebsocketMessage> messageCaptor;
     
     @Captor
-    private ArgumentCaptor<String> dataCaptor;
-    
-    @Captor
     private ArgumentCaptor<List<TerminalLog>> terminalLogsCaptor;
     
     @InjectMocks

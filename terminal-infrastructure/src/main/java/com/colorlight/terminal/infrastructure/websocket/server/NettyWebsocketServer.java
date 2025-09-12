@@ -1,5 +1,7 @@
 package com.colorlight.terminal.infrastructure.websocket.server;
 
+import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
+import com.colorlight.terminal.commons.exception.technical.TechnicalException;
 import com.colorlight.terminal.infrastructure.websocket.config.NettyWebsocketProperties;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
@@ -13,16 +15,17 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Netty WebSocket服务器
- * 
+ * <p>
  * 这是整个WebSocket服务的核心启动类，负责：
  * 1. 启动Netty服务器监听WebSocket连接
  * 2. 配置线程组和Bootstrap参数
  * 3. 管理服务器生命周期（启动/关闭）
  * 4. 处理异常和优雅关闭
- * 
+ * <p>
  * Netty基础概念：
  * - EventLoopGroup: 事件循环组，处理I/O操作
  * - Bootstrap: 启动器，配置服务器参数
@@ -53,9 +56,9 @@ public class NettyWebsocketServer implements ApplicationRunner, DisposableBean {
     
     /**
      * 服务器Channel
-     * 用volatile保证多线程访问的可见性
+     * 用AtomicReference保证多线程访问的线程安全
      */
-    private volatile Channel serverChannel;
+    private final AtomicReference<Channel> serverChannel = new AtomicReference<>();
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
@@ -76,7 +79,7 @@ public class NettyWebsocketServer implements ApplicationRunner, DisposableBean {
         } catch (Exception e) {
             log.error("NettyWebsocketServer - WebSocket服务器启动失败", e);
             // 启动失败直接抛异常，阻止Spring启动
-            throw new RuntimeException("WebSocket服务器启动失败，应用无法正常工作", e);
+            throw new TechnicalException(TechErrorCode.NETTY_START_ERROR, "WebSocket服务器启动失败，应用无法正常工作", e);
         }
     }
 
@@ -117,16 +120,16 @@ public class NettyWebsocketServer implements ApplicationRunner, DisposableBean {
         // 等待绑定完成，设置30秒超时
         if (!channelFuture.await(30, TimeUnit.SECONDS)) {
             shutdownGracefully();
-            throw new RuntimeException("WebSocket服务器绑定超时(30秒)");
+            throw new TechnicalException(TechErrorCode.NETTY_START_ERROR, "WebSocket服务器绑定超时(30秒)");
         }
         
         if (!channelFuture.isSuccess()) {
             shutdownGracefully();
-            throw new RuntimeException("WebSocket服务器绑定失败", channelFuture.cause());
+            throw new TechnicalException(TechErrorCode.NETTY_START_ERROR, "WebSocket服务器绑定失败", channelFuture.cause());
         }
         
         // 保存服务器channel引用
-        serverChannel = channelFuture.channel();
+        serverChannel.set(channelFuture.channel());
         
         log.info("NettyWebsocketServer - WebSocket服务器绑定成功: {}:{}", 
                 nettyWebsocketProperties.getServer().getHost(),
@@ -231,25 +234,28 @@ public class NettyWebsocketServer implements ApplicationRunner, DisposableBean {
      * 优雅关闭服务器
      */
     private void shutdownGracefully() {
-        try {
-            // 1. 关闭服务器Channel
-            if (serverChannel != null && serverChannel.isActive()) {
+        // 1. 原子性获取并清除serverChannel引用
+        Channel channel = serverChannel.getAndSet(null);
+        
+        // 2. 关闭服务器Channel（如果存在）
+        if (channel != null && channel.isActive()) {
+            try {
                 log.debug("NettyWebsocketServer - 正在关闭服务器Channel...");
-                serverChannel.close().sync();
+                channel.close().sync();
                 log.debug("NettyWebsocketServer - 服务器Channel已关闭");
+            } catch (InterruptedException e) {
+                log.warn("NettyWebsocketServer - 关闭服务器Channel时被中断");
+                Thread.currentThread().interrupt();
             }
-        } catch (InterruptedException e) {
-            log.warn("NettyWebsocketServer - 关闭服务器Channel时被中断");
-            Thread.currentThread().interrupt();
         }
         
-        // 2. 优雅关闭线程组
+        // 3. 优雅关闭线程组
         shutdownEventLoopGroups();
     }
 
     /**
      * 优雅关闭事件循环组
-     * 
+     * <p>
      * 给线程组一些时间来完成正在处理的任务，然后强制关闭
      */
     private void shutdownEventLoopGroups() {
@@ -275,5 +281,4 @@ public class NettyWebsocketServer implements ApplicationRunner, DisposableBean {
             Thread.currentThread().interrupt();
         }
     }
-
 }
