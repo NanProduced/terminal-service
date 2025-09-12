@@ -8,6 +8,7 @@ import com.colorlight.terminal.commons.utils.JsonUtils;
 import com.colorlight.terminal.infrastructure.cache.redis.constant.RedisKeyConstant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -48,8 +49,7 @@ public class DeviceDownloadingRedisService implements DeviceDownloadingPort {
             
         } catch (Exception e) {
             log.error("AsyncDeviceDownloadingService - 异步保存下载状态失败: deviceId={}, type={}", 
-                    deviceId, report.getWhat(), e);
-            throw e;
+                    deviceId, report != null ? report.getWhat() : "null", e);
         }
     }
 
@@ -70,7 +70,7 @@ public class DeviceDownloadingRedisService implements DeviceDownloadingPort {
             // 使用Redis事务保证原子性
             redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
-                public Object execute(RedisOperations operations) throws DataAccessException {
+                public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                     operations.multi();
 
                     // 构建更新字段

@@ -51,8 +51,12 @@ public class DeviceTimeZoneRedisService implements DeviceTimeZonePort {
         DeviceTimeZoneCache deviceTimeZoneCache = calculateAndSaveTimeOffset(deviceId);
         // newRtc上报部分不存在，内部下发获取配置指令
         if (Objects.isNull(deviceTimeZoneCache)) {
-            systemCommandPort.requestTimeZoneReport(deviceId, DeviceTimeZoneRedisService.class.getSimpleName());
-            log.info("DeviceTimeZone - 请求设备上报时间配置项: deviceId={}", deviceId);
+            try {
+                systemCommandPort.requestTimeZoneReport(deviceId, DeviceTimeZoneRedisService.class.getSimpleName());
+                log.info("DeviceTimeZone - 请求设备上报时间配置项: deviceId={}", deviceId);
+            } catch (Exception e) {
+                log.error("DeviceTimeZone -SystemCommand- 请求设备上报时间配置项失败: deviceId={}", deviceId, e);
+            }
         }
         return deviceTimeZoneCache;
     }
