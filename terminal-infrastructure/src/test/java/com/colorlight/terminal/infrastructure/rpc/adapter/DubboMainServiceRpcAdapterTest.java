@@ -10,7 +10,6 @@ import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 import com.colorlight.terminal.application.domain.status.ReportSource;
 import org.apache.dubbo.rpc.RpcException;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -24,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -390,6 +390,25 @@ class DubboMainServiceRpcAdapterTest {
             
             verify(deviceReportRpcService).reportDeviceLedStatus(any(), anyLong(), any());
         }
+
+        @Test
+        @DisplayName("应该处理很长的LED报告内容")
+        void should_handle_very_long_led_report_content() {
+            // Given
+            String longLedReport = "x".repeat(10000); // 10KB的内容
+
+            // When & Then - 应该不抛出异常
+            assertDoesNotThrow(() -> {
+                rpcAdapter.notifyLedStatus(TEST_DEVICE_ID, longLedReport);
+            });
+
+            verify(deviceReportRpcService).reportDeviceLedStatus(
+                    eq(TEST_DEVICE_ID),
+                    anyLong(),
+                    eq(longLedReport)
+            );
+        }
+
     }
 
     @Nested
@@ -497,7 +516,7 @@ class DubboMainServiceRpcAdapterTest {
                     .clientIp(TEST_CLIENT_IP).reportSource(ReportSource.WEBSOCKET).build();
 
             // 这些调用都不应该抛出异常
-            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> {
+            assertDoesNotThrow(() -> {
                 rpcAdapter.notifyCommandConfirm(confirmEvent);
                 rpcAdapter.notifyCommandExpiration(TEST_DEVICE_ID, TEST_COMMAND_ID_INT);
                 rpcAdapter.notifyDeviceLastReportTime(statusEvent);
@@ -524,7 +543,7 @@ class DubboMainServiceRpcAdapterTest {
                 doThrow(exception).when(commandFinishFacade).commandFinish(any());
 
                 // When & Then - 都应该不抛出异常
-                org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> {
+                assertDoesNotThrow(() -> {
                     rpcAdapter.notifyCommandConfirm(event);
                 });
 
@@ -569,24 +588,6 @@ class DubboMainServiceRpcAdapterTest {
             // Then
             verify(commandFinishFacade).commandFinish(commandFinishDtoCaptor.capture());
             assertThat(commandFinishDtoCaptor.getValue().getCommandId()).isEqualTo(largeCommandId.toString());
-        }
-
-        @Test
-        @DisplayName("应该处理很长的LED报告内容")
-        void should_handle_very_long_led_report_content() {
-            // Given
-            String longLedReport = "x".repeat(10000); // 10KB的内容
-
-            // When & Then - 应该不抛出异常
-            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> {
-                rpcAdapter.notifyLedStatus(TEST_DEVICE_ID, longLedReport);
-            });
-
-            verify(deviceReportRpcService).reportDeviceLedStatus(
-                    eq(TEST_DEVICE_ID),
-                    anyLong(),
-                    eq(longLedReport)
-            );
         }
 
     }
