@@ -1,11 +1,11 @@
 package com.colorlight.terminal.infrastructure.cleanup;
 
 import com.colorlight.terminal.commons.exception.business.BusinessException;
+import com.colorlight.terminal.infrastructure.cleanup.cleaner.DataStoreCleaner;
 import com.colorlight.terminal.infrastructure.config.properties.DeviceConfigProperties;
+import com.colorlight.terminal.infrastructure.event.AsyncBufferFlushEvent;
 import com.colorlight.terminal.infrastructure.persistence.mysql.entity.DeviceDeletionRecordDO;
 import com.colorlight.terminal.infrastructure.persistence.mysql.mapper.DeviceDeletionRecordMapper;
-import com.colorlight.terminal.infrastructure.cleanup.cleaner.DataStoreCleaner;
-import com.colorlight.terminal.infrastructure.event.AsyncBufferFlushEvent;
 import com.colorlight.terminal.rpc.dto.config.DataCleanupConfigDTO;
 import com.colorlight.terminal.rpc.dto.enums.CleanupMode;
 import com.colorlight.terminal.rpc.dto.enums.DataType;
@@ -25,7 +25,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**

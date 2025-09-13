@@ -16,20 +16,11 @@ import com.colorlight.terminal.application.port.outbound.statistics.DeviceProgra
 import com.colorlight.terminal.application.port.outbound.status.DeviceDownloadingPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceSwitchRecordPort;
 import com.colorlight.terminal.application.port.outbound.storage.ScreenshotStoragePort;
-import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.business.BusinessException;
 import com.colorlight.terminal.commons.utils.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
+import org.junit.jupiter.api.*;
+import org.mockito.*;
 
 import java.time.LocalDateTime;
 import java.util.Collections;

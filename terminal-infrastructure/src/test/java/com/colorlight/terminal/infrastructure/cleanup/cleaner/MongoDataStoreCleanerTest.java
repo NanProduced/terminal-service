@@ -15,7 +15,7 @@ import org.springframework.data.mongodb.core.query.Query;
 
 import java.util.EnumSet;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 

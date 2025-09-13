@@ -2,8 +2,6 @@ package com.colorlight.terminal.application.port.outbound.repository;
 
 import com.colorlight.terminal.application.dto.record.TerminalOnlineTimeRecord;
 
-import java.util.List;
-
 /**
  * 终端在线时长记录存储接口
  *

@@ -1,7 +1,7 @@
 package com.colorlight.terminal.infrastructure.event;
 
-import lombok.*;
 import com.colorlight.terminal.rpc.dto.config.DataCleanupConfigDTO;
+import lombok.*;
 
 /**
  * 异步缓冲区刷新事件

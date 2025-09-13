@@ -1,13 +1,10 @@
 package com.colorlight.terminal.application.service;
 
-import com.colorlight.terminal.application.domain.report.MediaPlayRecordReport;
-import com.colorlight.terminal.application.domain.report.ProgramPlayRecordReport;
+import com.colorlight.terminal.application.domain.report.*;
 import com.colorlight.terminal.application.domain.sensor.GpsReport;
 import com.colorlight.terminal.application.domain.sensor.SensorReport;
 import com.colorlight.terminal.application.dto.record.ScreenshotUploadRecord;
 import com.colorlight.terminal.application.handler.ReportTimePopulator;
-import com.colorlight.terminal.application.domain.report.TerminalLog;
-import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.application.port.outbound.repository.DownloadingRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalLogRepository;
@@ -16,10 +13,9 @@ import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceGpsHandlePort;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceMediaPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceProgramPlayRecordPort;
-import com.colorlight.terminal.application.port.outbound.status.DeviceSwitchRecordPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceDownloadingPort;
+import com.colorlight.terminal.application.port.outbound.status.DeviceSwitchRecordPort;
 import com.colorlight.terminal.application.port.outbound.storage.ScreenshotStoragePort;
-import com.colorlight.terminal.application.domain.report.DownloadingReport;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.business.BusinessException;
 import com.colorlight.terminal.commons.utils.JsonUtils;

@@ -1,7 +1,7 @@
 package com.colorlight.terminal.boot.interceptor;
 
-import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
 import com.colorlight.terminal.application.domain.status.ReportSource;
+import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

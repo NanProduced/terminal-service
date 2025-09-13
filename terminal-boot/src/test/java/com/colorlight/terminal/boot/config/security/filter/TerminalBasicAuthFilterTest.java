@@ -1,9 +1,10 @@
 package com.colorlight.terminal.boot.config.security.filter;
 
 import com.colorlight.terminal.application.enums.TerminalAccountStatus;
-import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
+import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
+import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -21,7 +22,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-import jakarta.servlet.FilterChain;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 

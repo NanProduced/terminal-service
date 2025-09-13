@@ -1,11 +1,11 @@
 package com.colorlight.terminal.infrastructure.testutil;
 
+import com.colorlight.terminal.application.domain.TerminalAccount;
 import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
 import com.colorlight.terminal.application.domain.status.DeviceOnlineStatus;
 import com.colorlight.terminal.application.domain.status.OnlineStatus;
 import com.colorlight.terminal.application.domain.status.ReportSource;
-import com.colorlight.terminal.application.domain.TerminalAccount;
 import com.colorlight.terminal.application.enums.TerminalAccountStatus;
 import com.colorlight.terminal.infrastructure.persistence.mysql.entity.TerminalAccountDO;
 

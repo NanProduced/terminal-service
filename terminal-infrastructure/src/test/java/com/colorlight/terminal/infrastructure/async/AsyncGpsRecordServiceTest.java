@@ -3,7 +3,6 @@ package com.colorlight.terminal.infrastructure.async;
 import com.colorlight.terminal.application.domain.sensor.GpsReport;
 import com.colorlight.terminal.application.port.outbound.repository.GpsRecordRepository;
 import com.colorlight.terminal.infrastructure.config.properties.TerminalStatsConfigProperties;
-import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +10,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
 import java.util.List;

@@ -1,8 +1,8 @@
 package com.colorlight.terminal.infrastructure.websocket.processor;
 
 import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
-import com.colorlight.terminal.application.port.outbound.websocket.ProtocolProcessorPort;
 import com.colorlight.terminal.application.port.outbound.websocket.ProtocolMessageProcessor;
+import com.colorlight.terminal.application.port.outbound.websocket.ProtocolProcessorPort;
 import com.colorlight.terminal.infrastructure.config.properties.WebSocketConfigProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;

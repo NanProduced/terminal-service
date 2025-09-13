@@ -1,7 +1,6 @@
 package com.colorlight.terminal.application.port.outbound.status;
 
 import com.colorlight.terminal.application.domain.status.DeviceOnlineStatus;
-import lombok.Getter;
 
 import java.util.List;
 

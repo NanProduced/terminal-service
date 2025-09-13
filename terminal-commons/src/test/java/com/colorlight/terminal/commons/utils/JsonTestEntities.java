@@ -1,7 +1,7 @@
 package com.colorlight.terminal.commons.utils;
 
-import lombok.Data;
 import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;

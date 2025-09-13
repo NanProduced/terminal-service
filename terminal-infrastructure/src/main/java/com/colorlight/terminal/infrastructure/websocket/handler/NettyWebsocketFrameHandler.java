@@ -1,10 +1,10 @@
 package com.colorlight.terminal.infrastructure.websocket.handler;
 
+import com.colorlight.terminal.application.domain.connection.MessageProcessingContext;
 import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
 import com.colorlight.terminal.application.port.inbound.websocket.WebsocketMessageUseCase;
 import com.colorlight.terminal.application.port.outbound.connection.ConnectionManagerPort;
-import com.colorlight.terminal.application.domain.connection.MessageProcessingContext;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
 import com.colorlight.terminal.infrastructure.websocket.auth.NettyWebsocketAuthHandler;
 import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebsocketSession;

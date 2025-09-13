@@ -1,9 +1,9 @@
 package com.colorlight.terminal.application.dto.request;
 
-import lombok.Data;
-import lombok.Builder;
-import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * 创建终端账号请求 (Application层)

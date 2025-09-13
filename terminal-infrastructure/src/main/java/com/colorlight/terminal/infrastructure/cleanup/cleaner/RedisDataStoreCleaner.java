@@ -1,9 +1,7 @@
 package com.colorlight.terminal.infrastructure.cleanup.cleaner;
 
 import com.colorlight.terminal.rpc.dto.enums.DataType;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;

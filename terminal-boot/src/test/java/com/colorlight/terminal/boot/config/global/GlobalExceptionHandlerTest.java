@@ -1,7 +1,7 @@
 package com.colorlight.terminal.boot.config.global;
 
-import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
+import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
