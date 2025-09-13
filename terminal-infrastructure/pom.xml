@@ -12,15 +12,10 @@
   <description>Redis/Netty/DB/Dubbo Provider 等外设实现</description>
 
   <dependencies>
-    <!-- 业务层依赖 -->
+    <!-- 业务层依赖 - terminal-commons 通过 terminal-application 传递获得 -->
     <dependency>
       <groupId>com.colorlight.terminal</groupId>
       <artifactId>terminal-application</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.colorlight.terminal</groupId>
-      <artifactId>terminal-commons</artifactId>
     </dependency>
 
     <!-- RPC接口实现 -->

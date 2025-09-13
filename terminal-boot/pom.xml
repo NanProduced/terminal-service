@@ -12,22 +12,12 @@
   <description>启动、配置、设备 REST 控制器与 WS 装配</description>
 
   <dependencies>
-    <!-- 核心模块依赖 -->
-    <dependency>
-      <groupId>com.colorlight.terminal</groupId>
-      <artifactId>terminal-commons</artifactId>
-    </dependency>
-    
+    <!-- 核心模块依赖 - commons/application 通过 infrastructure 传递获得 -->
     <dependency>
       <groupId>com.colorlight.terminal</groupId>
       <artifactId>terminal-api</artifactId>
     </dependency>
-    
-    <dependency>
-      <groupId>com.colorlight.terminal</groupId>
-      <artifactId>terminal-application</artifactId>
-    </dependency>
-    
+
     <dependency>
       <groupId>com.colorlight.terminal</groupId>
       <artifactId>terminal-infrastructure</artifactId>
@@ -197,22 +187,14 @@
             </exclude>
           </excludes>
           <mainClass>com.colorlight.terminal.boot.TerminalApplication</mainClass>
+          <!-- 镜像构建配置 - 手动执行: mvn spring-boot:build-image -->
+          <image>
+            <name>colorlight/terminal-service:${project.version}</name>
+            <env>
+              <JAVA_OPTS>-server -Xms2g -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=100</JAVA_OPTS>
+            </env>
+          </image>
         </configuration>
-        <executions>
-          <execution>
-            <goals>
-              <goal>build-image</goal>
-            </goals>
-            <configuration>
-              <image>
-                <name>colorlight/terminal-service:${project.version}</name>
-                <env>
-                  <JAVA_OPTS>-server -Xms2g -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=100</JAVA_OPTS>
-                </env>
-              </image>
-            </configuration>
-          </execution>
-        </executions>
       </plugin>
 
       <!-- JaCoCo代码覆盖率插件 -->
