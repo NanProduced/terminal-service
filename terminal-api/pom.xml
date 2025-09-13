@@ -50,4 +50,37 @@
       <artifactId>jakarta.validation-api</artifactId>
     </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <!-- JaCoCo代码覆盖率插件 -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <configuration>
+          <!-- 排除API层非业务逻辑代码 -->
+          <excludes>
+            <!-- DTO数据传输对象 - 纯数据容器 -->
+            <exclude>**/dto/**/*DTO.class</exclude>
+            <exclude>**/dto/**/*Request.class</exclude>
+            <exclude>**/dto/**/*Response.class</exclude>
+            <exclude>**/dto/**/*Result.class</exclude>
+            <exclude>**/dto/**/*Record.class</exclude>
+
+            <!-- API接口定义 - 无实现逻辑 -->
+            <exclude>**/api/**/*Api.class</exclude>
+            <exclude>**/controller/**/*Controller.class</exclude>
+
+            <!-- 常量和枚举 -->
+            <exclude>**/enums/**/*.class</exclude>
+            <exclude>**/constants/**/*.class</exclude>
+
+            <!-- Lombok生成代码 -->
+            <exclude>**/*Builder.class</exclude>
+            <exclude>**/*$Builder.class</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 </project>

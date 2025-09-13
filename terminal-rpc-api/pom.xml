@@ -114,6 +114,49 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!-- JaCoCo代码覆盖率插件 -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <configuration>
+                    <!-- 排除RPC API层非业务逻辑代码 -->
+                    <excludes>
+                        <!-- RPC接口定义 - 纯接口声明 -->
+                        <exclude>**/service/**/*Service.class</exclude>
+                        <exclude>**/api/**/*Api.class</exclude>
+
+                        <!-- DTO数据传输对象 - 纯数据容器 -->
+                        <exclude>**/dto/**/*DTO.class</exclude>
+                        <exclude>**/dto/**/*Request.class</exclude>
+                        <exclude>**/dto/**/*Response.class</exclude>
+                        <exclude>**/dto/**/*Result.class</exclude>
+
+                        <!-- 常量和枚举 -->
+                        <exclude>**/enums/**/*.class</exclude>
+                        <exclude>**/constants/**/*.class</exclude>
+
+                        <!-- 无Lombok，但保留兼容性 -->
+                        <exclude>**/*Builder.class</exclude>
+                        <exclude>**/*$Builder.class</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 

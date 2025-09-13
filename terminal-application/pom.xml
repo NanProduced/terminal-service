@@ -140,31 +140,31 @@
           <!-- 排除非业务逻辑代码，提升真实覆盖率准确性 -->
           <excludes>
             <!-- DTO数据传输对象 - 无业务逻辑 -->
-            <exclude>**/dto/request/**/*</exclude>
-            <exclude>**/dto/result/**/*</exclude>
-            <exclude>**/dto/record/**/*</exclude>
-            <exclude>**/dto/cache/**/*</exclude>
-            <exclude>**/dto/websocket/**/*</exclude>
-            
+            <exclude>**/dto/request/**/*.class</exclude>
+            <exclude>**/dto/result/**/*.class</exclude>
+            <exclude>**/dto/record/**/*.class</exclude>
+            <exclude>**/dto/cache/**/*.class</exclude>
+            <exclude>**/dto/websocket/**/*.class</exclude>
+
             <!-- 端口接口定义 - 无实现逻辑 -->
-            <exclude>**/port/inbound/**/*UseCase</exclude>
-            <exclude>**/port/outbound/**/*Port</exclude>
-            
+            <exclude>**/port/inbound/**/*UseCase.class</exclude>
+            <exclude>**/port/outbound/**/*Port.class</exclude>
+
             <!-- 配置属性类 - Spring配置绑定 -->
-            <exclude>**/properties/**/*</exclude>
-            
+            <exclude>**/properties/**/*.class</exclude>
+
             <!-- 枚举类 - 常量定义 -->
-            <exclude>**/enums/**/*</exclude>
-            
+            <exclude>**/enums/**/*.class</exclude>
+
             <!-- 纯数据模型 - 贫血模型，仅数据容器 -->
-            <exclude>**/domain/report/**/*</exclude>
-            <exclude>**/domain/sensor/**/*</exclude>
-            <exclude>**/domain/command/**/*</exclude>
-            <exclude>**/domain/status/**/*</exclude>
+            <exclude>**/domain/report/**/*.class</exclude>
+            <exclude>**/domain/sensor/**/*.class</exclude>
+            <exclude>**/domain/command/**/*.class</exclude>
+            <exclude>**/domain/status/**/*.class</exclude>
 
             <!-- Lombok生成代码 -->
-            <exclude>**/*Builder</exclude>
-            <exclude>**/*$Builder</exclude>
+            <exclude>**/*Builder.class</exclude>
+            <exclude>**/*$Builder.class</exclude>
           </excludes>
         </configuration>
       </plugin>
