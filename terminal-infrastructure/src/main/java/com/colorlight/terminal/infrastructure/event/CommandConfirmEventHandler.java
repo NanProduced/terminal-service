@@ -1,16 +1,9 @@
 package com.colorlight.terminal.infrastructure.event;
 
-import com.colorlight.ccloud.command.dto.CommandFinishDto;
-import com.colorlight.ccloud.command.enums.CommandStatusEnum;
-import com.colorlight.ccloud.command.interfaces.CommandFinishFacade;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
-import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
-import com.colorlight.terminal.commons.exception.technical.TechnicalException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.dubbo.config.annotation.DubboReference;
-import org.apache.dubbo.rpc.RpcException;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;

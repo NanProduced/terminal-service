@@ -1,17 +1,15 @@
 package com.colorlight.terminal.infrastructure.rpc.adapter;
 
 import com.colorlight.ccloud.command.dto.CommandFinishDto;
-import com.colorlight.ccloud.command.dto.entity.DeviceOnlineReportRequest;
-import com.colorlight.ccloud.command.enums.CommandStatusEnum;
+
 import com.colorlight.ccloud.command.interfaces.CommandFinishFacade;
 import com.colorlight.ccloud.command.interfaces.DeviceReportRpcService;
+import com.colorlight.ccloud.common.command.enums.CommandStatusEnum;
 import com.colorlight.ccloud.schedule.dto.Schedule;
 import com.colorlight.ccloud.schedule.interfaces.TerminalScheduleRpcService;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
-import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
-import com.colorlight.terminal.commons.exception.technical.TechnicalException;
 import com.colorlight.terminal.commons.utils.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +18,6 @@ import org.apache.dubbo.rpc.RpcException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
