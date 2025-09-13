@@ -149,14 +149,7 @@
       <optional>true</optional>
     </dependency>
     
-    <!-- 测试依赖 -->
-    <dependency>
-      <groupId>com.colorlight.terminal</groupId>
-      <artifactId>terminal-commons</artifactId>
-      <version>${project.version}</version>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
+    <!-- 测试依赖通过Profile控制，CI环境跳过 -->
     
     <dependency>
       <groupId>org.junit.jupiter</groupId>
@@ -318,4 +311,26 @@
       </plugin>
     </plugins>
   </build>
+
+  <!-- 开发和测试环境的Profile配置 -->
+  <profiles>
+    <!-- 本地开发和测试环境，需要test-jar -->
+    <profile>
+      <id>local-test</id>
+      <activation>
+        <property>
+          <name>!maven.test.skip</name>
+        </property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>com.colorlight.terminal</groupId>
+          <artifactId>terminal-commons</artifactId>
+          <version>${project.version}</version>
+          <type>test-jar</type>
+          <scope>test</scope>
+        </dependency>
+      </dependencies>
+    </profile>
+  </profiles>
 </project>
