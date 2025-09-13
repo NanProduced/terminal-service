@@ -10,6 +10,7 @@ import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 import com.colorlight.terminal.application.domain.status.ReportSource;
 import org.apache.dubbo.rpc.RpcException;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -449,10 +450,11 @@ class DubboMainServiceRpcAdapterTest {
             when(terminalScheduleRpcService.getScheduleByLedId(TEST_DEVICE_ID))
                     .thenThrow(new RpcException("排程服务不可用"));
 
-            // When & Then - 验证异常被抛出
-            org.junit.jupiter.api.Assertions.assertThrows(RpcException.class, () -> {
-                rpcAdapter.getScheduleByDeviceId(TEST_DEVICE_ID);
-            });
+            // When 
+            String result = rpcAdapter.getScheduleByDeviceId(TEST_DEVICE_ID);
+
+            // Then - 应该返回null而不是抛出异常
+            assertThat(result).isNull();
         }
 
         @Test
