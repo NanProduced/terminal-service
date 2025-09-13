@@ -179,7 +179,7 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
      * 使用一致性哈希确保分布均匀
      */
     private ConnectionShard getShardForDevice(Long deviceId) {
-        int shardIndex = Math.abs(deviceId.hashCode()) % SHARD_COUNT;
+        int shardIndex = (deviceId.hashCode() & Integer.MAX_VALUE) % SHARD_COUNT;
         return shards[shardIndex];
     }
     
@@ -352,10 +352,15 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
          * 具体实现依赖于会话类型
          */
         private boolean isSessionValid(TerminalConnection connection) {
-            if (connection.getSession() instanceof TerminalWebsocketSession session) {
-                return session.isConnected();
+            try {
+                if (connection.getSession() instanceof TerminalWebsocketSession session) {
+                    return session.isConnected();
+                }
+                return false;
+            } catch (Exception e) {
+                log.debug("检查会话有效性时发生异常: {}", e.getMessage());
+                return false;
             }
-            return false;
         }
         
         public void shutdown() {

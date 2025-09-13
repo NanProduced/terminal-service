@@ -1,10 +1,13 @@
 package com.colorlight.terminal.application.handler;
 
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
+import com.colorlight.terminal.commons.exception.technical.TechnicalException;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.Field;
 import java.util.Objects;
+
+import static com.colorlight.terminal.commons.exception.technical.TechErrorCode.INSTANTIATION_IS_PROHIBITED;
 
 /**
  * 给终端上报数据(led_status)填充reportTime的工具类
@@ -14,6 +17,13 @@ import java.util.Objects;
  */
 @Slf4j
 public class ReportTimePopulator {
+    
+    /**
+     * 私有构造函数，防止实例化
+     */
+    private ReportTimePopulator() {
+        throw new TechnicalException(INSTANTIATION_IS_PROHIBITED);
+    }
 
     /**
      * 自动填充TerminalStatusReport中所有非null子对象的reportTime字段
@@ -26,7 +36,7 @@ public class ReportTimePopulator {
         Field[] fields = TerminalStatusReport.class.getDeclaredFields();
         for (Field field : fields) {
             try {
-                field.setAccessible(true);
+                field.trySetAccessible();
                 Object fieldValue = field.get(report);
                 // 只处理非null子对象
                 if (fieldValue != null) {
@@ -44,7 +54,7 @@ public class ReportTimePopulator {
     private static void fillReportTimeIfExist(Object obj, long timestamp) {
         try {
             Field reportTimeField = obj.getClass().getDeclaredField("reportTime");
-            reportTimeField.setAccessible(true);
+            reportTimeField.trySetAccessible();
             reportTimeField.setLong(obj, timestamp);
         } catch (NoSuchFieldException e) {
             // ignore

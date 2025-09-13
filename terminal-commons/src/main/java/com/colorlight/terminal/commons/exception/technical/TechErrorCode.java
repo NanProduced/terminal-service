@@ -42,7 +42,9 @@ public enum TechErrorCode implements ErrorCode {
 
     MINIO_SECURITY_ERROR("TM0111", "MinIO签名异常", ErrorLevel.CRITICAL, HttpStatusCode.INTERNAL_SERVER_ERROR),
 
-    IO_EXCEPTION("TM0112", "I/O流处理异常", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR);
+    IO_EXCEPTION("TM0112", "I/O流处理异常", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR),
+
+    NETTY_START_ERROR("TM0113", "Netty服务器启动错误", ErrorLevel.FATAL, HttpStatusCode.INTERNAL_SERVER_ERROR);
     /**
      * 错误码
      */

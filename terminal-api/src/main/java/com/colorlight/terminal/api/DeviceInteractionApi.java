@@ -5,9 +5,9 @@ import com.colorlight.terminal.dto.command.DeviceApiCommandConfirm;
 import com.colorlight.terminal.dto.log.DeviceApiTerminalLog;
 import com.colorlight.terminal.dto.media.DeviceApiMedia;
 import com.colorlight.terminal.dto.program.DeviceApiProgram;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 

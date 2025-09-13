@@ -1,9 +1,13 @@
 package com.colorlight.terminal.infrastructure.cleanup.cleaner;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.colorlight.terminal.commons.exception.CommonErrorCode;
+import com.colorlight.terminal.commons.exception.business.BusinessException;
 import com.colorlight.terminal.infrastructure.persistence.mysql.entity.DeviceScreenshotRecordDO;
+import com.colorlight.terminal.infrastructure.persistence.mysql.entity.DeviceSwitchOnRecordDO;
 import com.colorlight.terminal.infrastructure.persistence.mysql.entity.TerminalAccountDO;
 import com.colorlight.terminal.infrastructure.persistence.mysql.mapper.DeviceScreenshotRecordMapper;
+import com.colorlight.terminal.infrastructure.persistence.mysql.mapper.DeviceSwitchOnRecordMapper;
 import com.colorlight.terminal.infrastructure.persistence.mysql.mapper.TerminalAccountMapper;
 import com.colorlight.terminal.infrastructure.storage.minio.service.MinioScreenshotStorageService;
 import com.colorlight.terminal.rpc.dto.enums.DataType;
@@ -27,6 +31,7 @@ public class MysqlDataStoreCleaner implements DataStoreCleaner {
     
     private final DeviceScreenshotRecordMapper screenshotRecordMapper;
     private final TerminalAccountMapper terminalAccountMapper;
+    private final DeviceSwitchOnRecordMapper deviceSwitchOnRecordMapper;
     private final MinioScreenshotStorageService minioService;
     
     @Override
@@ -46,7 +51,7 @@ public class MysqlDataStoreCleaner implements DataStoreCleaner {
             totalDeleted += cleanupScreenshotRecords(deviceId);
         }
         
-        // 清理开机记录 (如果有对应的Mapper)
+        // 清理开机记录
         if (dataTypes.contains(DataType.SWITCH_RECORD)) {
             totalDeleted += cleanupSwitchRecords(deviceId);
         }
@@ -78,8 +83,8 @@ public class MysqlDataStoreCleaner implements DataStoreCleaner {
             
             // 删除MinIO中的文件
             int fileDeletedCount = 0;
-            for (DeviceScreenshotRecordDO record : records) {
-                String objectKey = record.getObjectKey();
+            for (DeviceScreenshotRecordDO screenshotRecordDO : records) {
+                String objectKey = screenshotRecordDO.getObjectKey();
                 if (objectKey != null && !objectKey.trim().isEmpty()) {
                     try {
                         minioService.deleteObject(objectKey);
@@ -105,7 +110,7 @@ public class MysqlDataStoreCleaner implements DataStoreCleaner {
             
         } catch (Exception e) {
             log.error("设备 {} 截图记录清理失败", deviceId, e);
-            throw new RuntimeException("截图记录清理失败", e);
+            throw new BusinessException(CommonErrorCode.SYSTEM_ERROR, "截图记录清理失败", e);
         }
     }
     
@@ -133,23 +138,23 @@ public class MysqlDataStoreCleaner implements DataStoreCleaner {
             
         } catch (Exception e) {
             log.error("设备 {} 账号信息清理失败", deviceId, e);
-            throw new RuntimeException("设备账号信息清理失败", e);
+            throw new BusinessException(CommonErrorCode.SYSTEM_ERROR, "设备账号信息清理失败", e);
         }
     }
     
     /**
      * 清理开机记录
-     * 注意: 这里假设有DeviceSwitchOnRecordMapper，需要根据实际情况调整
      */
     private int cleanupSwitchRecords(Long deviceId) {
         try {
-            // TODO: 根据实际的DeviceSwitchOnRecordMapper实现
+            int deleteNum = deviceSwitchOnRecordMapper.delete(new LambdaQueryWrapper<DeviceSwitchOnRecordDO>()
+                    .eq(DeviceSwitchOnRecordDO::getDeviceId, deviceId));
             // 目前先返回0，实际项目中需要实现对应的清理逻辑
-            log.debug("设备 {} 开机记录清理 (待实现)", deviceId);
+            log.debug("设备 {} 开机记录清理， 删除记录{}条", deviceId, deleteNum);
             return 0;
         } catch (Exception e) {
             log.error("设备 {} 开机记录清理失败", deviceId, e);
-            throw new RuntimeException("开机记录清理失败", e);
+            throw new BusinessException(CommonErrorCode.SYSTEM_ERROR, "开机记录清理失败", e);
         }
     }
 }

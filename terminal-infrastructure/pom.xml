@@ -153,6 +153,79 @@
       <artifactId>lombok</artifactId>
       <optional>true</optional>
     </dependency>
+    
+    <!-- 测试依赖 -->
+    <dependency>
+      <groupId>com.colorlight.terminal</groupId>
+      <artifactId>terminal-commons</artifactId>
+      <version>${project.version}</version>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <!-- TestContainers 集成测试 -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>mysql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>mongodb</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <!-- Redis 测试支持 -->
+    <dependency>
+      <groupId>it.ozimov</groupId>
+      <artifactId>embedded-redis</artifactId>
+      <version>0.7.3</version>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
   </dependencies>
 
   <build>
@@ -179,6 +252,73 @@
               <version>${lombok-mapstruct-binding.version}</version>
             </path>
           </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+      
+      <!-- JaCoCo 代码覆盖率插件 - Infrastructure层专用配置 -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <configuration>
+          <!-- 排除Infrastructure层非业务逻辑代码 -->
+          <excludes>
+            <!-- 基础设施配置类 -->
+            <exclude>**/config/**/*Config.class</exclude>
+            <exclude>**/config/properties/**/*Properties.class</exclude>
+            <exclude>**/config/properties/**/*Properties$*.class</exclude>
+            <exclude>**/config/adapter/**/*Adapter.class</exclude>
+            
+            <!-- 数据对象和转换器 -->
+            <exclude>**/entity/**/*DO.class</exclude>
+            <exclude>**/entity/**/*Entity.class</exclude>
+            <exclude>**/document/**/*Document.class</exclude>
+            <exclude>**/converter/**/*Converter.class</exclude>
+            <exclude>**/converter/**/*Impl.class</exclude>
+            <exclude>**/dto/**/*DTO.class</exclude>
+            <exclude>**/dto/**/*Request.class</exclude>
+            <exclude>**/dto/**/*Response.class</exclude>
+            <exclude>**/dto/**/*Result.class</exclude>
+
+            <!-- WebSocket处理器DTO -->
+            <exclude>**/websocket/processor/v11/dto/**/*.class</exclude>
+            
+            <!-- MyBatis和MongoDB接口 -->
+            <exclude>**/mapper/**/*Mapper.class</exclude>
+            <exclude>**/constant/**/*Constant.class</exclude>
+
+            <!-- MySQL持久化配置 -->
+            <exclude>**/persistence/mysql/config/**/*.class</exclude>
+
+            <!-- Netty配置和初始化器 -->
+            <exclude>**/websocket/config/**/*Properties.class</exclude>
+            <exclude>**/websocket/config/**/*Properties$*.class</exclude>
+            <exclude>**/websocket/config/**/*Config.class</exclude>
+            <exclude>**/websocket/server/WebSocketChannelInitializer.class</exclude>
+            <exclude>**/websocket/server/**/*Server.class</exclude>
+
+            <!-- MinIO存储配置 -->
+            <exclude>**/storage/minio/config/**/*.class</exclude>
+
+            <!-- 生成器和工具类常量 -->
+            <exclude>**/generator/**/*Generator.class</exclude>
+
+            <!-- Spring缓存配置类 -->
+            <exclude>**/cache/local/config/**/*.class</exclude>
+            <exclude>**/cache/redis/config/**/*.class</exclude>
+
+            <!-- 本地缓存服务类 -->
+            <exclude>**/cache/local/service/**/*.class</exclude>
+
+            <!-- 缓存清理服务(启动时自动执行) -->
+            <exclude>**/cache/cleanup/**/*.class</exclude>
+
+            <!-- Spring Security配置相关 -->
+            <exclude>**/security/authentication/TerminalPrincipal.class</exclude>
+            
+            <!-- Lombok生成代码 -->
+            <exclude>**/*Builder.class</exclude>
+            <exclude>**/*$Builder.class</exclude>
+          </excludes>
         </configuration>
       </plugin>
     </plugins>

@@ -1,22 +1,16 @@
 package com.colorlight.terminal.infrastructure.event;
 
-import com.colorlight.ccloud.command.dto.entity.DeviceOnlineReportRequest;
-import com.colorlight.ccloud.command.interfaces.DeviceReportRpcService;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 import com.colorlight.terminal.application.dto.record.TerminalOnlineTimeRecord;
 import com.colorlight.terminal.application.dto.record.TerminalReconnectRecord;
+import com.colorlight.terminal.application.port.outbound.repository.TerminalAccountRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalOnlineTimeRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalReconnectRepository;
 import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
 import com.colorlight.terminal.application.port.outbound.status.AsyncTerminalLoginUpdatePort;
-import com.colorlight.terminal.application.port.outbound.repository.TerminalAccountRepository;
-import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
-import com.colorlight.terminal.commons.exception.technical.TechnicalException;
 import com.colorlight.terminal.commons.utils.TimeUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.dubbo.config.annotation.DubboReference;
-import org.apache.dubbo.rpc.RpcException;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;

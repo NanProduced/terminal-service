@@ -1,13 +1,19 @@
 package com.colorlight.terminal.application.domain.connection;
 
 import com.colorlight.terminal.commons.utils.JsonUtils;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
 public class TerminalConnection {
 
     /**
@@ -135,16 +141,6 @@ public class TerminalConnection {
      */
     public WebSocketSession getWebSocketSession() {
         return session;
-    }
-
-    /**
-     * 检查连接是否过期 - 基于最后活跃时间（统一WebSocket通信时间）
-     *
-     * @param expireThreshold 过期时间阈值
-     * @return 是否过期
-     */
-    public boolean isExpired(LocalDateTime expireThreshold) {
-        return lastActiveTime != null && lastActiveTime.isBefore(expireThreshold);
     }
 
     /**

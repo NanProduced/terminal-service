@@ -4,8 +4,8 @@ import com.colorlight.terminal.application.domain.report.MediaPlayRecordReport;
 import com.colorlight.terminal.infrastructure.persistence.mongodb.document.MediaPlayRecordDocument;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
-import org.mapstruct.NullValueCheckStrategy;
 import org.mapstruct.Named;
+import org.mapstruct.NullValueCheckStrategy;
 
 import java.util.List;
 

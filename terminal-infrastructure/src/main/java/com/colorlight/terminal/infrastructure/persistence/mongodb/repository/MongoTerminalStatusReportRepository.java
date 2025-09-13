@@ -5,6 +5,7 @@ import com.colorlight.terminal.application.port.outbound.repository.TerminalStat
 import com.colorlight.terminal.commons.utils.BeanUtils;
 import com.colorlight.terminal.infrastructure.persistence.mongodb.document.TerminalStatusReportDocument;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -19,6 +20,7 @@ import java.util.Optional;
  *
  * @author Nan
  */
+@Slf4j
 @Repository
 @RequiredArgsConstructor
 public class MongoTerminalStatusReportRepository implements TerminalStatusReportRepository {
@@ -52,7 +54,12 @@ public class MongoTerminalStatusReportRepository implements TerminalStatusReport
     @Override
     public Optional<TerminalStatusReport> getReportData(Long deviceId) {
         Query query = Query.query(Criteria.where("deviceId").is(deviceId));
-        return Optional.ofNullable(mongoTemplate.findOne(query, TerminalStatusReportDocument.class))
-                .map(TerminalStatusReportDocument::getTerminalStatusReport);
+        try {
+            return Optional.ofNullable(mongoTemplate.findOne(query, TerminalStatusReportDocument.class))
+                    .map(TerminalStatusReportDocument::getTerminalStatusReport);
+        } catch (Exception e) {
+            log.error("ReportRepository - 获取终端上报数据失败: deviceId={}", deviceId, e);
+            return Optional.empty();
+        }
     }
 }

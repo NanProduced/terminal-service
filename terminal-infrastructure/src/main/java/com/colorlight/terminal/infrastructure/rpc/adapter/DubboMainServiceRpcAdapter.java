@@ -1,10 +1,9 @@
 package com.colorlight.terminal.infrastructure.rpc.adapter;
 
 import com.colorlight.ccloud.command.dto.CommandFinishDto;
-
+import com.colorlight.ccloud.command.enums.CommandStatusEnum;
 import com.colorlight.ccloud.command.interfaces.CommandFinishFacade;
 import com.colorlight.ccloud.command.interfaces.DeviceReportRpcService;
-import com.colorlight.ccloud.common.command.enums.CommandStatusEnum;
 import com.colorlight.ccloud.schedule.dto.Schedule;
 import com.colorlight.ccloud.schedule.interfaces.TerminalScheduleRpcService;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
@@ -74,6 +73,29 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
     }
 
     /**
+     * 通知主服务指令过期
+     * @param deviceId 设备Id
+     * @param commandId 指令Id
+     */
+    @Override
+    public void notifyCommandExpiration(Long deviceId, Integer commandId) {
+        CommandFinishDto dto = new CommandFinishDto();
+        dto.setDeviceId(deviceId);
+        dto.setCommandId(commandId.toString());
+        dto.setStatus(CommandStatusEnum.TIMEOUT);
+        try {
+            commandFinishFacade.commandFinish(dto);
+            log.debug("RpcAdapter - 指令过期通知RPC调用成功: dto={}", dto);
+
+        } catch (RpcException e) {
+            log.warn("RpcAdapter - 指令过期通知RPC调用失败，已记录: dto={}, error={}",
+                    dto, e.getMessage());
+            // RPC失败仅记录日志，不中断业务流程
+        }
+
+    }
+
+    /**
      * 通知主服务设备最后上报时间
      * @param event 设备状态事件
      */
@@ -131,14 +153,20 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
     @Override
     public String getScheduleByDeviceId(Long deviceId) {
         long startTime = System.currentTimeMillis();
-        final Schedule schedule = terminalScheduleRpcService.getScheduleByLedId(deviceId);
-        long duration = System.currentTimeMillis() - startTime;
-        log.debug("RpcAdapter - 获取设备排程成功: 耗时={} ms, {}", duration, schedule);
-        if (Objects.isNull(schedule)) {
+        try {
+            final Schedule schedule = terminalScheduleRpcService.getScheduleByLedId(deviceId);
+            long duration = System.currentTimeMillis() - startTime;
+            log.debug("RpcAdapter - 获取设备排程成功: 耗时={} ms, {}", duration, schedule);
+            if (Objects.isNull(schedule)) {
+                return null;
+            } else {
+                return JsonUtils.toJson(schedule);
+            }
+        } catch (Exception e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.warn("RpcAdapter - 获取设备排程失败，已记录: error={}, duration={}ms",
+                    e.getMessage(), duration);
             return null;
-        }
-        else {
-            return JsonUtils.toJson(schedule);
         }
     }
 }

@@ -1,6 +1,5 @@
 package com.colorlight.terminal.infrastructure.config.properties;
 
-import com.colorlight.terminal.application.properties.DeviceProperties;
 import com.colorlight.terminal.rpc.dto.enums.CleanupMode;
 import com.colorlight.terminal.rpc.dto.enums.DataType;
 import lombok.Data;

@@ -96,6 +96,60 @@
       <scope>runtime</scope>
       <optional>true</optional>
     </dependency>
+    
+    <!-- 测试依赖 -->
+    <dependency>
+      <groupId>com.colorlight.terminal</groupId>
+      <artifactId>terminal-commons</artifactId>
+      <version>${project.version}</version>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <!-- Web测试支持 -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <!-- TestContainers 集成测试 -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
   </dependencies>
 
   <build>
@@ -159,6 +213,43 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+
+      <!-- JaCoCo代码覆盖率插件 -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <configuration>
+          <!-- 排除Boot层非业务逻辑代码 -->
+          <excludes>
+            <!-- 启动类 - 应用程序入口点 -->
+            <exclude>**/TerminalApplication.class</exclude>
+
+            <!-- 配置类 - Spring配置和基础设施 -->
+            <exclude>**/config/**/*Config.class</exclude>
+            <exclude>**/config/**/*Configuration.class</exclude>
+            <exclude>**/config/properties/**/*Properties.class</exclude>
+            <exclude>**/config/threadpool/**/*.class</exclude>
+            <exclude>**/config/security/**/*.class</exclude>
+            <exclude>**/config/web/**/*.class</exclude>
+            <exclude>**/config/global/**/*.class</exclude>
+
+            <!-- 过滤器和拦截器 - 框架层面代码 -->
+            <exclude>**/filter/**/*Filter.class</exclude>
+            <exclude>**/interceptor/**/*Interceptor.class</exclude>
+
+            <!-- 数据转换器 - MapStruct生成的代码 -->
+            <exclude>**/converter/**/*Converter.class</exclude>
+            <exclude>**/converter/**/*Impl.class</exclude>
+
+            <!-- 控制器基础结构代码（保留业务逻辑部分） -->
+            <exclude>**/controller/**/*Controller$*.class</exclude>
+
+            <!-- Lombok生成代码 -->
+            <exclude>**/*Builder.class</exclude>
+            <exclude>**/*$Builder.class</exclude>
+          </excludes>
+        </configuration>
       </plugin>
     </plugins>
   </build>

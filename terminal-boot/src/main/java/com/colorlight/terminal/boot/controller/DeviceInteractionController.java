@@ -65,7 +65,7 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     public ResponseEntity<Void> reportTerminalStatus(String report) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceReport - 收到上报消息: deviceId={}, report={}", principal.getDeviceId(), report);
-        terminalReportUseCase.saveLedStatus(principal.getDeviceId(), report);
+        terminalReportUseCase.asyncSaveStatusReport(principal.getDeviceId(), report);
         return ResponseEntity.status(HttpStatus.OK).build();
     }
 

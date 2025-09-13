@@ -1,6 +1,5 @@
 package com.colorlight.terminal.infrastructure.persistence.mysql.repository;
 
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
 import com.colorlight.terminal.commons.exception.technical.TechnicalException;

@@ -8,7 +8,6 @@ import lombok.NoArgsConstructor;
 
 import java.io.Serial;
 import java.io.Serializable;
-import java.time.Instant;
 
 /**
  * 终端认证缓存DTO

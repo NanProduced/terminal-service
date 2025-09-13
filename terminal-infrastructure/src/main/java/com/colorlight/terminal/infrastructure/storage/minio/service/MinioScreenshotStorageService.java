@@ -8,7 +8,7 @@ import com.colorlight.terminal.infrastructure.storage.minio.config.MinioProperti
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
-import io.minio.errors.*;
+import io.minio.errors.MinioException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -74,13 +74,7 @@ public class MinioScreenshotStorageService implements ScreenshotStoragePort {
             // 保存上传记录
             screenshotRecordRepository.saveScreenshotRecord(deviceId, uploadTime, objectName, actualSize);
             
-        } catch (MinioException e) {
-            long duration = System.currentTimeMillis() - startTime;
-            log.error("Screenshot - MinIO上传失败: deviceId={}, object={}, duration={}ms, error={}", 
-                    deviceId, objectName, duration, e.getMessage(), e);
-            throw new TechnicalException(TechErrorCode.MINIO_ERROR, "截图上传失败: " + e.getMessage());
-            
-        } catch (IOException e) {
+        }  catch (IOException e) {
             long duration = System.currentTimeMillis() - startTime;
             log.error("Screenshot - IO异常: deviceId={}, object={}, duration={}ms", 
                     deviceId, objectName, duration, e);
@@ -89,6 +83,12 @@ public class MinioScreenshotStorageService implements ScreenshotStoragePort {
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             log.error("Screenshot - 签名异常: deviceId={}, object={}", deviceId, objectName, e);
             throw new TechnicalException(TechErrorCode.MINIO_SECURITY_ERROR, "MinIO签名异常: " + e.getMessage());
+        } catch (MinioException | RuntimeException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.error("Screenshot - MinIO上传失败: deviceId={}, object={}, duration={}ms, error={}",
+                    deviceId, objectName, duration, e.getMessage(), e);
+            throw new TechnicalException(TechErrorCode.MINIO_ERROR, "截图上传失败: " + e.getMessage());
+
         }
     }
 
@@ -109,15 +109,15 @@ public class MinioScreenshotStorageService implements ScreenshotStoragePort {
             
             log.debug("MinIO - 对象删除成功: objectKey={}", objectKey);
             
-        } catch (MinioException e) {
-            log.error("MinIO - 删除对象失败: objectKey={}, error={}", objectKey, e.getMessage(), e);
-            throw new TechnicalException(TechErrorCode.MINIO_ERROR, "MinIO删除失败: " + e.getMessage());
-        } catch (IOException e) {
+        }  catch (IOException e) {
             log.error("MinIO - IO异常: objectKey={}", objectKey, e);
             throw new TechnicalException(TechErrorCode.IO_EXCEPTION, "MinIO删除IO异常: " + e.getMessage());
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             log.error("MinIO - 签名异常: objectKey={}", objectKey, e);
             throw new TechnicalException(TechErrorCode.MINIO_SECURITY_ERROR, "MinIO删除签名异常: " + e.getMessage());
+        } catch (MinioException | RuntimeException e) {
+            log.error("MinIO - 删除对象失败: objectKey={}, error={}", objectKey, e.getMessage(), e);
+            throw new TechnicalException(TechErrorCode.MINIO_ERROR, "MinIO删除失败: " + e.getMessage());
         }
     }
 

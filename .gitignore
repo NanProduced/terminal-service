@@ -11,6 +11,20 @@
 # Claude Code配置
 .claude/
 
+CLAUDE.md
+
+# Kiro配置
+.kiro/
+
+# 本地文档
+.doc/
+
+# rpc-api单独部署pom
+terminal-rpc-api/.flattened-pom.xml
+
+# Serena配置
+.serena/
+
 # Maven构建
 target/
 dependency-reduced-pom.xml

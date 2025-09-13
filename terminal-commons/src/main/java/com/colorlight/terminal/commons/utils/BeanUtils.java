@@ -2,12 +2,12 @@ package com.colorlight.terminal.commons.utils;
 
 import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
 import com.colorlight.terminal.commons.exception.technical.TechnicalException;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.BeanWrapperImpl;
 
 import java.beans.PropertyDescriptor;
 import java.util.HashSet;
 import java.util.Set;
-import org.springframework.beans.BeanWrapper;
-import org.springframework.beans.BeanWrapperImpl;
 
 /**
  * Bean工具类，封装了Spring的BeanUtils，提供了增强的属性操作功能。

@@ -4,7 +4,6 @@ import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
 import com.colorlight.terminal.application.dto.record.ScreenshotUploadRecord;
 
-import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -20,14 +19,14 @@ public interface TerminalReportUseCase {
      * @param deviceId 设备Id
      * @param reportStr 上报信息
      */
-    void saveLedStatus(Long deviceId, String reportStr);
+    void asyncSaveStatusReport(Long deviceId, String reportStr);
 
     /**
      * 异步保存led_status上报数据
      * @param deviceId 设备Id
      * @param report 上报信息
      */
-    void asyncSaveTerminalStatusReport(Long deviceId, TerminalStatusReport report);
+    void saveLedStatus(Long deviceId, TerminalStatusReport report);
 
     /**
      * 异步保存终端日志

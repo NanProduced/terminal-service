@@ -11,8 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.CompletableFuture;
-
 /**
  * 设备数据清理RPC服务实现
  * Infrastructure层实现，直接使用DeviceDataCleanupService
@@ -39,7 +37,7 @@ public class DeviceDataCleanupRpcServiceImpl implements DeviceDataCleanupRpcServ
             }
             
             // 异步执行清理任务
-            CompletableFuture<Void> future = deviceDataCleanupService.cleanupDeviceDataAsync(
+            deviceDataCleanupService.cleanupDeviceDataAsync(
                     request.getDeviceId(), 
                     request.getConfig()
             );
@@ -79,7 +77,7 @@ public class DeviceDataCleanupRpcServiceImpl implements DeviceDataCleanupRpcServ
             }
             
             // 异步执行批量清理任务
-            CompletableFuture<Void> future = deviceDataCleanupService.batchCleanupDeviceDataAsync(
+            deviceDataCleanupService.batchCleanupDeviceDataAsync(
                     request.getDeviceIds(), 
                     request.getConfig()
             );

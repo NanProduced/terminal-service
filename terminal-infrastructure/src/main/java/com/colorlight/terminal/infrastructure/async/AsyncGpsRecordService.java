@@ -5,11 +5,11 @@ import com.colorlight.terminal.application.domain.sensor.GpsReport;
 import com.colorlight.terminal.application.port.outbound.repository.GpsRecordRepository;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceGpsHandlePort;
 import com.colorlight.terminal.infrastructure.config.properties.TerminalStatsConfigProperties;
+import com.colorlight.terminal.infrastructure.event.AsyncBufferFlushEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +31,7 @@ public class AsyncGpsRecordService implements DeviceGpsHandlePort {
 
     private final GpsRecordRepository gpsRepository;
     private final TerminalStatsConfigProperties terminalStatsConfigProperties;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 数据缓存队列
     private BlockingQueue<GpsReport> dataBuffer;
@@ -38,7 +39,7 @@ public class AsyncGpsRecordService implements DeviceGpsHandlePort {
     private final ReentrantLock flushLock = new ReentrantLock();
 
     @PostConstruct
-    private void initializeQueue() {
+    void initializeQueue() {
         int queueSize = terminalStatsConfigProperties.getGps().getMaxQueueSize();
         this.dataBuffer = new LinkedBlockingQueue<>(queueSize);
         log.info("GpsService - GPS缓冲队列初始化完成, 容量: {}", queueSize);
@@ -147,19 +148,13 @@ public class AsyncGpsRecordService implements DeviceGpsHandlePort {
         try {
             if (!dataBuffer.isEmpty()) {
                 log.debug("GpsService - 定时刷新缓冲队列: size={}", dataBuffer.size());
-                flushBufferAsync();
+                // 发布异步刷新事件
+                eventPublisher.publishEvent(AsyncBufferFlushEvent.createGpsRecordFlushEvent(this, dataBuffer.size()));
             }
         } catch (Exception e) {
             log.error("GpsService - 定时刷新失败", e);
         }
     }
 
-    /**
-     * 异步刷新缓冲队列
-     */
-    @Async("statisticsReportExecutor")
-    public void flushBufferAsync() {
-        flushBuffer();
-    }
 
 }

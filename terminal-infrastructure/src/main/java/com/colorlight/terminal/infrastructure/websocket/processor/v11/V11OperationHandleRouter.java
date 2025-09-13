@@ -7,6 +7,7 @@ import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketErrorEn
 import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketMessage;
 import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketMessageTypeEnum;
 import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
+import com.colorlight.terminal.application.port.inbound.program.TerminalProgramUseCase;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.business.BusinessException;
@@ -35,12 +36,13 @@ public class V11OperationHandleRouter {
 
     private final TerminalCommandUseCase terminalCommandUseCase;
     private final TerminalReportUseCase terminalReportUseCase;
+    private final TerminalProgramUseCase terminalProgramUseCase;
     private final V11WebsocketDtoConverter dtoConverter;
 
     /**
      * 空JSON结构体
      */
-    private final static String EMPTY_JSON = "{}";
+    private static final String EMPTY_JSON = "{}";
 
     public void handleMessageByType(MessageProcessingContext context, V11WebsocketMessage message) {
 
@@ -113,10 +115,9 @@ public class V11OperationHandleRouter {
      * @param messageId 消息ID，用于响应时关联请求
      */
     private void handleGetSchedule(MessageProcessingContext context, Integer messageId) {
-        // todo: 待主服务RPC接口完成
-
+        String schedule = terminalProgramUseCase.getSchedule(context.getDeviceId());
         // 下发排程
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.SCHEDULE.getId(), messageId, null));
+        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.SCHEDULE.getId(), messageId, schedule));
         log.info("V11Router -ws- #GET_SCHEDULE#【获取排程】deviceId:{}", context.getDeviceId());
     }
 
@@ -135,8 +136,8 @@ public class V11OperationHandleRouter {
     }
 
     /**
-     * 处理确认指令的命令。
-     *
+     * 处理指令确认消息
+     * 
      * @param context 消息处理上下文，包含设备ID等信息
      * @param message 接收到的WebSocket消息对象
      */
@@ -153,7 +154,7 @@ public class V11OperationHandleRouter {
             // 回复确认指令成功
             context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.CONFIRM_COMMAND.getId(), message.getMessageId()));
         } catch (Exception e) {
-            log.error("V11Router -ws- #CONFIRM_COMMENT#【确认指令失败】deviceId:{}, commandId:{}", context.getDeviceId(), commandId);
+            log.error("V11Router -ws- #CONFIRM_COMMENT#【确认指令失败】deviceId:{}, commandId:{}", context.getDeviceId(), commandId, e);
             context.sendMessage(V11WebsocketMessage.generateErrorContent(V11WebsocketErrorEnum.INVALID_COMMENT_ID, message.getMessageId(), "confirm command failed: " + commandId));
         }
     }
@@ -166,7 +167,7 @@ public class V11OperationHandleRouter {
      */
     private void handleLedStatusReport(MessageProcessingContext context, V11WebsocketMessage message) {
         String dataStr = Objects.isNull(message.getData()) ? EMPTY_JSON : JsonUtils.toJson(message.getData());
-        terminalReportUseCase.saveLedStatus(context.getDeviceId(), dataStr);
+        terminalReportUseCase.asyncSaveStatusReport(context.getDeviceId(), dataStr);
         log.info("V11Router -ws- #STATUS_REPORT#【上报终端状态】deviceId:{}", context.getDeviceId());
         context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.STATUS_REPORT.getId(), message.getMessageId()));
     }

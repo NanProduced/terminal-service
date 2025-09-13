@@ -34,7 +34,7 @@ public class V10ProtocolMessageProcessor implements ProtocolMessageProcessor {
     /**
      * V1.0协议的心跳响应消息
      */
-    private static final String HEARTBEAT_RESPONSE = "heartbeat";
+    private static final String HEARTBEAT_FIELD = "heartbeat";
     
     @Override
     public ProtocolVersion getSupportedVersion() {
@@ -55,7 +55,7 @@ public class V10ProtocolMessageProcessor implements ProtocolMessageProcessor {
             final V10WebsocketMessage message = JsonUtils.fromJson(context.getRawMessage(), V10WebsocketMessage.class);
 
             // 心跳
-            if ("heartbeat".equalsIgnoreCase(message.getContent())) {
+            if (HEARTBEAT_FIELD.equalsIgnoreCase(message.getContent())) {
                 return handleHeartbeat(context);
             }
 
@@ -71,8 +71,7 @@ public class V10ProtocolMessageProcessor implements ProtocolMessageProcessor {
             }
             
         } catch (Exception e) {
-            log.error("V10ProtocolMessageProcessor - V1.0文本消息处理失败: deviceId={}, message={}",
-                     context.getDeviceId(), context.getRawMessage(), e);
+            log.error("V10ProtocolMessageProcessor - V1.0文本消息处理失败", e);
             return TextMessageProcessResult.ofFailure("V1.0消息处理异常: " + e.getMessage());
         }
     }
@@ -82,7 +81,7 @@ public class V10ProtocolMessageProcessor implements ProtocolMessageProcessor {
      * @return 返回成功
      */
     private TextMessageProcessResult handleHeartbeat(MessageProcessingContext context) {
-        if (context.sendMessage(HEARTBEAT_RESPONSE)) {
+        if (context.sendMessage(HEARTBEAT_FIELD)) {
             // 心跳没有业务逻辑
             return TextMessageProcessResult.ofSuccess(true);
         }

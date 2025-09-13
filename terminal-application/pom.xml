@@ -63,6 +63,46 @@
       <artifactId>slf4j-api</artifactId>
       <scope>provided</scope>
     </dependency>
+    
+    <!-- 测试依赖 -->
+    <dependency>
+      <groupId>com.colorlight.terminal</groupId>
+      <artifactId>terminal-commons</artifactId>
+      <version>${project.version}</version>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
   </dependencies>
   
   <build>
@@ -89,6 +129,43 @@
               <version>${lombok-mapstruct-binding.version}</version>
             </path>
           </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+      
+      <!-- JaCoCo 代码覆盖率插件 - 业务逻辑专用配置 -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <configuration>
+          <!-- 排除非业务逻辑代码，提升真实覆盖率准确性 -->
+          <excludes>
+            <!-- DTO数据传输对象 - 无业务逻辑 -->
+            <exclude>**/dto/request/**/*.class</exclude>
+            <exclude>**/dto/result/**/*.class</exclude>
+            <exclude>**/dto/record/**/*.class</exclude>
+            <exclude>**/dto/cache/**/*.class</exclude>
+            <exclude>**/dto/websocket/**/*.class</exclude>
+
+            <!-- 端口接口定义 - 无实现逻辑 -->
+            <exclude>**/port/inbound/**/*UseCase.class</exclude>
+            <exclude>**/port/outbound/**/*Port.class</exclude>
+
+            <!-- 配置属性类 - Spring配置绑定 -->
+            <exclude>**/properties/**/*.class</exclude>
+
+            <!-- 枚举类 - 常量定义 -->
+            <exclude>**/enums/**/*.class</exclude>
+
+            <!-- 纯数据模型 - 贫血模型，仅数据容器 -->
+            <exclude>**/domain/report/**/*.class</exclude>
+            <exclude>**/domain/sensor/**/*.class</exclude>
+            <exclude>**/domain/command/**/*.class</exclude>
+            <exclude>**/domain/status/**/*.class</exclude>
+
+            <!-- Lombok生成代码 -->
+            <exclude>**/*Builder.class</exclude>
+            <exclude>**/*$Builder.class</exclude>
+          </excludes>
         </configuration>
       </plugin>
     </plugins>

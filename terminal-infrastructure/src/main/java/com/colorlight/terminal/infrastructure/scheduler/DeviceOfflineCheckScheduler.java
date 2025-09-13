@@ -203,7 +203,7 @@ public class DeviceOfflineCheckScheduler {
             redisTemplate.delete(RedisKeyConstant.DEVICE_STATUS_INDEX_KEY);
             
             if (!correctOnlineDevices.isEmpty()) {
-                redisTemplate.opsForSet().add(RedisKeyConstant.DEVICE_STATUS_INDEX_KEY, correctOnlineDevices.toArray(new Long[0]));
+                redisTemplate.opsForSet().add(RedisKeyConstant.DEVICE_STATUS_INDEX_KEY, correctOnlineDevices.toArray());
             }
             
             log.debug("DeviceStatusScheduler - 索引重建完成: 设备数={}", correctOnlineDevices.size());

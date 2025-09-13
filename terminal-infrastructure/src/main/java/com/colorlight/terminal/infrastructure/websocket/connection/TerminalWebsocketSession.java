@@ -102,22 +102,5 @@ public class TerminalWebsocketSession implements WebSocketSession {
         }
     }
 
-    
-    // 实现WebSocketSession接口的getter方法 - 简化版本，统计在TerminalConnection层管理
-    
-    @Override
-    public long getSentMessageCount() {
-        return 0; // 统计功能已迁移到TerminalConnection层
-    }
-    
-    @Override
-    public long getReceivedMessageCount() {
-        return 0; // 统计功能已迁移到TerminalConnection层
-    }
-    
-    @Override
-    public long getErrorCount() {
-        return 0; // 统计功能已迁移到TerminalConnection层
-    }
 
 }

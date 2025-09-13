@@ -33,10 +33,11 @@ public interface CommandCachePort {
     /**
      * 根据指令ID获取指令详情
      * 
+     * @param deviceId 设备ID
      * @param commandId 指令ID
      * @return 指令对象
      */
-    Optional<TerminalCommand> getCommand(Integer commandId);
+    Optional<TerminalCommand> getCommand(Long deviceId, Integer commandId);
     
     /**
      * 删除指令 (确认执行后)

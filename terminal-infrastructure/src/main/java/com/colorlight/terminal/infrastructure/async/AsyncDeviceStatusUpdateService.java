@@ -5,12 +5,13 @@ import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort
 import com.colorlight.terminal.application.port.outbound.status.AsyncDeviceStatusUpdatePort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineStatusPort;
 import com.colorlight.terminal.commons.utils.JsonUtils;
+import com.colorlight.terminal.infrastructure.event.AsyncBufferFlushEvent;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -23,8 +24,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 异步设备状态更新服务
- * 
- * 缓冲池机制，提供异步状态更新处理
+ * <p>缓冲池机制，提供异步状态更新处理</p>
  * 
  * @author Nan
  */
@@ -36,6 +36,7 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
     
     private final DeviceOnlineStatusPort deviceOnlineStatusPort;
     private final DeviceConfigPort deviceConfigPort;
+    private final ApplicationEventPublisher eventPublisher;
     
     // 缓冲池 - 使用线程安全的并发队列
     private final ConcurrentLinkedQueue<DeviceOnlineStatus> bufferPool = new ConcurrentLinkedQueue<>();
@@ -50,6 +51,7 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
     private final AtomicLong totalProcessed = new AtomicLong(0);
     private final AtomicLong totalFlushed = new AtomicLong(0);
     private volatile long lastFlushTime = 0;
+    
     
     @PostConstruct
     public void init() {
@@ -147,7 +149,7 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
             // 分批处理缓冲池中的状态更新
             List<DeviceOnlineStatus> batch = new ArrayList<>(batchSize);
             
-            while (!bufferPool.isEmpty() && isRunning.get()) {
+            while (!bufferPool.isEmpty()) {
                 DeviceOnlineStatus status = bufferPool.poll();
                 if (status != null) {
                     batch.add(status);
@@ -206,20 +208,14 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
         try {
             if (!bufferPool.isEmpty()) {
                 log.debug("AsyncDeviceStatusUpdate - 定时刷新缓冲池: bufferSize={}", bufferPool.size());
-                flushBufferAsync();
+                // 发布异步刷新事件
+                eventPublisher.publishEvent(AsyncBufferFlushEvent.createDeviceStatusFlushEvent(this, bufferPool.size()));
             }
         } catch (Exception e) {
             log.error("AsyncDeviceStatusUpdate - 定时刷新失败", e);
         }
     }
     
-    /**
-     * 异步刷新缓冲池
-     */
-    @Async("deviceStatusExecutor")
-    public void flushBufferAsync() {
-        flushBuffer();
-    }
     
     /**
      * 检查是否需要紧急刷新
@@ -241,8 +237,8 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
                         "currentSize={}, maxSize={}, utilizationRate={}%, threshold={}%",
                         currentSize, maxSize, (int)(utilizationRate * 100), (int)(threshold * 100));
                 
-                // 异步执行紧急刷新
-                flushBufferAsync();
+                // 发布紧急刷新事件
+                eventPublisher.publishEvent(AsyncBufferFlushEvent.createDeviceStatusFlushEvent(this, currentSize));
             }
         }
     }
@@ -254,18 +250,18 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
         if (batch.isEmpty()) {
             return;
         }
-        
-        try {
-            // 使用现有的Redis服务批量更新状态
-            for (DeviceOnlineStatus status : batch) {
+
+        for (DeviceOnlineStatus status : batch) {
+            try {
+                // 使用现有的Redis服务批量更新状态
                 deviceOnlineStatusPort.smartDetermined(status);
+
+                log.debug("AsyncDeviceStatusUpdate - 批处理完成: batchSize={}", batch.size());
+
+            } catch (Exception e) {
+                log.error("AsyncDeviceStatusUpdate - 批处理失败: batchSize={}", batch.size(), e);
+                // 这里可以考虑重试机制或者降级处理
             }
-            
-            log.debug("AsyncDeviceStatusUpdate - 批处理完成: batchSize={}", batch.size());
-            
-        } catch (Exception e) {
-            log.error("AsyncDeviceStatusUpdate - 批处理失败: batchSize={}", batch.size(), e);
-            // 这里可以考虑重试机制或者降级处理
         }
     }
     

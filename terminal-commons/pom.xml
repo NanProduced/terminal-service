@@ -52,6 +52,20 @@
       <groupId>org.springframework</groupId>
       <artifactId>spring-beans</artifactId>
     </dependency>
+    
+    <!-- 测试依赖 -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
   </dependencies>
   
   <build>
@@ -68,6 +82,41 @@
               <version>${lombok.version}</version>
             </path>
           </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+      
+      <!-- 生成测试jar包供其他模块使用 -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>test-jar</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- JaCoCo代码覆盖率插件 -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <configuration>
+          <!-- 排除Commons层非业务逻辑代码 -->
+          <excludes>
+            <!-- 异常类 - 数据容器，无业务逻辑 -->
+            <exclude>**/exception/**/*Exception.class</exclude>
+            <exclude>**/exception/enums/**/*.class</exclude>
+
+            <!-- 工具类中的常量和静态方法（保留有业务逻辑的工具方法） -->
+            <exclude>**/utils/**/*Constant.class</exclude>
+            <exclude>**/constants/**/*.class</exclude>
+
+            <!-- Lombok生成代码 -->
+            <exclude>**/*Builder.class</exclude>
+            <exclude>**/*$Builder.class</exclude>
+          </excludes>
         </configuration>
       </plugin>
     </plugins>

@@ -1,6 +1,5 @@
 package com.colorlight.terminal.infrastructure.websocket.config;
 
-import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
