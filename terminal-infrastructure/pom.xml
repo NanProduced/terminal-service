@@ -287,6 +287,16 @@
             <!-- 生成器和工具类常量 -->
             <exclude>**/generator/**/*Generator</exclude>
             
+            <!-- Spring缓存配置类 -->
+            <exclude>**/cache/local/config/**/*</exclude>
+            <exclude>**/cache/redis/config/**/*</exclude>
+            
+            <!-- 缓存清理服务(启动时自动执行) -->
+            <exclude>**/cache/cleanup/**/*</exclude>
+            
+            <!-- Spring Security配置相关 -->
+            <exclude>**/security/authentication/TerminalPrincipal</exclude>
+            
             <!-- Lombok生成代码 -->
             <exclude>**/*Builder</exclude>
             <exclude>**/*$Builder</exclude>
