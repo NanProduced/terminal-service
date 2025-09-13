@@ -3,15 +3,14 @@ package com.colorlight.terminal.infrastructure.event;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceStatusEventPort;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.concurrent.Executor;
 
 /**
  * 设备状态事件发布器
@@ -21,16 +20,22 @@ import java.util.List;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(name = "terminal.device.spring-event.enabled", havingValue = "true", matchIfMissing = true)
 public class DeviceStatusEventPublisher implements DeviceStatusEventPort {
     
     private final ApplicationEventPublisher applicationEventPublisher;
     private final DeviceConfigPort deviceConfigPort;
+    private final Executor deviceEventExecutor;
     
-    // 注入自身以支持@Async方法的调用
-    @Autowired
-    private DeviceStatusEventPublisher self;
+    // 手动构造函数以支持@Qualifier注解
+    public DeviceStatusEventPublisher(
+            ApplicationEventPublisher applicationEventPublisher,
+            DeviceConfigPort deviceConfigPort,
+            @Qualifier("deviceEventExecutor") Executor deviceEventExecutor) {
+        this.applicationEventPublisher = applicationEventPublisher;
+        this.deviceConfigPort = deviceConfigPort;
+        this.deviceEventExecutor = deviceEventExecutor;
+    }
     
     @Override
     public void publishStatusEvent(DeviceStatusEvent event) {
@@ -40,7 +45,7 @@ public class DeviceStatusEventPublisher implements DeviceStatusEventPort {
             
             if (deviceConfigPort.isSpringEventAsync()) {
                 // 异步发布事件
-                self.publishEventAsync(event);
+                publishEventAsync(event);
             } else {
                 // 同步发布事件
                 applicationEventPublisher.publishEvent(event);
@@ -52,9 +57,15 @@ public class DeviceStatusEventPublisher implements DeviceStatusEventPort {
         }
     }
     
-    @Async("deviceEventExecutor")
-    protected void publishEventAsync(DeviceStatusEvent event) {
-        applicationEventPublisher.publishEvent(event);
+    private void publishEventAsync(DeviceStatusEvent event) {
+        deviceEventExecutor.execute(() -> {
+            try {
+                applicationEventPublisher.publishEvent(event);
+            } catch (Exception e) {
+                log.error("DeviceStatusEvent - 异步发布事件失败: deviceId={}, eventType={}", 
+                    event.getDeviceId(), event.getEventType(), e);
+            }
+        });
     }
     
     @Override
@@ -69,7 +80,7 @@ public class DeviceStatusEventPublisher implements DeviceStatusEventPort {
             
             if (deviceConfigPort.isSpringEventAsync()) {
                 // 异步批量发布
-                self.batchPublishEventsAsync(events);
+                batchPublishEventsAsync(events);
             } else {
                 // 同步批量发布
                 for (DeviceStatusEvent event : events) {
@@ -81,10 +92,15 @@ public class DeviceStatusEventPublisher implements DeviceStatusEventPort {
         }
     }
     
-    @Async("deviceEventExecutor")
-    protected void batchPublishEventsAsync(List<DeviceStatusEvent> events) {
-        for (DeviceStatusEvent event : events) {
-            applicationEventPublisher.publishEvent(event);
-        }
+    private void batchPublishEventsAsync(List<DeviceStatusEvent> events) {
+        deviceEventExecutor.execute(() -> {
+            try {
+                for (DeviceStatusEvent event : events) {
+                    applicationEventPublisher.publishEvent(event);
+                }
+            } catch (Exception e) {
+                log.error("DeviceStatusEvent - 异步批量发布事件失败: count={}", events.size(), e);
+            }
+        });
     }
 }
