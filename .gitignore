@@ -16,14 +16,19 @@ CLAUDE.md
 # Kiro配置
 .kiro/
 
+# Codex配置
+.codex/
+
+AGENTS.md
+
+# Serena配置
+.serena/
+
 # 本地文档
 .doc/
 
 # rpc-api单独部署pom
 terminal-rpc-api/.flattened-pom.xml
-
-# Serena配置
-.serena/
 
 # Maven构建
 target/
