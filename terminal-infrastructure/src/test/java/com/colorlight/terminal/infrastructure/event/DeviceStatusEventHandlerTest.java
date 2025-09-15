@@ -19,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.Executor;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -61,8 +62,10 @@ class DeviceStatusEventHandlerTest {
     
     @Mock
     private MainServerRpcPort mainServerRpcPort;
-    
-    @InjectMocks
+
+    @Mock
+    private Executor rpcExecutor;
+
     private DeviceStatusEventHandler deviceStatusEventHandler;
     
     private Long sampleDeviceId;
@@ -74,6 +77,16 @@ class DeviceStatusEventHandlerTest {
         sampleDeviceId = 12345L;
         sampleClientIp = "192.168.1.100";
         currentTime = System.currentTimeMillis();
+
+        // 手动创建DeviceStatusEventHandler实例，因为它现在使用手动构造函数
+        deviceStatusEventHandler = new DeviceStatusEventHandler(
+                terminalAccountRepository,
+                terminalOnlineTimeRepository,
+                terminalReconnectRepository,
+                asyncTerminalLoginUpdatePort,
+                mainServerRpcPort,
+                rpcExecutor
+        );
     }
 
     @Test
@@ -95,7 +108,12 @@ class DeviceStatusEventHandlerTest {
         then(terminalAccountRepository).should().updateLoginTimeImmediate(
                 eq(sampleDeviceId), eq(sampleClientIp), any(LocalDateTime.class));
         
-        // 验证RPC通知被调用
+        // 验证RPC通知被调用（通过Executor异步执行）
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+        then(rpcExecutor).should().execute(runnableCaptor.capture());
+
+        // 手动执行异步任务以验证RPC调用
+        runnableCaptor.getValue().run();
         then(mainServerRpcPort).should().notifyDeviceLastReportTime(goLiveEvent);
     }
 
@@ -114,7 +132,7 @@ class DeviceStatusEventHandlerTest {
 
         // Then: 验证不执行任何操作
         then(terminalAccountRepository).should(never()).updateLoginTimeImmediate(any(), any(), any());
-        then(mainServerRpcPort).should(never()).notifyDeviceLastReportTime(any());
+        then(rpcExecutor).should(never()).execute(any(Runnable.class));
     }
 
     @Test
@@ -150,7 +168,12 @@ class DeviceStatusEventHandlerTest {
         assertEquals(sampleClientIp, savedRecord.getReconnectIp());
         assertEquals("WEBSOCKET", savedRecord.getReconnectSource());
         
-        // 验证RPC通知被调用
+        // 验证RPC通知被调用（通过Executor异步执行）
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+        then(rpcExecutor).should().execute(runnableCaptor.capture());
+
+        // 手动执行异步任务以验证RPC调用
+        runnableCaptor.getValue().run();
         then(mainServerRpcPort).should().notifyDeviceLastReportTime(reconnectEvent);
     }
 
@@ -239,7 +262,12 @@ class DeviceStatusEventHandlerTest {
         then(asyncTerminalLoginUpdatePort).should().submitLoginUpdate(
                 eq(sampleDeviceId), eq(sampleClientIp), any(LocalDateTime.class));
         
-        // 验证RPC通知被调用
+        // 验证RPC通知被调用（通过Executor异步执行）
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+        then(rpcExecutor).should().execute(runnableCaptor.capture());
+
+        // 手动执行异步任务以验证RPC调用
+        runnableCaptor.getValue().run();
         then(mainServerRpcPort).should().notifyDeviceLastReportTime(heartbeatEvent);
     }
 
@@ -317,7 +345,12 @@ class DeviceStatusEventHandlerTest {
 
         // Then: 验证立即更新被调用，异常被捕获
         then(terminalAccountRepository).should().updateLoginTimeImmediate(any(), any(), any());
-        // RPC通知仍然应该被调用
+        // RPC通知仍然应该被调用（通过Executor异步执行）
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+        then(rpcExecutor).should().execute(runnableCaptor.capture());
+
+        // 手动执行异步任务以验证RPC调用
+        runnableCaptor.getValue().run();
         then(mainServerRpcPort).should().notifyDeviceLastReportTime(goLiveEvent);
     }
 
@@ -346,6 +379,84 @@ class DeviceStatusEventHandlerTest {
         then(asyncTerminalLoginUpdatePort).should().submitLoginUpdate(any(), any(), any());
         // 其他操作仍然应该正常执行
         then(terminalReconnectRepository).should().saveReconnectRecord(any());
+        // RPC通知仍然应该被调用（通过Executor异步执行）
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+        then(rpcExecutor).should().execute(runnableCaptor.capture());
+
+        // 手动执行异步任务以验证RPC调用
+        runnableCaptor.getValue().run();
         then(mainServerRpcPort).should().notifyDeviceLastReportTime(reconnectEvent);
+    }
+
+    @Test
+    @DisplayName("处理设备检测离线事件 - 时间顺序异常（负数时长）")
+    void handleDetectedDeviceOffline_InvalidTimeOrder() {
+        // Given: 时间顺序异常的离线事件（开始时间晚于结束时间）
+        Long invalidOnlineStartTime = currentTime;         // 当前时间作为开始时间
+        Long invalidLastReportTime = currentTime - 60000L; // 1分钟前作为结束时间（时间倒退）
+
+        DeviceStatusEvent invalidTimeOrderEvent = DeviceStatusEvent.builder()
+                .deviceId(sampleDeviceId)
+                .eventType(DeviceStatusEvent.EventType.DEVICE_DETECTED_OFFLINE)
+                .eventTime(currentTime)
+                .onlineStartTime(invalidOnlineStartTime)   // 开始时间：当前时间
+                .lastReportTime(invalidLastReportTime)     // 结束时间：1分钟前（异常）
+                .build();
+
+        // When: 处理时间顺序异常的离线事件
+        assertDoesNotThrow(() -> deviceStatusEventHandler.handleDetectedDeviceOffline(invalidTimeOrderEvent));
+
+        // Then: 验证不保存在线时长记录（因为时间顺序异常）
+        then(terminalOnlineTimeRepository).should(never()).saveTerminalOnlineTime(any());
+    }
+
+    @Test
+    @DisplayName("处理设备检测离线事件 - 连接时长过短")
+    void handleDetectedDeviceOffline_TooShortDuration() {
+        // Given: 连接时长过短的离线事件（小于1秒）
+        Long shortOnlineStartTime = currentTime - 500L;  // 500毫秒前上线
+        Long shortLastReportTime = currentTime;          // 当前时间离线
+
+        DeviceStatusEvent shortDurationEvent = DeviceStatusEvent.builder()
+                .deviceId(sampleDeviceId)
+                .eventType(DeviceStatusEvent.EventType.DEVICE_DETECTED_OFFLINE)
+                .eventTime(currentTime)
+                .onlineStartTime(shortOnlineStartTime)     // 500ms前
+                .lastReportTime(shortLastReportTime)       // 当前时间
+                .build();
+
+        // When: 处理连接时长过短的离线事件
+        assertDoesNotThrow(() -> deviceStatusEventHandler.handleDetectedDeviceOffline(shortDurationEvent));
+
+        // Then: 验证不保存在线时长记录（因为连接时长小于1秒）
+        then(terminalOnlineTimeRepository).should(never()).saveTerminalOnlineTime(any());
+    }
+
+    @Test
+    @DisplayName("处理设备检测离线事件 - 边界情况：刚好1秒时长")
+    void handleDetectedDeviceOffline_ExactlyOneSecondDuration() {
+        // Given: 连接时长刚好1秒的离线事件（边界测试）
+        Long boundaryOnlineStartTime = currentTime - 1000L; // 1秒前上线
+        Long boundaryLastReportTime = currentTime;          // 当前时间离线
+
+        DeviceStatusEvent boundaryEvent = DeviceStatusEvent.builder()
+                .deviceId(sampleDeviceId)
+                .eventType(DeviceStatusEvent.EventType.DEVICE_DETECTED_OFFLINE)
+                .eventTime(currentTime)
+                .onlineStartTime(boundaryOnlineStartTime)   // 1000ms前
+                .lastReportTime(boundaryLastReportTime)     // 当前时间
+                .build();
+
+        // When: 处理连接时长刚好1秒的离线事件
+        assertDoesNotThrow(() -> deviceStatusEventHandler.handleDetectedDeviceOffline(boundaryEvent));
+
+        // Then: 验证保存在线时长记录（因为连接时长等于1秒，符合要求）
+        ArgumentCaptor<TerminalOnlineTimeRecord> recordCaptor = ArgumentCaptor.forClass(TerminalOnlineTimeRecord.class);
+        then(terminalOnlineTimeRepository).should().saveTerminalOnlineTime(recordCaptor.capture());
+
+        TerminalOnlineTimeRecord savedRecord = recordCaptor.getValue();
+        assertEquals(sampleDeviceId, savedRecord.getDeviceId());
+        assertNotNull(savedRecord.getStartTime());
+        assertNotNull(savedRecord.getEndTime());
     }
 }

@@ -9,13 +9,14 @@ import com.colorlight.terminal.application.port.outbound.repository.TerminalReco
 import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
 import com.colorlight.terminal.application.port.outbound.status.AsyncTerminalLoginUpdatePort;
 import com.colorlight.terminal.commons.utils.TimeUtils;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.Executor;
 
 /**
  * 设备状态事件处理器
@@ -25,7 +26,6 @@ import java.time.LocalDateTime;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class DeviceStatusEventHandler {
     
     private final TerminalAccountRepository terminalAccountRepository;
@@ -33,7 +33,23 @@ public class DeviceStatusEventHandler {
     private final TerminalReconnectRepository  terminalReconnectRepository;
     private final AsyncTerminalLoginUpdatePort asyncTerminalLoginUpdatePort;
     private final MainServerRpcPort mainServerRpcPort;
-    
+    private final Executor rpcExecutor;
+
+    // 手动构造函数以支持@Qualifier注解
+    public DeviceStatusEventHandler(TerminalAccountRepository terminalAccountRepository,
+                                    TerminalOnlineTimeRepository terminalOnlineTimeRepository,
+                                    TerminalReconnectRepository terminalReconnectRepository,
+                                    AsyncTerminalLoginUpdatePort asyncTerminalLoginUpdatePort,
+                                    MainServerRpcPort mainServerRpcPort,
+                                    @Qualifier("rpcNotificationExecutor") Executor rpcExecutor) {
+        this.terminalAccountRepository = terminalAccountRepository;
+        this.terminalOnlineTimeRepository = terminalOnlineTimeRepository;
+        this.terminalReconnectRepository = terminalReconnectRepository;
+        this.asyncTerminalLoginUpdatePort = asyncTerminalLoginUpdatePort;
+        this.mainServerRpcPort = mainServerRpcPort;
+        this.rpcExecutor = rpcExecutor;
+    }
+
     /**
      * 处理设备上线事件
      * 设备首次上线时立即更新登录时间到MySQL，确保firstLoginTime不丢失
@@ -48,7 +64,7 @@ public class DeviceStatusEventHandler {
             // 首次上线立即更新登录时间，确保firstLoginTime不丢失
             updateLoginTimeImmediate(event);
             // 异步通知主服务（使用独立RPC线程池）
-            notifyMainServerAsync(event);
+            rpcExecutor.execute(() -> notifyMainServerAsync(event));
         }
     }
 
@@ -68,7 +84,7 @@ public class DeviceStatusEventHandler {
             // 记录重连信息
             saveTerminalReconnect(event);
             // 异步通知主服务（使用独立RPC线程池）
-            notifyMainServerAsync(event);
+            rpcExecutor.execute(() -> notifyMainServerAsync(event));
         }
     }
     
@@ -111,7 +127,7 @@ public class DeviceStatusEventHandler {
             // 心跳事件提交到缓冲池异步更新
             updateLoginTimeAsync(event);
             // 异步通知主服务（使用独立RPC线程池）
-            notifyMainServerAsync(event);
+            rpcExecutor.execute(() -> notifyMainServerAsync(event));
         }
     }
     
@@ -181,14 +197,30 @@ public class DeviceStatusEventHandler {
             return;
         }
 
-        TerminalOnlineTimeRecord record = TerminalOnlineTimeRecord.builder()
+        // 时间合法性检查：防止时间顺序异常导致负数时长
+        if (event.getOnlineStartTime() > event.getLastReportTime()) {
+            log.error("DeviceOnlineTime - 时间顺序异常，跳过保存: deviceId={}, startTime={}, endTime={}",
+                event.getDeviceId(), event.getOnlineStartTime(), event.getLastReportTime());
+            return;
+        }
+
+        // 最小时长校验：忽略无意义的极短连接记录（小于1秒）
+        long durationMs = event.getLastReportTime() - event.getOnlineStartTime();
+        if (durationMs < 1000) {
+            log.debug("DeviceOnlineTime - 连接时长过短，跳过保存: deviceId={}, duration={}ms",
+                event.getDeviceId(), durationMs);
+            return;
+        }
+
+        TerminalOnlineTimeRecord onlineTimeRecord = TerminalOnlineTimeRecord.builder()
                 .deviceId(event.getDeviceId())
                 .startTime(TimeUtils.convertTimestampToLocalDateTime(event.getOnlineStartTime()))
                 .endTime(TimeUtils.convertTimestampToLocalDateTime(event.getLastReportTime()))
                 .build();
 
-        terminalOnlineTimeRepository.saveTerminalOnlineTime(record);
-        log.debug("DeviceOnlineTime - 设备在线时长记录保存成功: deviceId={}, info={}", event.getDeviceId(), event);
+        terminalOnlineTimeRepository.saveTerminalOnlineTime(onlineTimeRecord);
+        log.debug("DeviceOnlineTime - 设备在线时长记录保存成功: deviceId={}, duration={}s",
+            event.getDeviceId(), durationMs / 1000);
     }
 
     // ==================== 终端异常重连记录辅助方法 ====================
@@ -199,7 +231,7 @@ public class DeviceStatusEventHandler {
      */
     private void saveTerminalReconnect(DeviceStatusEvent event) {
 
-        TerminalReconnectRecord record = TerminalReconnectRecord.builder()
+        TerminalReconnectRecord reconnectRecord = TerminalReconnectRecord.builder()
                 .deviceId(event.getDeviceId())
                 .startOnlineTime(TimeUtils.convertTimestampToLocalDateTime(event.getOnlineStartTime()))
                 .lastReportTime(TimeUtils.convertTimestampToLocalDateTime(event.getLastReportTime()))
@@ -208,7 +240,7 @@ public class DeviceStatusEventHandler {
                 .reconnectSource(event.getReportSource().name())
                 .build();
 
-        terminalReconnectRepository.saveReconnectRecord(record);
+        terminalReconnectRepository.saveReconnectRecord(reconnectRecord);
         log.debug("DeviceReconnect - 设备重连信息保存成功: deviceId={}, info={}", event.getDeviceId(), event);
     }
 
@@ -219,7 +251,6 @@ public class DeviceStatusEventHandler {
      * 使用独立RPC线程池，避免阻塞设备事件处理
      * @param event 设备状态事件
      */
-    @Async("rpcNotificationExecutor")
     public void notifyMainServerAsync(DeviceStatusEvent event) {
         try {
             mainServerRpcPort.notifyDeviceLastReportTime(event);
