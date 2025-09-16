@@ -62,7 +62,7 @@ public class TerminalInfoContributor implements InfoContributor {
         // 服务端口信息
         Map<String, Object> ports = new HashMap<>();
         ports.put(ApplicationFields.HTTP_PORT, environment.getProperty("server.port", DefaultValues.DEFAULT_HTTP_PORT));
-        ports.put(ApplicationFields.WEBSOCKET_PORT, environment.getProperty("terminal.websocket.port", DefaultValues.DEFAULT_WEBSOCKET_PORT));
+        ports.put(ApplicationFields.WEBSOCKET_PORT, environment.getProperty("terminal.netty.server.port", DefaultValues.DEFAULT_WEBSOCKET_PORT));
         ports.put(ApplicationFields.MANAGEMENT_PORT, environment.getProperty("management.server.port", DefaultValues.DEFAULT_MANAGEMENT_PORT));
 
         // 构建信息（如果可用）
