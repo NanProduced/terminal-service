@@ -15,14 +15,18 @@ import com.colorlight.terminal.commons.utils.JsonUtils;
 import com.colorlight.terminal.infrastructure.websocket.processor.v11.converter.V11WebsocketDtoConverter;
 import com.colorlight.terminal.infrastructure.websocket.processor.v11.dto.CommandResponse;
 import com.colorlight.terminal.infrastructure.websocket.processor.v11.dto.TerminalLogDTO;
+import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebsocketSession;
+import io.netty.channel.Channel;
 import com.fasterxml.jackson.core.type.TypeReference;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 /**
  * v11协议 - 操作分发路由
@@ -31,13 +35,34 @@ import java.util.Objects;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class V11OperationHandleRouter {
 
     private final TerminalCommandUseCase terminalCommandUseCase;
     private final TerminalReportUseCase terminalReportUseCase;
     private final TerminalProgramUseCase terminalProgramUseCase;
     private final V11WebsocketDtoConverter dtoConverter;
+
+    /**
+     * WebSocket业务处理专用线程池
+     * 用于异步处理耗时的业务操作（Redis查询、数据库操作等），避免阻塞EventLoop
+     */
+    private final Executor websocketBusinessExecutor;
+
+    /**
+     * 构造函数，注入WebSocket业务处理专用线程池
+     */
+    public V11OperationHandleRouter(
+            TerminalCommandUseCase terminalCommandUseCase,
+            TerminalReportUseCase terminalReportUseCase,
+            TerminalProgramUseCase terminalProgramUseCase,
+            V11WebsocketDtoConverter dtoConverter,
+            @Qualifier("websocketBusinessExecutor") Executor websocketBusinessExecutor) {
+        this.terminalCommandUseCase = terminalCommandUseCase;
+        this.terminalReportUseCase = terminalReportUseCase;
+        this.terminalProgramUseCase = terminalProgramUseCase;
+        this.dtoConverter = dtoConverter;
+        this.websocketBusinessExecutor = websocketBusinessExecutor;
+    }
 
     /**
      * 空JSON结构体
@@ -95,17 +120,50 @@ public class V11OperationHandleRouter {
 
     /**
      * 处理获取指令的命令。
+     * 异步化处理：避免Redis查询阻塞EventLoop线程
      *
      * @param context 消息处理上下文，包含设备ID等信息
      * @param messageId 消息ID，用于响应时关联请求
      */
     private void handleGetCommand(MessageProcessingContext context, Integer messageId) {
+        Long deviceId = context.getDeviceId();
 
-        List<TerminalCommand> pendingCommands = terminalCommandUseCase.getPendingCommands(context.getDeviceId());
-        List<CommandResponse> commandResponses = dtoConverter.convertToCommandResponses(pendingCommands);
-        // 下发待执行指令列表
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.COMMAND.getId(), messageId, commandResponses));
-        log.info("V11Router -ws- #GET_COMMENT#【获取指令】deviceId:{}, commandIds:{}", context.getDeviceId(), commandResponses.stream().map(CommandResponse::getId).toList());
+        // 异步执行Redis查询操作，避免阻塞EventLoop线程
+        // getPendingCommands可能涉及多次Redis操作：List查询 + 批量Get操作
+        CompletableFuture
+                .supplyAsync(() -> {
+                    try {
+                        // 执行可能耗时的Redis查询操作
+                        List<TerminalCommand> pendingCommands = terminalCommandUseCase.getPendingCommands(deviceId);
+                        return dtoConverter.convertToCommandResponses(pendingCommands);
+                    } catch (Exception e) {
+                        log.error("V11Router -ws- #GET_COMMENT#【获取指令异常】deviceId:{}", deviceId, e);
+                        throw e; // 重新抛出异常，由whenComplete处理
+                    }
+                }, websocketBusinessExecutor)
+                .whenComplete((commandResponses, throwable) -> {
+                    // 回调必须在EventLoop线程中执行，确保sendMessage的线程安全
+                    TerminalWebsocketSession session = (TerminalWebsocketSession) context.getConnection().getSession();
+                    Channel channel = session.getNettyChannel();
+                    channel.eventLoop().execute(() -> {
+                        try {
+                            if (throwable == null) {
+                                // 成功获取指令，发送响应
+                                context.sendMessage(new V11WebsocketMessage(
+                                        V11WebsocketMessageTypeEnum.COMMAND.getId(), messageId, commandResponses));
+                                log.info("V11Router -ws- #GET_COMMENT#【获取指令成功】deviceId:{}, commandIds:{}",
+                                        deviceId, commandResponses.stream().map(CommandResponse::getId).toList());
+                            } else {
+                                // 处理异常，发送错误响应
+                                log.error("V11Router -ws- #GET_COMMENT#【获取指令失败】deviceId:{}", deviceId, throwable);
+                                context.sendMessage(V11WebsocketMessage.generateErrorContent(
+                                        V11WebsocketErrorEnum.SERVER_ERROR, messageId, "获取指令失败"));
+                            }
+                        } catch (Exception e) {
+                            log.error("V11Router -ws- #GET_COMMENT#【发送响应异常】deviceId:{}", deviceId, e);
+                        }
+                    });
+                });
     }
 
     /**
@@ -137,26 +195,69 @@ public class V11OperationHandleRouter {
 
     /**
      * 处理指令确认消息
-     * 
+     * 异步化处理：避免Redis删除操作和事件发布阻塞EventLoop线程
+     *
      * @param context 消息处理上下文，包含设备ID等信息
      * @param message 接收到的WebSocket消息对象
      */
     private void handleConfirmCommand(MessageProcessingContext context, V11WebsocketMessage message) {
-        if (Objects.isNull(message.getData())) throw new BusinessException(CommonErrorCode.WS_INVALID_MESSAGE_DATA);
+        // 快速参数验证，在EventLoop线程中完成
+        if (Objects.isNull(message.getData())) {
+            throw new BusinessException(CommonErrorCode.WS_INVALID_MESSAGE_DATA);
+        }
+
         String dataStr = JsonUtils.toJson(message.getData());
         int commandId = JsonUtils.getIntValue(dataStr, "parent", 0);
         String content = JsonUtils.getStringValue(dataStr, "content", "");
-        if (commandId <= 0) throw new BusinessException(CommonErrorCode.WS_INVALID_MESSAGE_DATA);
 
-        try {
-            terminalCommandUseCase.confirmCommandExecution(context.getDeviceId(), commandId, content);
-            log.info("V11Router -ws- #CONFIRM_COMMENT#【确认指令成功】deviceId:{}, commandId:{}", context.getDeviceId(), commandId);
-            // 回复确认指令成功
-            context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.CONFIRM_COMMAND.getId(), message.getMessageId()));
-        } catch (Exception e) {
-            log.error("V11Router -ws- #CONFIRM_COMMENT#【确认指令失败】deviceId:{}, commandId:{}", context.getDeviceId(), commandId, e);
-            context.sendMessage(V11WebsocketMessage.generateErrorContent(V11WebsocketErrorEnum.INVALID_COMMENT_ID, message.getMessageId(), "confirm command failed: " + commandId));
+        if (commandId <= 0) {
+            throw new BusinessException(CommonErrorCode.WS_INVALID_MESSAGE_DATA);
         }
+
+        Long deviceId = context.getDeviceId();
+        Integer messageId = message.getMessageId();
+
+        // 异步执行指令确认操作，避免阻塞EventLoop线程
+        // confirmCommandExecution涉及：Redis删除操作 + 事件发布
+        CompletableFuture
+                .runAsync(() -> {
+                    try {
+                        // 执行可能耗时的Redis删除和事件发布操作
+                        terminalCommandUseCase.confirmCommandExecution(deviceId, commandId, content);
+                        log.info("V11Router -ws- #CONFIRM_COMMENT#【确认指令业务处理成功】deviceId:{}, commandId:{}",
+                                deviceId, commandId);
+                    } catch (Exception e) {
+                        log.error("V11Router -ws- #CONFIRM_COMMENT#【确认指令业务处理失败】deviceId:{}, commandId:{}",
+                                deviceId, commandId, e);
+                        throw e; // 重新抛出异常，由whenComplete处理
+                    }
+                }, websocketBusinessExecutor)
+                .whenComplete((result, throwable) -> {
+                    // 回调必须在EventLoop线程中执行，确保sendMessage的线程安全
+                    TerminalWebsocketSession session = (TerminalWebsocketSession) context.getConnection().getSession();
+                    Channel channel = session.getNettyChannel();
+                    channel.eventLoop().execute(() -> {
+                        try {
+                            if (throwable == null) {
+                                // 确认成功，发送成功响应
+                                context.sendMessage(new V11WebsocketMessage(
+                                        V11WebsocketMessageTypeEnum.CONFIRM_COMMAND.getId(), messageId));
+                                log.info("V11Router -ws- #CONFIRM_COMMENT#【确认指令成功】deviceId:{}, commandId:{}",
+                                        deviceId, commandId);
+                            } else {
+                                // 确认失败，发送错误响应
+                                log.error("V11Router -ws- #CONFIRM_COMMENT#【确认指令失败】deviceId:{}, commandId:{}",
+                                        deviceId, commandId, throwable);
+                                context.sendMessage(V11WebsocketMessage.generateErrorContent(
+                                        V11WebsocketErrorEnum.INVALID_COMMENT_ID, messageId,
+                                        "confirm command failed: " + commandId));
+                            }
+                        } catch (Exception e) {
+                            log.error("V11Router -ws- #CONFIRM_COMMENT#【发送确认响应异常】deviceId:{}, commandId:{}",
+                                    deviceId, commandId, e);
+                        }
+                    });
+                });
     }
 
     /**

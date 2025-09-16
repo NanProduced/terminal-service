@@ -17,7 +17,10 @@ import io.netty.handler.timeout.IdleStateEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+
+import java.util.concurrent.Executor;
 
 /**
  * NettyWebSocket帧处理器
@@ -27,18 +30,38 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @ChannelHandler.Sharable
-@RequiredArgsConstructor
 public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebSocketFrame> {
 
     private final WebsocketMessageUseCase webSocketMessageUseCase;
     private final ConnectionManagerPort connectionManagerPort;
 
+    /**
+     * WebSocket连接专用线程池
+     * 用于异步处理连接初始化，避免阻塞Netty EventLoop线程
+     */
+    private final Executor websocketConnectionExecutor;
+
+    /**
+     * 构造函数，注入WebSocket连接专用线程池
+     */
+    public NettyWebsocketFrameHandler(
+            WebsocketMessageUseCase webSocketMessageUseCase,
+            ConnectionManagerPort connectionManagerPort,
+            @Qualifier("websocketConnectionExecutor") Executor websocketConnectionExecutor) {
+        this.webSocketMessageUseCase = webSocketMessageUseCase;
+        this.connectionManagerPort = connectionManagerPort;
+        this.websocketConnectionExecutor = websocketConnectionExecutor;
+    }
+
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
         if (evt instanceof WebSocketServerProtocolHandler.HandshakeComplete handshakeComplete) {
-            log.info("NettyWebsocketFrameHandler - WebSocket握手完成: requestUri={}, channelId={}", 
+            log.info("NettyWebsocketFrameHandler - WebSocket握手完成: requestUri={}, channelId={}",
                     handshakeComplete.requestUri(), ctx.channel().id().asShortText());
-            initializeWebsocketSession(ctx);
+
+            // 异步处理连接初始化，避免阻塞EventLoop线程
+            // 连接初始化可能包含Redis写操作等耗时操作
+            websocketConnectionExecutor.execute(() -> initializeWebsocketSessionAsync(ctx));
         } else if (evt instanceof IdleStateEvent idleStateEvent) {
             handleIdleStateEvent(ctx, idleStateEvent);
         }
@@ -69,7 +92,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
             if (frame instanceof TextWebSocketFrame textFrame) {
                 handleTextFrame(deviceId, textFrame.text());
             } else if (frame instanceof PingWebSocketFrame) {
-                handlePingFrame(ctx, deviceId);
+                handlePingFrame(deviceId);
             } else if (frame instanceof PongWebSocketFrame) {
                 handlePongFrame(deviceId);
             } else if (frame instanceof CloseWebSocketFrame) {
@@ -100,23 +123,36 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
     }
 
     /**
-     * WebSocket会话初始化
+     * WebSocket会话异步初始化
+     * 在专用线程池中执行，避免阻塞EventLoop线程
+     * 处理可能的耗时操作：Redis写入、数据库查询等
      */
-    private void initializeWebsocketSession(ChannelHandlerContext ctx) {
+    private void initializeWebsocketSessionAsync(ChannelHandlerContext ctx) {
         try {
+            // 1. 检查连接是否还有效（避免异步执行期间连接被关闭）
+            if (!ctx.channel().isActive()) {
+                log.debug("NettyWebsocketFrameHandler - 连接已关闭，跳过会话初始化: channelId={}",
+                        ctx.channel().id().asShortText());
+                return;
+            }
+
+            // 2. 从Channel属性中获取认证信息
             String deviceIdStr = ctx.channel().attr(NettyWebsocketAuthHandler.DEVICE_ID).get();
             TerminalPrincipal principal = ctx.channel().attr(NettyWebsocketAuthHandler.TERMINAL_PRINCIPAL).get();
             ProtocolVersion protocolVersion = ctx.channel().attr(NettyWebsocketAuthHandler.PROTOCOL_VERSION).get();
 
+            // 3. 验证认证信息完整性
             if (StringUtils.isBlank(deviceIdStr) || principal == null) {
-                log.error("WebSocket会话初始化失败: 缺少认证信息 - deviceId={}, principal={}", deviceIdStr, principal);
-                ctx.close();
+                log.error("NettyWebsocketFrameHandler - WebSocket会话初始化失败: 缺少认证信息 - deviceId={}, principal={}",
+                        deviceIdStr, principal);
+                // 回到EventLoop线程关闭连接
+                ctx.channel().eventLoop().execute(ctx::close);
                 return;
             }
 
             Long deviceId = Long.parseLong(deviceIdStr);
-            
-            // 创建技术会话对象（这里不用包含版本号）
+
+            // 4. 创建技术会话对象
             TerminalWebsocketSession technicalSession = TerminalWebsocketSession.builder()
                     .sessionId(ctx.channel().id().asShortText())
                     .deviceId(deviceId)
@@ -126,19 +162,24 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
                     // 心跳时间管理已迁移到TerminalConnection层
                     .build();
 
-            // 通过UseCase处理连接建立
-            TerminalConnection connection = webSocketMessageUseCase.handleConnectionEstablished(deviceId, technicalSession, protocolVersion);
-            
+            // 5. 通过UseCase处理连接建立（可能包含Redis写操作）
+            TerminalConnection connection = webSocketMessageUseCase.handleConnectionEstablished(
+                    deviceId, technicalSession, protocolVersion);
+
+            // 6. 检查会话创建结果
             if (connection != null) {
-                log.info("WebSocket会话创建成功: deviceId={}, sessionId={}", deviceId, technicalSession.getSessionId());
+                log.info("NettyWebsocketFrameHandler - WebSocket会话创建成功: deviceId={}, sessionId={}",
+                        deviceId, technicalSession.getSessionId());
             } else {
-                log.error("WebSocket会话创建失败: deviceId={}", deviceId);
-                ctx.close();
+                log.error("NettyWebsocketFrameHandler - WebSocket会话创建失败: deviceId={}", deviceId);
+                // 回到EventLoop线程关闭连接
+                ctx.channel().eventLoop().execute(ctx::close);
             }
-            
+
         } catch (Exception e) {
-            log.error("WebSocket会话初始化异常", e);
-            ctx.close();
+            log.error("NettyWebsocketFrameHandler - WebSocket会话异步初始化异常", e);
+            // 回到EventLoop线程关闭连接
+            ctx.channel().eventLoop().execute(ctx::close);
         }
     }
 
@@ -167,7 +208,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
     /**
      * 处理Ping帧
      */
-    private void handlePingFrame(ChannelHandlerContext ctx, Long deviceId) {
+    private void handlePingFrame(Long deviceId) {
         webSocketMessageUseCase.handlePingFrame(getConnectionByDeviceId(deviceId));
     }
 
