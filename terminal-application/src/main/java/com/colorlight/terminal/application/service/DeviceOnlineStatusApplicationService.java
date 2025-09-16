@@ -44,7 +44,7 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
     @Async("deviceStatusExecutor")
     public void updateLastReportTime(Long deviceId, ReportSource source, String clientIp) {
         // 使用基础设施层的分布式锁防止并发竞态
-        Boolean acquired = false;
+        boolean acquired = false;
         
         try {
             // 尝试获取分布式锁，超时5秒

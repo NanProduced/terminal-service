@@ -26,6 +26,8 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 5. 统计数据处理器（statisticsReportExecutor）
  * 6. rpc通知调用处理器（rpcNotificationExecutor）
  * 7. minio上传处理器（minioUploadExecutor）
+ * 8. WebSocket连接处理器（websocketConnectionExecutor）- 避免阻塞EventLoop
+ * 9. WebSocket业务处理器（websocketBusinessExecutor）- 处理耗时业务操作
  * 
  * 所有线程池都配置了守护线程和优雅关闭机制
  * 定时任务支持通过配置控制延迟启动时间，避免启动时资源竞争
@@ -260,6 +262,91 @@ public class ThreadPoolConfig {
 
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
+
+        return executor;
+    }
+
+    /**
+     * WebSocket连接处理器
+     * 专用于WebSocket连接建立、认证后续处理等操作
+     * 避免阻塞Netty EventLoop线程，提升WebSocket服务性能
+     */
+    @Bean("websocketConnectionExecutor")
+    public Executor websocketConnectionExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+
+        // 核心线程数 - 基于WebSocket连接建立频率设计
+        executor.setCorePoolSize(4);
+
+        // 最大线程数 - 支持连接建立高峰
+        executor.setMaxPoolSize(16);
+
+        // 队列容量 - 缓冲连接建立请求
+        executor.setQueueCapacity(500);
+
+        // 线程空闲时间 - 较长保活时间，适应连接建立的波峰波谷
+        executor.setKeepAliveSeconds(300);
+
+        // 线程命名
+        executor.setThreadNamePrefix("ws-connection-");
+
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(60);
+
+        // 拒绝策略：记录警告并由调用者线程执行（避免连接建立失败）
+        executor.setRejectedExecutionHandler((task, ext) -> {
+            log.warn("ThreadPool - WebSocket连接任务被拒绝，使用调用者线程执行: queue={}, active={}",
+                    ext.getQueue().size(), ext.getActiveCount());
+            // 使用调用者线程执行，确保连接建立不会失败
+            task.run();
+        });
+
+        executor.initialize();
+
+        log.info("ThreadPool - WebSocket连接处理器初始化完成: core={}, max={}, queue={}",
+                executor.getCorePoolSize(), executor.getMaxPoolSize(), executor.getQueueCapacity());
+
+        return executor;
+    }
+
+    /**
+     * WebSocket业务处理器
+     * 专用于WebSocket消息处理中的耗时业务操作（如Redis查询、数据库操作）
+     * 与连接处理器分离，避免连接建立被业务处理阻塞
+     */
+    @Bean("websocketBusinessExecutor")
+    public Executor websocketBusinessExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+
+        // 核心线程数 - 基于并发消息处理需求设计
+        executor.setCorePoolSize(8);
+
+        // 最大线程数 - 支持高并发消息处理
+        executor.setMaxPoolSize(32);
+
+        // 队列容量 - 缓冲消息处理请求
+        executor.setQueueCapacity(2000);
+
+        // 线程空闲时间
+        executor.setKeepAliveSeconds(120);
+
+        // 线程命名
+        executor.setThreadNamePrefix("ws-business-");
+
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(120);
+
+        // 拒绝策略：丢弃任务并记录（消息处理失败可以容忍）
+        executor.setRejectedExecutionHandler((task, ext) -> {
+            log.error("ThreadPool - WebSocket业务任务被拒绝，任务已丢弃: queue={}, active={}",
+                    ext.getQueue().size(), ext.getActiveCount());
+            // 可以考虑发送错误响应给客户端
+        });
+
+        executor.initialize();
+
+        log.info("ThreadPool - WebSocket业务处理器初始化完成: core={}, max={}, queue={}",
+                executor.getCorePoolSize(), executor.getMaxPoolSize(), executor.getQueueCapacity());
 
         return executor;
     }

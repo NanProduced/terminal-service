@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -27,10 +26,15 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Executor;
+
+import com.colorlight.terminal.application.domain.connection.TerminalConnection;
+import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebsocketSession;
+import io.netty.channel.Channel;
+import io.netty.channel.EventLoop;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -69,17 +73,29 @@ class V11OperationHandleRouterTest {
     
     @Mock
     private V11WebsocketDtoConverter dtoConverter;
-    
+
     @Mock
     private MessageProcessingContext messageProcessingContext;
-    
+
+    @Mock
+    private TerminalConnection terminalConnection;
+
+    @Mock
+    private TerminalWebsocketSession terminalWebsocketSession;
+
+    @Mock
+    private Channel nettyChannel;
+
+    @Mock
+    private EventLoop eventLoop;
+
     @Captor
     private ArgumentCaptor<V11WebsocketMessage> messageCaptor;
-    
+
     @Captor
     private ArgumentCaptor<List<TerminalLog>> terminalLogsCaptor;
-    
-    @InjectMocks
+
+    // 由于修改了构造函数，需要手动创建实例而不是使用@InjectMocks
     private V11OperationHandleRouter router;
     
     /**
@@ -181,20 +197,45 @@ class V11OperationHandleRouterTest {
     
     @BeforeEach
     void setUp() {
+        // 创建一个直接执行的Executor来模拟异步行为，但在测试中同步执行
+        Executor websocketBusinessExecutor = Runnable::run; // 立即执行任务
+
+        // 初始化router实例，注入所需的依赖
+        router = new V11OperationHandleRouter(
+                terminalCommandUseCase,
+                terminalReportUseCase,
+                terminalProgramUseCase,
+                dtoConverter,
+                websocketBusinessExecutor
+        );
+
         // 基础Mock设置 - 使用lenient模式避免严格验证
         lenient().when(messageProcessingContext.getDeviceId()).thenReturn(12345L);
         lenient().when(messageProcessingContext.sendMessage(any(V11WebsocketMessage.class))).thenReturn(true);
         lenient().when(messageProcessingContext.sendMessage(anyString())).thenReturn(true);
-        
+
+        // Mock连接相关对象，支持异步回调
+        lenient().when(messageProcessingContext.getConnection()).thenReturn(terminalConnection);
+        lenient().when(terminalConnection.getSession()).thenReturn(terminalWebsocketSession);
+        lenient().when(terminalWebsocketSession.getNettyChannel()).thenReturn(nettyChannel);
+        lenient().when(nettyChannel.eventLoop()).thenReturn(eventLoop);
+
+        // 模拟EventLoop.execute()立即执行任务，确保异步回调能被同步验证
+        lenient().doAnswer(invocation -> {
+            Runnable task = invocation.getArgument(0);
+            task.run(); // 立即执行回调任务
+            return null;
+        }).when(eventLoop).execute(any(Runnable.class));
+
         // 默认转换器行为
         lenient().when(dtoConverter.convertToCommandResponses(any())).thenReturn(TestDataBuilder.buildCommandResponses());
         lenient().when(dtoConverter.convertToTerminalLogs(any())).thenReturn(TestDataBuilder.buildTerminalLogs());
-        
+
         // 默认UseCase行为 - 直接stub void方法
         lenient().when(terminalCommandUseCase.getPendingCommands(any(Long.class))).thenReturn(TestDataBuilder.buildTerminalCommands());
         lenient().doNothing().when(terminalCommandUseCase).confirmCommandExecution(any(Long.class), any(Integer.class), anyString());
         lenient().when(terminalProgramUseCase.getSchedule(any(Long.class))).thenReturn(null);
-        
+
         // 使用doNothing()来配置void方法，避免方法签名问题
         lenient().doNothing().when(terminalReportUseCase).asyncHandleMediaPlayRecordReport(any(Long.class), anyString());
         lenient().doNothing().when(terminalReportUseCase).asyncHandleProgramPlayRecordReport(any(Long.class), anyString());
@@ -233,19 +274,19 @@ class V11OperationHandleRouterTest {
         }
         
         @Test
-        @DisplayName("应该正确路由COMMAND消息类型")
-        void should_route_command_message_correctly() {
+        @DisplayName("应该正确路由COMMAND消息类型并异步处理")
+        void should_route_command_message_correctly_with_async_processing() {
             // Given - 准备COMMAND消息
             V11WebsocketMessage commandMessage = TestDataBuilder.buildMessage(V11WebsocketMessageTypeEnum.COMMAND, 1001);
-            
+
             // When - 处理消息
             router.handleMessageByType(messageProcessingContext, commandMessage);
-            
-            // Then - 验证调用了指令处理逻辑
+
+            // Then - 验证调用了指令处理逻辑（使用同步执行器确保立即执行）
             verify(terminalCommandUseCase).getPendingCommands(12345L);
             verify(dtoConverter).convertToCommandResponses(any());
             verify(messageProcessingContext).sendMessage(messageCaptor.capture());
-            
+
             V11WebsocketMessage response = messageCaptor.getValue();
             assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.COMMAND.getId());
             assertThat(response.getReceiptId()).isEqualTo(1001);
@@ -314,23 +355,23 @@ class V11OperationHandleRouterTest {
     class CommandHandlingTest {
         
         @Test
-        @DisplayName("应该成功获取待执行指令")
-        void should_get_pending_commands_successfully() {
+        @DisplayName("应该异步获取待执行指令")
+        void should_get_pending_commands_asynchronously() {
             // Given - 准备指令获取消息
             V11WebsocketMessage commandMessage = TestDataBuilder.buildMessage(V11WebsocketMessageTypeEnum.COMMAND, 1001);
             List<TerminalCommand> pendingCommands = TestDataBuilder.buildTerminalCommands();
             List<CommandResponse> commandResponses = TestDataBuilder.buildCommandResponses();
-            
+
             when(terminalCommandUseCase.getPendingCommands(12345L)).thenReturn(pendingCommands);
             when(dtoConverter.convertToCommandResponses(pendingCommands)).thenReturn(commandResponses);
-            
+
             // When - 处理消息
             router.handleMessageByType(messageProcessingContext, commandMessage);
-            
-            // Then - 验证指令获取流程
+
+            // Then - 验证指令获取流程（使用同步执行器确保立即执行）
             verify(terminalCommandUseCase).getPendingCommands(12345L);
             verify(dtoConverter).convertToCommandResponses(pendingCommands);
-            
+
             verify(messageProcessingContext).sendMessage(messageCaptor.capture());
             V11WebsocketMessage response = messageCaptor.getValue();
             assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.COMMAND.getId());
@@ -339,36 +380,36 @@ class V11OperationHandleRouterTest {
         }
         
         @Test
-        @DisplayName("应该处理空的待执行指令列表")
-        void should_handle_empty_pending_commands_list() {
+        @DisplayName("应该异步处理空的待执行指令列表")
+        void should_handle_empty_pending_commands_list_asynchronously() {
             // Given - 准备空的指令列表
             V11WebsocketMessage commandMessage = TestDataBuilder.buildMessage(V11WebsocketMessageTypeEnum.COMMAND, 1001);
             when(terminalCommandUseCase.getPendingCommands(12345L)).thenReturn(Collections.emptyList());
             when(dtoConverter.convertToCommandResponses(Collections.emptyList())).thenReturn(Collections.emptyList());
-            
+
             // When - 处理消息
             router.handleMessageByType(messageProcessingContext, commandMessage);
-            
-            // Then - 验证处理空列表
+
+            // Then - 验证处理空列表（使用同步执行器确保立即执行）
             verify(terminalCommandUseCase).getPendingCommands(12345L);
             verify(messageProcessingContext).sendMessage(messageCaptor.capture());
-            
+
             V11WebsocketMessage response = messageCaptor.getValue();
             assertThat(response.getData()).isEqualTo(Collections.emptyList());
         }
         
         @Test
-        @DisplayName("应该成功确认指令执行")
-        void should_confirm_command_execution_successfully() {
+        @DisplayName("应该异步确认指令执行")
+        void should_confirm_command_execution_asynchronously() {
             // Given - 准备指令确认消息
             V11WebsocketMessage confirmMessage = TestDataBuilder.buildConfirmCommandMessage(2001, 1001, "执行成功");
-            
+
             // When - 处理消息
             router.handleMessageByType(messageProcessingContext, confirmMessage);
-            
-            // Then - 验证指令确认流程
+
+            // Then - 验证指令确认流程（使用同步执行器确保立即执行）
             verify(terminalCommandUseCase).confirmCommandExecution(12345L, 1001, "执行成功");
-            
+
             verify(messageProcessingContext).sendMessage(messageCaptor.capture());
             V11WebsocketMessage response = messageCaptor.getValue();
             assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.CONFIRM_COMMAND.getId());
@@ -401,17 +442,17 @@ class V11OperationHandleRouterTest {
         }
         
         @Test
-        @DisplayName("当指令确认执行失败时应该发送错误消息")
-        void should_send_error_message_when_command_confirmation_fails() {
+        @DisplayName("当指令确认执行失败时应该在异步处理中发送错误消息")
+        void should_send_error_message_when_command_confirmation_fails_in_async_processing() {
             // Given - 准备指令确认消息，但UseCase抛出异常
             V11WebsocketMessage confirmMessage = TestDataBuilder.buildConfirmCommandMessage(2001, 1001, "执行成功");
             doThrow(new RuntimeException("指令确认失败")).when(terminalCommandUseCase)
                 .confirmCommandExecution(anyLong(), anyInt(), anyString());
-            
+
             // When - 处理消息
             router.handleMessageByType(messageProcessingContext, confirmMessage);
-            
-            // Then - 验证发送错误消息
+
+            // Then - 验证发送错误消息（使用同步执行器确保立即执行）
             verify(messageProcessingContext).sendMessage(messageCaptor.capture());
             V11WebsocketMessage errorResponse = messageCaptor.getValue();
             assertThat(errorResponse.getType()).isEqualTo(V11WebsocketMessageTypeEnum.ERROR.getId());
@@ -609,18 +650,18 @@ class V11OperationHandleRouterTest {
         }
         
         @Test
-        @DisplayName("应该处理空内容的指令确认")
-        void should_handle_command_confirmation_with_empty_content() {
+        @DisplayName("应该异步处理空内容的指令确认")
+        void should_handle_command_confirmation_with_empty_content_asynchronously() {
             // Given - 准备空内容的指令确认消息
             V11WebsocketMessage confirmMessage = TestDataBuilder.buildConfirmCommandMessage(2001, 1001, "");
-            
+
             // When - 处理消息
             router.handleMessageByType(messageProcessingContext, confirmMessage);
-            
-            // Then - 验证成功处理空内容
+
+            // Then - 验证成功处理空内容（使用同步执行器确保立即执行）
             verify(terminalCommandUseCase).confirmCommandExecution(12345L, 1001, "");
             verify(messageProcessingContext).sendMessage(messageCaptor.capture());
-            
+
             V11WebsocketMessage response = messageCaptor.getValue();
             assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.CONFIRM_COMMAND.getId());
         }

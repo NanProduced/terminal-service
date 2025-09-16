@@ -11,6 +11,7 @@ import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebso
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelId;
+import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http.websocketx.*;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.util.Attribute;
@@ -21,12 +22,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.net.SocketAddress;
 import java.util.Optional;
+import java.util.concurrent.Executor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -53,7 +54,7 @@ class NettyWebsocketFrameHandlerTest {
     
     @Mock
     private ConnectionManagerPort connectionManagerPort;
-    
+
     @Mock
     private ChannelHandlerContext channelHandlerContext;
     
@@ -74,14 +75,17 @@ class NettyWebsocketFrameHandlerTest {
     
     @Mock
     private SocketAddress remoteAddress;
-    
+
+    @Mock
+    private EventLoop eventLoop;
+
     @Captor
     private ArgumentCaptor<TerminalWebsocketSession> sessionCaptor;
     
     @Captor
     private ArgumentCaptor<MessageProcessingContext> contextCaptor;
-    
-    @InjectMocks
+
+    // 由于修改了构造函数，需要手动创建实例而不是使用@InjectMocks
     private NettyWebsocketFrameHandler frameHandler;
     
     /**
@@ -124,12 +128,31 @@ class NettyWebsocketFrameHandlerTest {
     
     @BeforeEach
     void setUp() {
+        // 创建一个直接执行的Executor来模拟异步行为，但在测试中同步执行
+        Executor websocketConnectionExecutor = Runnable::run; // 立即执行任务
+
+        // 初始化frameHandler实例，注入所需的依赖
+        frameHandler = new NettyWebsocketFrameHandler(
+                websocketMessageUseCase,
+                connectionManagerPort,
+                websocketConnectionExecutor
+        );
+
         // 基础Mock设置 - 使用lenient模式避免严格验证
         lenient().when(channelHandlerContext.channel()).thenReturn(channel);
         lenient().when(channel.id()).thenReturn(channelId);
         lenient().when(channelId.asShortText()).thenReturn("test-channel-123");
         lenient().when(channel.remoteAddress()).thenReturn(remoteAddress);
         lenient().when(remoteAddress.toString()).thenReturn("/192.168.1.100:8080");
+        lenient().when(channel.isActive()).thenReturn(true);
+        lenient().when(channel.eventLoop()).thenReturn(eventLoop);
+
+        // 模拟EventLoop.execute()立即执行任务，确保异步回调能被同步验证
+        lenient().doAnswer(invocation -> {
+            Runnable task = invocation.getArgument(0);
+            task.run(); // 立即执行回调任务
+            return null;
+        }).when(eventLoop).execute(any(Runnable.class));
         
         // 设备ID属性Mock
         lenient().when(channel.attr(NettyWebsocketAuthHandler.DEVICE_ID)).thenReturn(deviceIdAttribute);
