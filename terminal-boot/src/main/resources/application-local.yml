@@ -87,11 +87,11 @@ management:
       # 启用健康检查分组
       group:
         readiness:
-          # 就绪状态检查包含：应用就绪状态、EventLoop状态
-          include: readinessState,eventLoop
+          # 就绪状态检查
+          include: eventLoop
         liveness:
-          # 存活状态检查包含：应用存活状态、EventLoop状态
-          include: livenessState,eventLoop
+          # 存活状态检查
+          include: eventLoop
     info:
       enabled: true  # 启用info端点，提供应用基本信息
     metrics:
