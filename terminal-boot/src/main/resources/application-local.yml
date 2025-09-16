@@ -69,26 +69,72 @@ dubbo:
     timeout: 3000
     retries: 0
 
+# Spring Boot Actuator 监控端点配置
 management:
   endpoints:
     web:
       exposure:
-        include: "*"
+        # 启用推荐的监控端点（包含自定义端点），排除高风险管理端点
+        # 包含：健康检查、应用信息、指标监控、Prometheus、配置属性、环境变量、线程转储、堆转储、WebSocket、设备、线程池
+        # 排除：关机、重启等危险操作端点
+        include: health,info,metrics,prometheus,configprops,env,threaddump,heapdump,websocket,devices,threadpools
+        exclude: shutdown,restart
+      base-path: /actuator  # Actuator端点的基础路径
+  endpoint:
+    health:
+      # 显示详细健康信息（包含EventLoop监控）
+      show-details: always
+      # 启用健康检查分组
+      group:
+        readiness:
+          # 就绪状态检查包含：应用就绪状态、EventLoop状态
+          include: readinessState,eventLoop
+        liveness:
+          # 存活状态检查包含：应用存活状态、EventLoop状态
+          include: livenessState,eventLoop
+    info:
+      enabled: true  # 启用info端点，提供应用基本信息
+    metrics:
+      enabled: true  # 启用metrics端点，提供应用性能指标
+    prometheus:
+      enabled: true  # 启用prometheus端点，提供Prometheus格式的监控数据
+  # 应用信息配置
+  info:
+    env:
+      enabled: true  # 启用环境变量信息
+    git:
+      mode: full     # Git信息完整模式
+    build:
+      enabled: true  # 启用构建信息
+    java:
+      enabled: true  # 启用Java环境信息
+  # Micrometer 监控配置
+  metrics:
+    distribution:
+      percentiles-histogram:
+        # 为HTTP服务器请求启用百分位直方图
+        http.server.requests: true
+      percentiles:
+        # 配置HTTP服务器请求的监控百分位数
+        http.server.requests: 0.5, 0.9, 0.95, 0.99
+    tags:
+      # 为指标添加通用标签
+      application: ${spring.application.name}   # 应用名称标签
+      environment: ${spring.profiles.active}    # 环境标签
+  prometheus:
+    metrics:
+      export:
+        enabled: true  # 启用Prometheus指标导出
   tracing:
-    enabled: true
+    enabled: true      # 启用分布式追踪
     sampling:
-      probability: 1.0
+      probability: 1.0 # 追踪采样率100%，生产环境建议调低
   # Zipkin Reporter 的专属配置
   zipkin:
     tracing:
       # 默认 auto-config 会把 span 发到这个端点
       # 没有部署zipkin就不需要配置
-      endpoint: http://192.168.1.185:9411/api/v2/spans
-  endpoint:
-    health:
-      show-details: always
-    metrics:
-      enabled: true
+      endpoint: http://192.168.1.185:9411/api/v2/spans  # Zipkin服务端点
 
 # 本地环境日志配置 - 更详细的日志便于调试
 logging:
