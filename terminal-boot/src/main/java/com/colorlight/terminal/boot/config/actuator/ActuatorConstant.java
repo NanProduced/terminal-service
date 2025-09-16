@@ -177,6 +177,42 @@ public final class ActuatorConstant {
     }
 
     /**
+     * EventLoop监控相关字段名
+     */
+    public static final class EventLoopFields {
+        private EventLoopFields() {
+            // 工具类不允许实例化
+        }
+
+        /** 统计信息字段名 */
+        public static final String STATISTICS = "statistics";
+        /** 阈值字段名 */
+        public static final String THRESHOLDS = "thresholds";
+        /** 性能字段名 */
+        public static final String PERFORMANCE = "performance";
+        /** 当前总待处理任务数字段名 */
+        public static final String TOTAL_PENDING_TASKS = "totalPendingTasks";
+        /** 最大待处理任务数字段名 */
+        public static final String MAX_PENDING_TASKS = "maxPendingTasks";
+        /** 告警次数字段名 */
+        public static final String WARNING_COUNT = "warningCount";
+        /** 严重告警次数字段名 */
+        public static final String CRITICAL_COUNT = "criticalCount";
+        /** 告警阈值字段名 */
+        public static final String WARNING_THRESHOLD = "warningThreshold";
+        /** 严重告警阈值字段名 */
+        public static final String CRITICAL_THRESHOLD = "criticalThreshold";
+        /** 任务积压比率字段名 */
+        public static final String TASK_BACKLOG_RATIO = "taskBacklogRatio";
+        /** 告警频率字段名 */
+        public static final String ALERT_FREQUENCY = "alertFrequency";
+        /** 系统稳定性字段名 */
+        public static final String SYSTEM_STABILITY = "systemStability";
+        /** 成功字段名 */
+        public static final String SUCCESS = "success";
+    }
+
+    /**
      * 应用信息相关字段名
      */
     public static final class ApplicationFields {
@@ -305,6 +341,34 @@ public final class ActuatorConstant {
         public static final String SLIGHTLY_UNBALANCED = "SLIGHTLY_UNBALANCED";
         /** 不平衡状态值 */
         public static final String UNBALANCED = "UNBALANCED";
+
+        // EventLoop健康状态
+        /** 严重状态值 */
+        public static final String CRITICAL = "CRITICAL";
+        /** 警告状态值 */
+        public static final String WARNING = "WARNING";
+        /** 注意状态值 */
+        public static final String CAUTION = "CAUTION";
+
+        // EventLoop系统稳定性状态
+        /** 稳定状态值 */
+        public static final String STABLE = "稳定";
+        /** 基本稳定状态值 */
+        public static final String BASICALLY_STABLE = "基本稳定";
+        /** 轻微不稳定状态值 */
+        public static final String SLIGHTLY_UNSTABLE = "轻微不稳定";
+        /** 不稳定状态值 */
+        public static final String UNSTABLE = "不稳定";
+
+        // EventLoop告警频率状态
+        /** 无告警状态值 */
+        public static final String NO_ALERTS = "无告警";
+        /** 偶尔告警状态值 */
+        public static final String OCCASIONAL_ALERTS = "偶尔告警";
+        /** 频繁告警状态值 */
+        public static final String FREQUENT_ALERTS = "频繁告警";
+        /** 持续告警状态值 */
+        public static final String CONTINUOUS_ALERTS = "持续告警";
     }
 
     /**
@@ -321,6 +385,8 @@ public final class ActuatorConstant {
         public static final String THREAD_POOL_STATISTICS = "Thread Pool Statistics";
         /** WebSocket连接统计端点名称 */
         public static final String WEBSOCKET_CONNECTION_STATISTICS = "WebSocket Connection Statistics";
+        /** EventLoop统计端点名称 */
+        public static final String EVENTLOOP_STATISTICS = "eventloop-statistics";
     }
 
     /**
@@ -343,6 +409,10 @@ public final class ActuatorConstant {
         public static final String FAILED_TO_GET_TTL_STATS = "Failed to get TTL stats";
         /** 获取线程池信息失败错误消息 */
         public static final String FAILED_TO_GET_THREAD_POOL_INFO = "Failed to get thread pool info: ";
+        /** 获取EventLoop统计失败错误消息 */
+        public static final String FAILED_TO_RETRIEVE_EVENTLOOP_STATISTICS = "Failed to retrieve EventLoop statistics";
+        /** 重置EventLoop统计失败错误消息 */
+        public static final String FAILED_TO_RESET_EVENTLOOP_STATISTICS = "Failed to reset EventLoop statistics";
     }
 
     /**
@@ -405,5 +475,31 @@ public final class ActuatorConstant {
         public static final String TTL_CONFIGURED_DESCRIPTION = "双TTL机制已配置";
         /** Redis基础描述值 */
         public static final String REDIS_BASED_DESCRIPTION = "基于Redis计数器和设备状态索引的在线统计";
+    }
+
+    /**
+     * EventLoop相关常量值
+     */
+    public static final class EventLoopValues {
+        private EventLoopValues() {
+            // 工具类不允许实例化
+        }
+
+        /** 告警阈值 */
+        public static final long WARNING_THRESHOLD_VALUE = 1000L;
+        /** 严重告警阈值 */
+        public static final long CRITICAL_THRESHOLD_VALUE = 5000L;
+        /** 默认健康消息 */
+        public static final String DEFAULT_HEALTHY_MESSAGE = "EventLoop运行正常";
+        /** EventLoop运行良好建议 */
+        public static final String GOOD_PERFORMANCE_RECOMMENDATION = "EventLoop运行良好，无需特别优化";
+        /** 严重阻塞建议 */
+        public static final String CRITICAL_BLOCKING_RECOMMENDATION = "建议检查业务逻辑是否存在阻塞操作，考虑异步处理或增加EventLoop线程数";
+        /** 频繁告警建议 */
+        public static final String FREQUENT_WARNING_RECOMMENDATION = "建议优化业务处理逻辑，减少EventLoop中的耗时操作";
+        /** 任务积压建议 */
+        public static final String BACKLOG_RECOMMENDATION = "当前任务积压较多，建议监控业务处理性能";
+        /** 重置成功消息 */
+        public static final String RESET_SUCCESS_MESSAGE = "EventLoop统计信息已重置";
     }
 }
