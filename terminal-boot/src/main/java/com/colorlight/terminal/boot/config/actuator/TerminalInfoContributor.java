@@ -1,6 +1,6 @@
 package com.colorlight.terminal.boot.config.actuator;
 
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.info.Info;
 import org.springframework.boot.actuate.info.InfoContributor;
 import org.springframework.boot.info.BuildProperties;
@@ -22,12 +22,19 @@ import java.util.Map;
  * @author Nan
  */
 @Component
-@RequiredArgsConstructor
 public class TerminalInfoContributor implements InfoContributor {
 
     private final Environment environment;
     private final BuildProperties buildProperties;
     private final GitProperties gitProperties;
+
+    public TerminalInfoContributor(Environment environment,
+                                   @Autowired(required = false) BuildProperties buildProperties,
+                                   @Autowired(required = false) GitProperties gitProperties) {
+        this.environment = environment;
+        this.buildProperties = buildProperties;
+        this.gitProperties = gitProperties;
+    }
 
     @Override
     public void contribute(Info.Builder builder) {
