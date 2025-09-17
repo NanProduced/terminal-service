@@ -252,6 +252,31 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
     
     // ============== 生命周期管理 ==============
     
+    /**
+     * 获取协议版本连接数统计
+     * 提供给监控服务使用，避免使用反射
+     *
+     * @return 协议版本与连接数的映射
+     */
+    public Map<ProtocolVersion, Integer> getProtocolVersionConnections() {
+        Map<ProtocolVersion, Integer> result = new HashMap<>();
+        for (Map.Entry<ProtocolVersion, AtomicInteger> entry : versionCounter.entrySet()) {
+            result.put(entry.getKey(), entry.getValue().get());
+        }
+        return result;
+    }
+
+    /**
+     * 获取指定协议版本的连接数
+     *
+     * @param version 协议版本
+     * @return 连接数，如果版本不存在返回0
+     */
+    public int getProtocolVersionConnectionCount(ProtocolVersion version) {
+        AtomicInteger counter = versionCounter.get(version);
+        return counter != null ? counter.get() : 0;
+    }
+
     @Override
     public void destroy() {
         log.info("ShardedConnectionManager - Shutting down ShardedConnectionManager...");
