@@ -48,8 +48,8 @@ public class EventLoopAlertEvent extends ApplicationEvent {
     /** 告警消息 */
     private final String message;
 
-    /** 事件时间戳 */
-    private final long timestamp;
+    /** 事件告警时间戳 */
+    private final long alertTimestamp;
 
     /**
      * 创建WARNING级别告警事件
@@ -80,12 +80,12 @@ public class EventLoopAlertEvent extends ApplicationEvent {
         this.eventExecutorInfo = eventExecutorInfo;
         this.threshold = threshold;
         this.message = message;
-        this.timestamp = System.currentTimeMillis();
+        this.alertTimestamp = System.currentTimeMillis();
     }
 
     @Override
     public String toString() {
-        return String.format("EventLoopAlertEvent{level=%s, pendingTasks=%d, threshold=%d, eventExecutor='%s', timestamp=%d, message='%s'}",
-                alertLevel.name(), pendingTasks, threshold, eventExecutorInfo, timestamp, message);
+        return String.format("EventLoopAlertEvent{level=%s, pendingTasks=%d, threshold=%d, eventExecutor='%s', alertTimestamp=%d, message='%s'}",
+                alertLevel.name(), pendingTasks, threshold, eventExecutorInfo, alertTimestamp, message);
     }
 }
