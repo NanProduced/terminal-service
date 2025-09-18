@@ -51,37 +51,17 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "single",
+            "fixedColor": "blue"
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 100
-              },
-              {
-                "color": "green",
-                "value": 500
-              },
-              {
-                "color": "blue",
-                "value": 1000
-              }
-            ]
-          },
           "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 6,
-        "w": 4,
+        "w": 6,
         "x": 0,
         "y": 1
       },
@@ -124,34 +104,18 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "single",
+            "fixedColor": "green"
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 100
-              },
-              {
-                "color": "red",
-                "value": 200
-              }
-            ]
-          },
           "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 6,
-        "w": 4,
-        "x": 4,
+        "w": 6,
+        "x": 6,
         "y": 1
       },
       "id": 2,
@@ -221,8 +185,8 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 4,
-        "x": 8,
+        "w": 6,
+        "x": 12,
         "y": 1
       },
       "id": 3,
@@ -290,8 +254,8 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 4,
-        "x": 12,
+        "w": 6,
+        "x": 18,
         "y": 1
       },
       "id": 4,
@@ -321,104 +285,6 @@
       ],
       "title": "负载均衡状态",
       "type": "gauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "连接趋势对比",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "vis": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 16,
-        "y": 1
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "terminal_system_metrics{type=\"websocket_connections\"}",
-          "legendFormat": "WebSocket连接",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "terminal_system_metrics{type=\"online_devices\"}",
-          "legendFormat": "在线设备",
-          "refId": "B"
-        }
-      ],
-      "title": "连接趋势对比",
-      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -504,8 +370,8 @@
       "options": {
         "legend": {
           "calcs": [],
-          "displayMode": "table",
-          "placement": "right",
+          "displayMode": "list",
+          "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
@@ -709,7 +575,7 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "right",
+          "placement": "bottom",
           "showLegend": true,
           "values": [
             "value"
@@ -779,18 +645,14 @@
       },
       "id": 9,
       "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
         "orientation": "horizontal",
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "textMode": "auto"
+        "displayMode": "gradient",
+        "showValues": "auto",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
       },
       "pluginVersion": "10.1.0",
       "targets": [
@@ -805,7 +667,7 @@
         }
       ],
       "title": "Top 5 繁忙分片",
-      "type": "stat"
+      "type": "barchart"
     },
     {
       "datasource": {
@@ -1179,7 +1041,7 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "right",
+          "placement": "bottom",
           "showLegend": true,
           "values": [
             "value"

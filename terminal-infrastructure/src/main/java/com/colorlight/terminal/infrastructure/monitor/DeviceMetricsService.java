@@ -11,27 +11,24 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Component;
 
 import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
 import com.colorlight.terminal.commons.exception.technical.TechnicalException;
 
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class DeviceMetricsService {
 
     private final MeterRegistry meterRegistry;
@@ -39,15 +36,26 @@ public class DeviceMetricsService {
     private final EventLoopHealthMonitor eventLoopHealthMonitor;
     private final ThreadPoolTaskExecutor[] taskExecutors;
     private final DeviceOnlineStatusPort deviceOnlineStatusPort;
+    private final ThreadPoolTaskScheduler taskScheduler;
+
+    public DeviceMetricsService(
+            MeterRegistry meterRegistry,
+            ConnectionManagerPort connectionManagerPort,
+            EventLoopHealthMonitor eventLoopHealthMonitor,
+            ThreadPoolTaskExecutor[] taskExecutors,
+            DeviceOnlineStatusPort deviceOnlineStatusPort,
+            @Qualifier("deviceTaskSchedulerForMetrics") ThreadPoolTaskScheduler taskScheduler) {
+        this.meterRegistry = meterRegistry;
+        this.connectionManagerPort = connectionManagerPort;
+        this.eventLoopHealthMonitor = eventLoopHealthMonitor;
+        this.taskExecutors = taskExecutors;
+        this.deviceOnlineStatusPort = deviceOnlineStatusPort;
+        this.taskScheduler = taskScheduler;
+    }
 
     // EventLoop告警计数器
     private Counter eventLoopWarnings;
     private Counter eventLoopCriticals;
-
-    // 分片统计缓存
-    private final AtomicReference<Map<String, Object>> cachedShardStats = new AtomicReference<>();
-    private final AtomicLong cacheTimestamp = new AtomicLong(0);
-    private static final long CACHE_TTL_MS = 5000;
 
     @PostConstruct
     public void initOptimizedMetrics() {
@@ -67,40 +75,34 @@ public class DeviceMetricsService {
             // 5. EventLoop指标合并
             registerEventLoopMetrics();
 
-            log.info("TerminalMetrics -optimized- 优化指标初始化成功, 总指标数: 5个多维度Gauge");
+            log.info("{} {}", MetricsConstant.LogTag.OPTIMIZED, MetricsConstant.SuccessMessage.OPTIMIZED_METRICS_INIT_SUCCESS);
 
         } catch (Exception e) {
-            log.error("TerminalMetrics -optimized- 优化指标初始化失败", e);
-            throw new TechnicalException(TechErrorCode.METRICS_ERROR, "优化Metrics初始化失败", e);
+            log.error("{} 优化指标初始化失败", MetricsConstant.LogTag.OPTIMIZED, e);
+            throw new TechnicalException(TechErrorCode.METRICS_ERROR, MetricsConstant.ErrorMessage.OPTIMIZED_METRICS_INIT_FAILED, e);
         }
     }
 
     /**
-     * 1. 系统核心指标合并 - 4合1
+     * 1. 系统核心指标合并
      */
     private void registerSystemMetrics() {
         // WebSocket连接数
-        Gauge.builder("terminal_system_metrics", this, DeviceMetricsService::getCurrentConnectionCount)
-                .description("系统核心指标")
-                .tags(Tags.of("type", "websocket_connections"))
+        Gauge.builder(MetricsConstant.TERMINAL_SYSTEM_METRICS, this, DeviceMetricsService::getCurrentConnectionCount)
+                .description(MetricsConstant.SYSTEM_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.SystemType.WEBSOCKET_CONNECTIONS))
                 .register(meterRegistry);
 
         // 在线设备数
-        Gauge.builder("terminal_system_metrics", this, DeviceMetricsService::getOnlineDeviceCount)
-                .description("系统核心指标")
-                .tags(Tags.of("type", "online_devices"))
+        Gauge.builder(MetricsConstant.TERMINAL_SYSTEM_METRICS, this, DeviceMetricsService::getOnlineDeviceCount)
+                .description(MetricsConstant.SYSTEM_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.SystemType.ONLINE_DEVICES))
                 .register(meterRegistry);
 
         // WebSocket连接率
-        Gauge.builder("terminal_system_metrics", this, DeviceMetricsService::getWebsocketConnectionRatio)
-                .description("系统核心指标")
-                .tags(Tags.of("type", "websocket_ratio"))
-                .register(meterRegistry);
-
-        // 负载均衡比例
-        Gauge.builder("terminal_system_metrics", this, DeviceMetricsService::getConnectionBalance)
-                .description("系统核心指标")
-                .tags(Tags.of("type", "balance_ratio"))
+        Gauge.builder(MetricsConstant.TERMINAL_SYSTEM_METRICS, this, DeviceMetricsService::getWebsocketConnectionRatio)
+                .description(MetricsConstant.SYSTEM_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.SystemType.WEBSOCKET_RATIO))
                 .register(meterRegistry);
     }
 
@@ -108,6 +110,10 @@ public class DeviceMetricsService {
      * 2. 线程池指标合并 - 详细按线程池分组
      */
     private void registerThreadPoolMetrics() {
+        // 1. 注册调度器线程池指标
+        registerSchedulerMetrics();
+
+        // 2. 注册普通线程池指标
         if (taskExecutors == null || taskExecutors.length == 0) {
             return;
         }
@@ -117,35 +123,130 @@ public class DeviceMetricsService {
             final String poolName = getThreadPoolName(taskExecutors[i], poolIndex);
 
             // 利用率
-            Gauge.builder("terminal_threadpool_metrics", this, service -> service.getThreadPoolUtilization(poolIndex))
-                    .description("线程池详细指标")
-                    .tags(Tags.of("pool", poolName, "type", "utilization"))
+            Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, service -> service.getThreadPoolUtilization(poolIndex))
+                    .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                    .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.UTILIZATION))
                     .register(meterRegistry);
 
             // 活跃线程数
-            Gauge.builder("terminal_threadpool_metrics", this, service -> service.getThreadPoolActiveThreads(poolIndex))
-                    .description("线程池详细指标")
-                    .tags(Tags.of("pool", poolName, "type", "active_threads"))
+            Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, service -> service.getThreadPoolActiveThreads(poolIndex))
+                    .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                    .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.ACTIVE_THREADS))
                     .register(meterRegistry);
 
             // 队列大小
-            Gauge.builder("terminal_threadpool_metrics", this, service -> service.getThreadPoolQueueSize(poolIndex))
-                    .description("线程池详细指标")
-                    .tags(Tags.of("pool", poolName, "type", "queue_size"))
+            Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, service -> service.getThreadPoolQueueSize(poolIndex))
+                    .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                    .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.QUEUE_SIZE))
                     .register(meterRegistry);
 
             // 核心线程数
-            Gauge.builder("terminal_threadpool_metrics", this, service -> service.getThreadPoolCoreThreads(poolIndex))
-                    .description("线程池详细指标")
-                    .tags(Tags.of("pool", poolName, "type", "core_threads"))
+            Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, service -> service.getThreadPoolCoreThreads(poolIndex))
+                    .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                    .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.CORE_THREADS))
                     .register(meterRegistry);
 
             // 最大线程数
-            Gauge.builder("terminal_threadpool_metrics", this, service -> service.getThreadPoolMaxThreads(poolIndex))
-                    .description("线程池详细指标")
-                    .tags(Tags.of("pool", poolName, "type", "max_threads"))
+            Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, service -> service.getThreadPoolMaxThreads(poolIndex))
+                    .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                    .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.MAX_THREADS))
+                    .register(meterRegistry);
+
+            // 当前线程数
+            Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, service -> service.getThreadPoolCurrentThreads(poolIndex))
+                    .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                    .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.CURRENT_THREADS))
+                    .register(meterRegistry);
+
+            // 总任务数
+            Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, service -> service.getThreadPoolTotalTasks(poolIndex))
+                    .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                    .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.TOTAL_TASKS))
+                    .register(meterRegistry);
+
+            // 已完成任务数
+            Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, service -> service.getThreadPoolCompletedTasks(poolIndex))
+                    .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                    .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.COMPLETED_TASKS))
+                    .register(meterRegistry);
+
+            // 最大队列容量
+            Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, service -> service.getThreadPoolQueueCapacity(poolIndex))
+                    .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                    .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.QUEUE_CAPACITY))
+                    .register(meterRegistry);
+
+            // 队列使用率
+            Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, service -> service.getThreadPoolQueueUtilization(poolIndex))
+                    .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                    .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.QUEUE_UTILIZATION))
                     .register(meterRegistry);
         }
+    }
+
+    /**
+     * 注册调度器线程池指标
+     */
+    private void registerSchedulerMetrics() {
+        if (taskScheduler == null) {
+            return;
+        }
+
+        final String poolName = MetricsConstant.DEVICE_SCHEDULER_POOL;
+
+        // 利用率
+        Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, DeviceMetricsService::getSchedulerUtilization)
+                .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.UTILIZATION))
+                .register(meterRegistry);
+
+        // 活跃线程数
+        Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, DeviceMetricsService::getSchedulerActiveThreads)
+                .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.ACTIVE_THREADS))
+                .register(meterRegistry);
+
+        // 队列大小
+        Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, DeviceMetricsService::getSchedulerQueueSize)
+                .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.QUEUE_SIZE))
+                .register(meterRegistry);
+
+        // 核心线程数（调度器的poolSize）
+        Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, DeviceMetricsService::getSchedulerCoreThreads)
+                .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.CORE_THREADS))
+                .register(meterRegistry);
+
+        // 最大线程数（调度器的poolSize）
+        Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, DeviceMetricsService::getSchedulerMaxThreads)
+                .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.MAX_THREADS))
+                .register(meterRegistry);
+
+        // 当前线程数
+        Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, DeviceMetricsService::getSchedulerCurrentThreads)
+                .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.CURRENT_THREADS))
+                .register(meterRegistry);
+
+        // 总任务数
+        Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, DeviceMetricsService::getSchedulerTotalTasks)
+                .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.TOTAL_TASKS))
+                .register(meterRegistry);
+
+        // 已完成任务数
+        Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, DeviceMetricsService::getSchedulerCompletedTasks)
+                .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.COMPLETED_TASKS))
+                .register(meterRegistry);
+
+        // 队列容量（调度器通常为无界队列）
+        Gauge.builder(MetricsConstant.TERMINAL_THREADPOOL_METRICS, this, DeviceMetricsService::getSchedulerQueueCapacity)
+                .description(MetricsConstant.THREADPOOL_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.POOL, poolName, MetricsConstant.TagKey.TYPE, MetricsConstant.ThreadPoolType.QUEUE_CAPACITY))
+                .register(meterRegistry);
     }
 
     /**
@@ -157,12 +258,12 @@ public class DeviceMetricsService {
         }
 
         // 注册16个分片的连接数指标
-        for (int shardId = 0; shardId < 16; shardId++) {
+        for (int shardId = 0; shardId < MetricsConstant.SHARD_COUNT; shardId++) {
             final int finalShardId = shardId;
 
-            Gauge.builder("terminal_shard_metrics", this, service -> service.getShardConnectionCount(finalShardId))
-                    .description("分片详细指标")
-                    .tags(Tags.of("shard_id", String.valueOf(shardId), "type", "connections"))
+            Gauge.builder(MetricsConstant.TERMINAL_SHARD_METRICS, this, service -> service.getShardConnectionCount(finalShardId))
+                    .description(MetricsConstant.SHARD_METRICS_DESC)
+                    .tags(Tags.of(MetricsConstant.TagKey.SHARD_ID, String.valueOf(shardId), MetricsConstant.TagKey.TYPE, MetricsConstant.ShardType.CONNECTIONS))
                     .register(meterRegistry);
         }
     }
@@ -187,12 +288,12 @@ public class DeviceMetricsService {
      */
     private void registerActualProtocolVersions() {
         // 只注册项目中实际使用的协议版本 v1.0 和 v1.1
-        String[] actualVersions = {"v1.0", "v1.1"};
+        String[] actualVersions = MetricsConstant.ProtocolVersions.ACTUAL_VERSIONS;
 
         for (String version : actualVersions) {
-            Gauge.builder("terminal_protocol_metrics", this, service -> service.getProtocolVersionConnections(version))
-                    .description("协议版本连接数")
-                    .tags(Tags.of("version", version, "type", "connections"))
+            Gauge.builder(MetricsConstant.TERMINAL_PROTOCOL_METRICS, this, service -> service.getProtocolVersionConnections(version))
+                    .description(MetricsConstant.PROTOCOL_METRICS_DESC)
+                    .tags(Tags.of(MetricsConstant.TagKey.VERSION, version, MetricsConstant.TagKey.TYPE, MetricsConstant.ProtocolType.CONNECTIONS))
                     .register(meterRegistry);
         }
     }
@@ -202,30 +303,28 @@ public class DeviceMetricsService {
      */
     private void registerEventLoopMetrics() {
         // 待处理任务数
-        Gauge.builder("terminal_eventloop_metrics", this, DeviceMetricsService::getEventLoopPendingTasks)
-                .description("EventLoop性能指标")
-                .tags(Tags.of("type", "pending_tasks"))
+        Gauge.builder(MetricsConstant.TERMINAL_EVENTLOOP_METRICS, this, DeviceMetricsService::getEventLoopPendingTasks)
+                .description(MetricsConstant.EVENTLOOP_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.EventLoopType.PENDING_TASKS))
                 .register(meterRegistry);
 
         // 告警计数器(用于Grafana rate计算)
-        eventLoopWarnings = Counter.builder("terminal_eventloop_warnings_total")
-                .description("EventLoop告警总数")
-                .tags(Tags.of("level", "warning"))
+        eventLoopWarnings = Counter.builder(MetricsConstant.TERMINAL_EVENTLOOP_WARNINGS_TOTAL)
+                .description(MetricsConstant.EVENTLOOP_WARNINGS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.LEVEL, MetricsConstant.AlertLevel.WARNING))
                 .register(meterRegistry);
 
-        eventLoopCriticals = Counter.builder("terminal_eventloop_criticals_total")
-                .description("EventLoop严重告警总数")
-                .tags(Tags.of("level", "critical"))
+        eventLoopCriticals = Counter.builder(MetricsConstant.TERMINAL_EVENTLOOP_CRITICALS_TOTAL)
+                .description(MetricsConstant.EVENTLOOP_CRITICALS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.LEVEL, MetricsConstant.AlertLevel.CRITICAL))
                 .register(meterRegistry);
     }
-
-    // ============== 指标计算方法 ==============
 
     private double getCurrentConnectionCount() {
         try {
             return connectionManagerPort.getConnectionCount();
         } catch (Exception e) {
-            log.warn("TerminalMetrics -connection- 获取连接数失败", e);
+            log.warn("{} 获取连接数失败", MetricsConstant.LogTag.CONNECTION, e);
             return 0.0;
         }
     }
@@ -234,7 +333,7 @@ public class DeviceMetricsService {
         try {
             return connectionManagerPort.getOnlineDeviceIds().size();
         } catch (Exception e) {
-            log.warn("TerminalMetrics -device- 获取在线设备数失败", e);
+            log.warn("{} 获取在线设备数失败", MetricsConstant.LogTag.DEVICE, e);
             return 0.0;
         }
     }
@@ -252,7 +351,7 @@ public class DeviceMetricsService {
             int totalOnlineDevices = deviceOnlineStatusPort.getOnlineDeviceCount();
 
             if (totalOnlineDevices == 0) {
-                log.error("TerminalMetrics -websocket- websocket连接率计算错误: websocket连接数 > 总在线数（0）");
+                log.error("{} websocket连接率计算错误: websocket连接数 > 总在线数（0）", MetricsConstant.LogTag.WEBSOCKET);
             }
 
             // 计算WebSocket连接率
@@ -260,35 +359,8 @@ public class DeviceMetricsService {
             return Math.min(ratio, 1.0); // 确保不超过100%
 
         } catch (Exception e) {
-            log.warn("TerminalMetrics -websocket- 获取websocket连接率失败", e);
+            log.warn("{} 获取websocket连接率失败", MetricsConstant.LogTag.WEBSOCKET, e);
             return 0.0; // 出错时返回0，表示无法确定连接率
-        }
-    }
-
-    private double getConnectionBalance() {
-        try {
-            if (!(connectionManagerPort instanceof ShardedConnectionManager shardedManager)) {
-                // 非分片管理器，默认认为完全均衡
-                return 1.0;
-            }
-
-            // 使用缓存的分片统计数据
-            Map<String, Object> shardStats = getCachedShardStatistics(shardedManager);
-
-            // 获取分片大小数据
-            @SuppressWarnings("unchecked")
-            Map<Integer, Integer> shardSizes = (Map<Integer, Integer>) shardStats.get("shardSizes");
-
-            if (shardSizes == null || shardSizes.isEmpty()) {
-                return 1.0; // 无数据时认为完全均衡
-            }
-
-            // 计算负载均衡比例
-            return calculateLoadBalanceRatio(shardSizes);
-
-        } catch (Exception e) {
-            log.warn("TerminalMetrics -balance- 获取负载均衡比例失败", e);
-            return 1.0; // 出错时假设均衡
         }
     }
 
@@ -302,7 +374,7 @@ public class DeviceMetricsService {
             return maxPoolSize > 0 ? (double) executor.getActiveCount() / maxPoolSize * 100 : 0.0;
 
         } catch (Exception e) {
-            log.warn("TerminalMetrics -threadpool- 获取线程池利用率失败 poolIndex={}", poolIndex, e);
+            log.warn("{} 获取线程池利用率失败 poolIndex={}", MetricsConstant.LogTag.THREADPOOL, poolIndex, e);
             return 0.0;
         }
     }
@@ -312,7 +384,7 @@ public class DeviceMetricsService {
             ThreadPoolExecutor executor = getThreadPoolExecutor(poolIndex);
             return executor != null ? executor.getActiveCount() : 0.0;
         } catch (Exception e) {
-            log.debug("TerminalMetricsServiceOptimized - 获取线程池活跃线程数异常, poolIndex: {}", poolIndex, e);
+            log.debug("{} 获取线程池活跃线程数异常, poolIndex: {}", MetricsConstant.LogTag.THREADPOOL, poolIndex, e);
             return 0.0;
         }
     }
@@ -322,7 +394,7 @@ public class DeviceMetricsService {
             ThreadPoolExecutor executor = getThreadPoolExecutor(poolIndex);
             return executor != null ? executor.getQueue().size() : 0.0;
         } catch (Exception e) {
-            log.debug("TerminalMetricsServiceOptimized - 获取线程池队列大小异常, poolIndex: {}", poolIndex, e);
+            log.debug("{} 获取线程池队列大小异常, poolIndex: {}", MetricsConstant.LogTag.THREADPOOL, poolIndex, e);
             return 0.0;
         }
     }
@@ -332,7 +404,7 @@ public class DeviceMetricsService {
             ThreadPoolExecutor executor = getThreadPoolExecutor(poolIndex);
             return executor != null ? executor.getCorePoolSize() : 0.0;
         } catch (Exception e) {
-            log.debug("TerminalMetricsServiceOptimized - 获取线程池核心线程数异常, poolIndex: {}", poolIndex, e);
+            log.debug("{} 获取线程池核心线程数异常, poolIndex: {}", MetricsConstant.LogTag.THREADPOOL, poolIndex, e);
             return 0.0;
         }
     }
@@ -342,7 +414,77 @@ public class DeviceMetricsService {
             ThreadPoolExecutor executor = getThreadPoolExecutor(poolIndex);
             return executor != null ? executor.getMaximumPoolSize() : 0.0;
         } catch (Exception e) {
-            log.debug("TerminalMetricsServiceOptimized - 获取线程池最大线程数异常, poolIndex: {}", poolIndex, e);
+            log.debug("{} 获取线程池最大线程数异常, poolIndex: {}", MetricsConstant.LogTag.THREADPOOL, poolIndex, e);
+            return 0.0;
+        }
+    }
+
+    private double getThreadPoolCurrentThreads(int poolIndex) {
+        try {
+            ThreadPoolExecutor executor = getThreadPoolExecutor(poolIndex);
+            return executor != null ? executor.getPoolSize() : 0.0;
+        } catch (Exception e) {
+            log.debug("{} 获取线程池当前线程数异常, poolIndex: {}", MetricsConstant.LogTag.THREADPOOL, poolIndex, e);
+            return 0.0;
+        }
+    }
+
+    private double getThreadPoolTotalTasks(int poolIndex) {
+        try {
+            ThreadPoolExecutor executor = getThreadPoolExecutor(poolIndex);
+            return executor != null ? executor.getTaskCount() : 0.0;
+        } catch (Exception e) {
+            log.debug("{} 获取线程池总任务数异常, poolIndex: {}", MetricsConstant.LogTag.THREADPOOL, poolIndex, e);
+            return 0.0;
+        }
+    }
+
+    private double getThreadPoolCompletedTasks(int poolIndex) {
+        try {
+            ThreadPoolExecutor executor = getThreadPoolExecutor(poolIndex);
+            return executor != null ? executor.getCompletedTaskCount() : 0.0;
+        } catch (Exception e) {
+            log.debug("{} 获取线程池已完成任务数异常, poolIndex: {}", MetricsConstant.LogTag.THREADPOOL, poolIndex, e);
+            return 0.0;
+        }
+    }
+
+    private double getThreadPoolQueueCapacity(int poolIndex) {
+        try {
+            if (taskExecutors == null || poolIndex >= taskExecutors.length) {
+                return 0.0;
+            }
+            ThreadPoolTaskExecutor executor = taskExecutors[poolIndex];
+            return executor != null ? executor.getQueueCapacity() : 0.0;
+        } catch (Exception e) {
+            log.debug("{} 获取线程池队列容量异常, poolIndex: {}", MetricsConstant.LogTag.THREADPOOL, poolIndex, e);
+            return 0.0;
+        }
+    }
+
+    private double getThreadPoolQueueUtilization(int poolIndex) {
+        try {
+            ThreadPoolExecutor executor = getThreadPoolExecutor(poolIndex);
+            if (executor == null) {
+                return 0.0;
+            }
+
+            if (taskExecutors == null || poolIndex >= taskExecutors.length) {
+                return 0.0;
+            }
+
+            ThreadPoolTaskExecutor taskExecutor = taskExecutors[poolIndex];
+            int queueCapacity = taskExecutor.getQueueCapacity();
+
+            if (queueCapacity <= 0) {
+                return 0.0; // 无界队列或容量为0
+            }
+
+            int currentQueueSize = executor.getQueue().size();
+            return (double) currentQueueSize / queueCapacity * 100;
+
+        } catch (Exception e) {
+            log.debug("{} 获取线程池队列使用率异常, poolIndex: {}", MetricsConstant.LogTag.THREADPOOL, poolIndex, e);
             return 0.0;
         }
     }
@@ -354,14 +496,14 @@ public class DeviceMetricsService {
                 return 0.0;
             }
 
-            Map<String, Object> shardStats = getCachedShardStatistics(shardedManager);
+            Map<String, Object> shardStats = shardedManager.getShardStatistics();
             @SuppressWarnings("unchecked")
             Map<Integer, Integer> shardSizes = (Map<Integer, Integer>) shardStats.get("shardSizes");
 
             return shardSizes != null ? shardSizes.getOrDefault(shardId, 0) : 0.0;
 
         } catch (Exception e) {
-            log.debug("TerminalMetricsServiceOptimized - 获取分片连接数异常, shardId: {}", shardId, e);
+            log.debug("{} 获取分片连接数异常, shardId: {}", MetricsConstant.LogTag.THREADPOOL, shardId, e);
             return 0.0;
         }
     }
@@ -390,7 +532,7 @@ public class DeviceMetricsService {
             return shardedManager.getProtocolVersionConnectionCount(protocolVersion);
 
         } catch (Exception e) {
-            log.error("TerminalMetricsServiceOptimized - 获取协议版本连接数异常, version: {}", version, e);
+            log.error("{} 获取协议版本连接数异常, version: {}", MetricsConstant.LogTag.THREADPOOL, version, e);
             return 0.0;
         }
     }
@@ -407,7 +549,8 @@ public class DeviceMetricsService {
         }
 
         // 移除前缀 "v" 并匹配枚举
-        String cleanVersion = version.startsWith("v") ? version.substring(1) : version;
+        String cleanVersion = version.startsWith(MetricsConstant.PROTOCOL_VERSION_PREFIX) ? 
+            version.substring(1) : version;
 
         return switch (cleanVersion) {
             case "1.0" -> ProtocolVersion.V1_0;
@@ -421,7 +564,112 @@ public class DeviceMetricsService {
             EventLoopHealthMonitor.EventLoopStatistics statistics = eventLoopHealthMonitor.getStatistics();
             return statistics.totalPendingTasks();
         } catch (Exception e) {
-            log.warn("TerminalMetrics -eventloop- 获取EventLoop待处理任务失败", e);
+            log.warn("{} 获取EventLoop待处理任务失败", MetricsConstant.LogTag.EVENTLOOP, e);
+            return 0.0;
+        }
+    }
+
+    // ============== 调度器指标方法 ==============
+
+    private double getSchedulerUtilization() {
+        try {
+            if (taskScheduler == null) return 0.0;
+
+            ThreadPoolExecutor executor = taskScheduler.getScheduledThreadPoolExecutor();
+
+            int poolSize = taskScheduler.getPoolSize();
+            return poolSize > 0 ? (double) executor.getActiveCount() / poolSize * 100 : 0.0;
+
+        } catch (Exception e) {
+            log.debug("{} 获取调度器利用率异常", MetricsConstant.LogTag.SCHEDULER, e);
+            return 0.0;
+        }
+    }
+
+    private double getSchedulerActiveThreads() {
+        try {
+            if (taskScheduler == null) return 0.0;
+
+            ThreadPoolExecutor executor = taskScheduler.getScheduledThreadPoolExecutor();
+            return executor.getActiveCount();
+        } catch (Exception e) {
+            log.debug("{} 获取调度器活跃线程数异常", MetricsConstant.LogTag.SCHEDULER, e);
+            return 0.0;
+        }
+    }
+
+    private double getSchedulerQueueSize() {
+        try {
+            if (taskScheduler == null) return 0.0;
+
+            ThreadPoolExecutor executor = taskScheduler.getScheduledThreadPoolExecutor();
+            return executor.getQueue().size();
+        } catch (Exception e) {
+            log.debug("{} 获取调度器队列大小异常", MetricsConstant.LogTag.SCHEDULER, e);
+            return 0.0;
+        }
+    }
+
+    private double getSchedulerCoreThreads() {
+        try {
+            return taskScheduler != null ? taskScheduler.getPoolSize() : 0.0;
+        } catch (Exception e) {
+            log.debug("{} 获取调度器核心线程数异常", MetricsConstant.LogTag.SCHEDULER, e);
+            return 0.0;
+        }
+    }
+
+    private double getSchedulerMaxThreads() {
+        try {
+            return taskScheduler != null ? taskScheduler.getPoolSize() : 0.0;
+        } catch (Exception e) {
+            log.debug("{} 获取调度器最大线程数异常", MetricsConstant.LogTag.SCHEDULER, e);
+            return 0.0;
+        }
+    }
+
+    private double getSchedulerCurrentThreads() {
+        try {
+            if (taskScheduler == null) return 0.0;
+
+            ThreadPoolExecutor executor = taskScheduler.getScheduledThreadPoolExecutor();
+            return executor.getPoolSize();
+        } catch (Exception e) {
+            log.debug("{} 获取调度器当前线程数异常", MetricsConstant.LogTag.SCHEDULER, e);
+            return 0.0;
+        }
+    }
+
+    private double getSchedulerTotalTasks() {
+        try {
+            if (taskScheduler == null) return 0.0;
+
+            ThreadPoolExecutor executor = taskScheduler.getScheduledThreadPoolExecutor();
+            return executor.getTaskCount();
+        } catch (Exception e) {
+            log.debug("{} 获取调度器总任务数异常", MetricsConstant.LogTag.SCHEDULER, e);
+            return 0.0;
+        }
+    }
+
+    private double getSchedulerCompletedTasks() {
+        try {
+            if (taskScheduler == null) return 0.0;
+
+            ThreadPoolExecutor executor = taskScheduler.getScheduledThreadPoolExecutor();
+            return executor.getCompletedTaskCount();
+        } catch (Exception e) {
+            log.debug("{} 获取调度器已完成任务数异常", MetricsConstant.LogTag.SCHEDULER, e);
+            return 0.0;
+        }
+    }
+
+    private double getSchedulerQueueCapacity() {
+        try {
+            // ThreadPoolTaskScheduler通常使用无界队列，返回Integer.MAX_VALUE或-1表示无界
+            return -1.0; // 表示无界队列
+        } catch (Exception e) {
+            log.debug("{} 获取调度器队列容量异常", MetricsConstant.LogTag.SCHEDULER, e);
             return 0.0;
         }
     }
@@ -445,7 +693,7 @@ public class DeviceMetricsService {
                         ThreadPoolExecutor poolExecutor = executor.getThreadPoolExecutor();
                         return !poolExecutor.isShutdown();
                     } catch (Exception e) {
-                        log.debug("TerminalMetrics -threadpool- 线程池执行器不可用: {}", e.getMessage());
+                        log.debug("{} 线程池执行器不可用: {}", MetricsConstant.LogTag.THREADPOOL, e.getMessage());
                         return false;
                     }
                 })
@@ -466,89 +714,22 @@ public class DeviceMetricsService {
             ThreadPoolExecutor poolExecutor = executor.getThreadPoolExecutor();
             return !poolExecutor.isShutdown() ? poolExecutor : null;
         } catch (Exception e) {
-            log.debug("TerminalMetrics -threadpool- 线程池执行器不可用 poolIndex={}: {}", poolIndex, e.getMessage());
+            log.debug("{} 线程池执行器不可用 poolIndex={}: {}", MetricsConstant.LogTag.THREADPOOL, poolIndex, e.getMessage());
             return null;
         }
     }
 
     private String getThreadPoolName(ThreadPoolTaskExecutor executor, int index) {
         if (executor == null) {
-            return "pool-" + index;
+            return MetricsConstant.DEFAULT_POOL_PREFIX + index;
         }
 
         try {
             String threadNamePrefix = executor.getThreadNamePrefix();
-            return threadNamePrefix.replace("-", "");
+            return threadNamePrefix.replace(MetricsConstant.THREAD_NAME_SEPARATOR, "");
         } catch (Exception e) {
-            return "pool-" + index;
+            return MetricsConstant.DEFAULT_POOL_PREFIX + index;
         }
-    }
-
-    private Map<String, Object> getCachedShardStatistics(ShardedConnectionManager shardedManager) {
-        long currentTime = System.currentTimeMillis();
-
-        Map<String, Object> currentCache = cachedShardStats.get();
-        if (currentCache != null && (currentTime - cacheTimestamp.get()) < CACHE_TTL_MS) {
-            return currentCache;
-        }
-
-        try {
-            Map<String, Object> newStats = shardedManager.getShardStatistics();
-            cachedShardStats.set(newStats);
-            cacheTimestamp.set(currentTime);
-            return newStats;
-        } catch (Exception e) {
-            log.warn("TerminalMetrics -cache- 获取分片统计失败，使用默认值", e);
-            // 返回默认的空统计数据
-            Map<String, Object> defaultStats = Map.of(
-                "totalShards", 0,
-                "totalConnections", 0,
-                "shardSizes", Map.of()
-            );
-            cachedShardStats.set(defaultStats);
-            cacheTimestamp.set(currentTime);
-            return defaultStats;
-        }
-    }
-
-    /**
-     * 计算负载均衡比例
-     * 使用变异系数(CV)算法：CV = 标准差/均值
-     * 负载均衡比例 = 1.0 - min(CV, 1.0)
-     *
-     * @param shardSizes 各分片的连接数分布
-     * @return 负载均衡比例，范围[0.0, 1.0]，1.0表示完全均衡
-     */
-    private double calculateLoadBalanceRatio(Map<Integer, Integer> shardSizes) {
-        Collection<Integer> sizes = shardSizes.values();
-        int shardCount = sizes.size();
-
-        if (shardCount <= 1) {
-            return 1.0; // 只有一个分片，认为完全均衡
-        }
-
-        // 计算总连接数和平均值
-        double totalConnections = sizes.stream().mapToInt(Integer::intValue).sum();
-        if (totalConnections == 0) {
-            return 1.0; // 无连接时认为完全均衡
-        }
-
-        double mean = totalConnections / shardCount;
-
-        // 计算方差
-        double variance = sizes.stream()
-                .mapToDouble(size -> Math.pow(size - mean, 2))
-                .sum() / shardCount;
-
-        // 计算标准差
-        double standardDeviation = Math.sqrt(variance);
-
-        // 计算变异系数 (Coefficient of Variation)
-        double coefficientOfVariation = mean > 0 ? standardDeviation / mean : 0.0;
-
-        // 负载均衡比例 = 1.0 - min(CV, 1.0)
-        // CV越小表示分布越均匀，均衡比例越高
-        return Math.max(0.0, 1.0 - Math.min(coefficientOfVariation, 1.0));
     }
 
     /**
@@ -556,18 +737,18 @@ public class DeviceMetricsService {
      * 监听EventLoopAlertEvent，根据事件级别更新相应的告警计数器
      */
     @EventListener
-    @Async
+    @Async("deviceEventExecutor")
     public void handleEventLoopAlert(EventLoopAlertEvent event) {
         try {
             if (EventLoopAlertEvent.AlertLevel.WARNING.equals(event.getAlertLevel())) {
                 eventLoopWarnings.increment();
-                log.debug("TerminalMetrics -eventloop- 收到EventLoop告警事件: {}", event.getMessage());
+                log.debug("{} 收到EventLoop告警事件: {}", MetricsConstant.LogTag.EVENTLOOP, event.getMessage());
             } else if (EventLoopAlertEvent.AlertLevel.CRITICAL.equals(event.getAlertLevel())) {
                 eventLoopCriticals.increment();
-                log.warn("TerminalMetrics -eventloop- 收到EventLoop严重告警事件: {}", event.getMessage());
+                log.warn("{} 收到EventLoop严重告警事件: {}", MetricsConstant.LogTag.EVENTLOOP, event.getMessage());
             }
         } catch (Exception e) {
-            log.error("TerminalMetrics -eventloop- 处理EventLoop告警事件失败", e);
+            log.error("{} 处理EventLoop告警事件失败", MetricsConstant.LogTag.EVENTLOOP, e);
         }
     }
 
@@ -578,7 +759,6 @@ public class DeviceMetricsService {
         try {
             return new MetricsSummary(
                 getCurrentConnectionCount(),
-                getConnectionBalance(),
                 getEventLoopPendingTasks(),
                 eventLoopWarnings.count(),
                 eventLoopCriticals.count(),
@@ -589,7 +769,7 @@ public class DeviceMetricsService {
                 getWebsocketConnectionRatio()
             );
         } catch (Exception e) {
-            log.error("TerminalMetrics -summary- 获取指标摘要失败", e);
+            log.error("{} 获取指标摘要失败", MetricsConstant.LogTag.SUMMARY, e);
             return MetricsSummary.empty();
         }
     }
@@ -614,7 +794,7 @@ public class DeviceMetricsService {
                     .average()
                     .orElse(0.0);
         } catch (Exception e) {
-            log.warn("TerminalMetrics -threadpool- 获取平均线程池利用率失败", e);
+            log.warn("{} 获取平均线程池利用率失败", MetricsConstant.LogTag.THREADPOOL, e);
             return 0.0;
         }
     }
@@ -632,7 +812,7 @@ public class DeviceMetricsService {
                     .mapToInt(executor -> executor.getQueue().size())
                     .sum();
         } catch (Exception e) {
-            log.warn("TerminalMetrics -threadpool- 获取线程池队列总大小失败", e);
+            log.warn("{} 获取线程池队列总大小失败", MetricsConstant.LogTag.THREADPOOL, e);
             return 0.0;
         }
     }
@@ -650,7 +830,7 @@ public class DeviceMetricsService {
                     .mapToInt(ThreadPoolExecutor::getActiveCount)
                     .sum();
         } catch (Exception e) {
-            log.warn("TerminalMetrics -threadpool- 获取活跃线程总数失败", e);
+            log.warn("{} 获取活跃线程总数失败", MetricsConstant.LogTag.THREADPOOL, e);
             return 0.0;
         }
     }
@@ -660,7 +840,6 @@ public class DeviceMetricsService {
      */
     public record MetricsSummary(
         double connectionCount,
-        double connectionBalance,
         double eventLoopPendingTasks,
         double eventLoopWarnings,
         double eventLoopCriticals,
@@ -671,13 +850,7 @@ public class DeviceMetricsService {
         double websocketConnectionRatio
     ) {
         public static MetricsSummary empty() {
-            return new MetricsSummary(0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0.0);
-        }
-
-        public boolean isHealthy() {
-            return eventLoopCriticals == 0
-                && threadPoolUtilization < 90.0
-                && websocketConnectionRatio >= 0.0; // WebSocket连接率≥0即为正常
+            return new MetricsSummary(0, 1.0, 0, 0, 0, 0, 0, 0, 0.0);
         }
     }
 }
