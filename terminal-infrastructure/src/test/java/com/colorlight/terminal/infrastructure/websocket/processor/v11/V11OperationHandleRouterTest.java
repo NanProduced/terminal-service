@@ -596,44 +596,6 @@ class V11OperationHandleRouterTest {
     }
     
     @Nested
-    @DisplayName("待实现功能测试")
-    class PendingFeatureTest {
-        
-        @Test
-        @DisplayName("应该处理节目获取请求（待实现）")
-        void should_handle_programs_request() {
-            // Given - 准备节目获取消息
-            V11WebsocketMessage programsMessage = TestDataBuilder.buildMessage(V11WebsocketMessageTypeEnum.PROGRAMS, 9001);
-            
-            // When - 处理消息
-            router.handleMessageByType(messageProcessingContext, programsMessage);
-            
-            // Then - 验证发送节目响应（当前为null数据）
-            verify(messageProcessingContext).sendMessage(messageCaptor.capture());
-            V11WebsocketMessage response = messageCaptor.getValue();
-            assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.PROGRAMS.getId());
-            assertThat(response.getReceiptId()).isEqualTo(9001);
-            assertThat(response.getData()).isNull(); // 待实现功能
-        }
-        
-        @Test
-        @DisplayName("应该处理下载状态上报（待实现）")
-        void should_handle_download_status_report() {
-            // Given - 准备下载状态上报消息
-            V11WebsocketMessage downloadMessage = TestDataBuilder.buildMessageWithData(
-                V11WebsocketMessageTypeEnum.DOWNLOAD_STATUS, 10001, "{\"progress\":75}");
-            
-            // When - 处理消息
-            router.handleMessageByType(messageProcessingContext, downloadMessage);
-            
-            // Then - 验证发送下载状态响应
-            verify(messageProcessingContext).sendMessage(messageCaptor.capture());
-            V11WebsocketMessage response = messageCaptor.getValue();
-            assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.DOWNLOAD_STATUS.getId());
-        }
-    }
-    
-    @Nested
     @DisplayName("边界情况测试")
     class EdgeCaseTest {
         

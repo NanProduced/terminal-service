@@ -24,6 +24,8 @@ public class MediaPlayRecordDocument {
 
     private Long deviceId;
 
+    private Integer mediaId;
+
     private String mediaName;
 
     private String mediaMd5;

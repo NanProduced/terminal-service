@@ -186,10 +186,10 @@ public class V11OperationHandleRouter {
      * @param messageId 消息ID，用于响应时关联请求
      */
     private void handleGetProgram(MessageProcessingContext context, Integer messageId) {
-        // todo: 待主服务RPC接口完成
+        String program = terminalProgramUseCase.getProgram(context.getDeviceId());
 
         // 下发节目
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.PROGRAMS.getId(), messageId, null));
+        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.PROGRAMS.getId(), messageId, program));
         log.info("V11Router -ws- #GET_PROGRAMS#【获取节目】deviceId:{}", context.getDeviceId());
     }
 
@@ -280,8 +280,8 @@ public class V11OperationHandleRouter {
      * @param message 接收到的WebSocket消息对象
      */
     private void handleDownloadingReport(MessageProcessingContext context, V11WebsocketMessage message) {
-
-        //todo: 待主服务实现RPC
+        String dataStr = Objects.isNull(message.getData()) ? EMPTY_JSON : JsonUtils.toJson(message.getData());
+        terminalReportUseCase.asyncSaveDownloadingReport(context.getDeviceId(), dataStr);
 
         log.info("V11Router -ws- #DOWNLOADING_REPORT#【上报下载状态】 deviceId:{}", context.getDeviceId());
         context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.DOWNLOAD_STATUS.getId(), message.getMessageId()));

@@ -70,4 +70,10 @@ public class RedisKeyConstant {
      * 终端在线状态更新分布式锁
      */
     public static final String DEVICE_STATUS_UPDATE_LOCK_KEY = "device:update:lock:%d";
+
+    /*===================  素材Md5与素材Id映射 ====================== */
+    /**
+     * 素材Md5与素材Id映射 - 用于减少素材Md5查询（RPC）
+     */
+    public static final String MEDIA_MD5_ID_MAP_KEY = "media:md5:id:%s";
 }

@@ -11,6 +11,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 素材统计MongoDB存储实现
@@ -25,13 +26,29 @@ public class MongoMediaPlayRecordRepository implements MediaPlayRecordRepository
     private final MediaPlayRecordConverter mediaPlayRecordConverter;
 
     /**
-     * 保存素材播放记录
+     * 保存素材播放记录（不设置素材ID）
      * @param deviceId 设备Id
      * @param reports 上报记录
      */
     @Override
     public void saveMediaPlayRecords(Long deviceId, List<MediaPlayRecordReport> reports) {
         List<MediaPlayRecordDocument> mediaPlayRecordDocuments = mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, reports);
+        try {
+            mongoTemplate.insertAll(mediaPlayRecordDocuments);
+        } catch (Exception e) {
+            throw new TechnicalException(TechErrorCode.MYSQL_ERROR, e);
+        }
+    }
+
+    /**
+     * 保存素材播放记录（包含素材ID映射）
+     * @param deviceId 设备Id
+     * @param reports 上报记录
+     * @param mediaIdMap 素材Id映射表
+     */
+    @Override
+    public void saveMediaPlayRecords(Long deviceId, List<MediaPlayRecordReport> reports, Map<String, Integer> mediaIdMap) {
+        List<MediaPlayRecordDocument> mediaPlayRecordDocuments = mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, reports, mediaIdMap);
         try {
             mongoTemplate.insertAll(mediaPlayRecordDocuments);
         } catch (Exception e) {

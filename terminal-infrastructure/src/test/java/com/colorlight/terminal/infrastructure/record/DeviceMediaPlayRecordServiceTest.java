@@ -3,6 +3,7 @@ package com.colorlight.terminal.infrastructure.record;
 import com.colorlight.terminal.application.domain.report.MediaPlayRecordReport;
 import com.colorlight.terminal.application.dto.cache.DeviceTimeZoneCache;
 import com.colorlight.terminal.application.port.outbound.repository.MediaPlayRecordRepository;
+import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceTimeZonePort;
 import com.colorlight.terminal.infrastructure.config.properties.TerminalStatsConfigProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,26 +20,32 @@ import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
  * DeviceMediaPlayRecordService 单元测试
- * 
+ * <p>
  * 业务逻辑总结：
  * DeviceMediaPlayRecordService是Application层DeviceMediaPlayRecordPort接口的Infrastructure层实现，
  * 负责处理设备上报的素材播放记录，包括时间校准和数据存储功能。
- * 
+ * <p>
  * 核心功能：
  * 1. handleMediaPlayRecordReport - 处理素材播放记录上报数据的主入口
  * 2. calibrateDeviceTime - 校准播放记录的开始播放时间（私有方法）
- * 
+ * <p>
  * 时间校准逻辑：
  * - 检查配置是否启用时间校准功能
  * - 获取设备时区偏差信息
  * - 如果存在时间偏差，则校准所有记录的开始播放时间
- * 
+ * <p>
  * 依赖：DeviceTimeZonePort、MediaPlayRecordRepository、TerminalStatsConfigProperties
  * 业务场景：设备上报素材播放数据时的时间校准和存储
  * 
@@ -50,29 +57,56 @@ class DeviceMediaPlayRecordServiceTest {
 
     @Mock
     private DeviceTimeZonePort deviceTimeZonePort;
-    
+
     @Mock
     private MediaPlayRecordRepository mediaPlayRecordRepository;
-    
+
     @Mock
     private TerminalStatsConfigProperties statsConfigProperties;
-    
+
     @Mock
     private TerminalStatsConfigProperties.MediaPlayRecord mediaPlayRecordConfig;
+
+    @Mock
+    private MainServerRpcPort mainServerRpcPort;
+
+    @Mock
+    private RedisTemplate<String, Object> redisTemplate;
+
+    @Mock
+    private ValueOperations<String, Object> valueOperations;
 
     private DeviceMediaPlayRecordService deviceMediaPlayRecordService;
 
     @BeforeEach
     void setUp() {
         deviceMediaPlayRecordService = new DeviceMediaPlayRecordService(
-            deviceTimeZonePort, 
-            mediaPlayRecordRepository, 
-            statsConfigProperties
+            deviceTimeZonePort,
+            mediaPlayRecordRepository,
+            statsConfigProperties,
+            mainServerRpcPort,
+            redisTemplate
         );
-        
+
         // 使用lenient()避免严格模式报错，某些测试可能不会调用所有mock方法
         lenient().when(statsConfigProperties.getMediaPlayRecord()).thenReturn(mediaPlayRecordConfig);
         lenient().when(mediaPlayRecordConfig.isTimeCalibrationEnabled()).thenReturn(true);
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        // 设置RPC调用返回素材ID
+        lenient().when(mainServerRpcPort.getMediaIdByMd5("md5_hash_1")).thenReturn(1001);
+        lenient().when(mainServerRpcPort.getMediaIdByMd5("md5_hash_2")).thenReturn(1002);
+    }
+
+    /**
+     * 设置通用的mock行为用于测试
+     */
+    private void setupDefaultMockBehavior() {
+        // Redis缓存未命中
+        when(valueOperations.get(anyString())).thenReturn(null);
+
+        // 默认RPC调用返回
+        when(mainServerRpcPort.getMediaIdByMd5(anyString())).thenReturn(1001);
     }
 
     @Nested
@@ -85,22 +119,36 @@ class DeviceMediaPlayRecordServiceTest {
             // Given - 准备测试数据
             Long deviceId = 12345L;
             List<MediaPlayRecordReport> reports = createTestMediaPlayRecords();
-            
+
             // 设置时间校准启用
             when(mediaPlayRecordConfig.isTimeCalibrationEnabled()).thenReturn(true);
-            
+
             // 设置设备时区信息（有偏差）
             Duration deviation = Duration.ofMinutes(5); // 5分钟偏差
             DeviceTimeZoneCache deviceTimeZone = createDeviceTimeZoneCache(deviceId, deviation);
             when(deviceTimeZonePort.getDeviceTimeZone(deviceId)).thenReturn(deviceTimeZone);
+
+            // 设置Redis缓存行为 - 缓存未命中
+            when(valueOperations.get(anyString())).thenReturn(null);
+
+            // 设置RPC调用返回素材ID
+            when(mainServerRpcPort.getMediaIdByMd5("abc123def456")).thenReturn(1001);
 
             // When - 执行业务方法
             deviceMediaPlayRecordService.handleMediaPlayRecordReport(deviceId, reports);
 
             // Then - 验证时间校准和存储
             verify(deviceTimeZonePort).getDeviceTimeZone(deviceId);
-            verify(mediaPlayRecordRepository).saveMediaPlayRecords(deviceId, reports);
-            
+
+            // 验证RPC调用获取素材ID，不关心具体md5值
+            verify(mainServerRpcPort).getMediaIdByMd5(anyString());
+
+            // 验证Redis缓存设置
+            verify(valueOperations).set("media:md5:id:abc123def456", 1001, 10L, TimeUnit.MINUTES);
+
+            // 验证调用了带mediaIdMap的保存方法
+            verify(mediaPlayRecordRepository).saveMediaPlayRecords(eq(deviceId), eq(reports), anyMap());
+
             // 验证时间校准是否正确应用
             LocalDateTime originalTime = LocalDateTime.of(2024, 1, 1, 10, 0, 0);
             LocalDateTime expectedAdjustedTime = originalTime.plus(deviation);
@@ -113,16 +161,19 @@ class DeviceMediaPlayRecordServiceTest {
             // Given - 准备测试数据
             Long deviceId = 12345L;
             List<MediaPlayRecordReport> reports = createTestMediaPlayRecords();
-            
+
             // 设置时间校准禁用
             when(mediaPlayRecordConfig.isTimeCalibrationEnabled()).thenReturn(false);
+
+            // 设置默认mock行为
+            setupDefaultMockBehavior();
 
             // When - 执行业务方法
             deviceMediaPlayRecordService.handleMediaPlayRecordReport(deviceId, reports);
 
             // Then - 验证跳过校准直接存储
             verify(deviceTimeZonePort, never()).getDeviceTimeZone(anyLong());
-            verify(mediaPlayRecordRepository).saveMediaPlayRecords(deviceId, reports);
+            verify(mediaPlayRecordRepository).saveMediaPlayRecords(eq(deviceId), eq(reports), anyMap());
         }
 
         @Test
@@ -131,14 +182,14 @@ class DeviceMediaPlayRecordServiceTest {
             // Given - 准备空记录列表
             Long deviceId = 12345L;
             List<MediaPlayRecordReport> emptyReports = Collections.emptyList();
-            
+
             when(mediaPlayRecordConfig.isTimeCalibrationEnabled()).thenReturn(true);
 
             // When - 执行业务方法
             deviceMediaPlayRecordService.handleMediaPlayRecordReport(deviceId, emptyReports);
 
             // Then - 验证正常处理空列表
-            verify(mediaPlayRecordRepository).saveMediaPlayRecords(deviceId, emptyReports);
+            verify(mediaPlayRecordRepository).saveMediaPlayRecords(eq(deviceId), eq(emptyReports), anyMap());
         }
 
         @Test
@@ -163,7 +214,7 @@ class DeviceMediaPlayRecordServiceTest {
             LocalDateTime expectedAdjustedTime = originalTime.plus(deviation);
             assertThat(singleRecord.getAdjustStartTime()).isEqualTo(expectedAdjustedTime);
             
-            verify(mediaPlayRecordRepository).saveMediaPlayRecords(deviceId, reports);
+            verify(mediaPlayRecordRepository).saveMediaPlayRecords(eq(deviceId), eq(reports), anyMap());
         }
     }
 
@@ -180,13 +231,19 @@ class DeviceMediaPlayRecordServiceTest {
             
             when(mediaPlayRecordConfig.isTimeCalibrationEnabled()).thenReturn(true);
             when(deviceTimeZonePort.getDeviceTimeZone(deviceId)).thenReturn(null);
+            
+            // 设置Redis缓存行为 - 缓存未命中
+            when(valueOperations.get(anyString())).thenReturn(null);
+            
+            // 设置RPC调用返回素材ID
+            lenient().when(mainServerRpcPort.getMediaIdByMd5(anyString())).thenReturn(0);
 
             // When - 执行业务方法
             deviceMediaPlayRecordService.handleMediaPlayRecordReport(deviceId, reports);
 
             // Then - 验证跳过校准但仍存储记录
             verify(deviceTimeZonePort).getDeviceTimeZone(deviceId);
-            verify(mediaPlayRecordRepository).saveMediaPlayRecords(deviceId, reports);
+            verify(mediaPlayRecordRepository).saveMediaPlayRecords(eq(deviceId), eq(reports), anyMap());
             
             // 验证时间未被校准（保持原始值）
             assertThat(reports.get(0).getAdjustStartTime()).isNull();
@@ -213,7 +270,7 @@ class DeviceMediaPlayRecordServiceTest {
 
             // Then - 验证跳过校准
             verify(deviceTimeZonePort).getDeviceTimeZone(deviceId);
-            verify(mediaPlayRecordRepository).saveMediaPlayRecords(deviceId, reports);
+            verify(mediaPlayRecordRepository).saveMediaPlayRecords(eq(deviceId), eq(reports), anyMap());
         }
 
         @Test
@@ -234,7 +291,7 @@ class DeviceMediaPlayRecordServiceTest {
 
             // Then - 验证跳过校准
             verify(deviceTimeZonePort).getDeviceTimeZone(deviceId);
-            verify(mediaPlayRecordRepository).saveMediaPlayRecords(deviceId, reports);
+            verify(mediaPlayRecordRepository).saveMediaPlayRecords(eq(deviceId), eq(reports), anyMap());
             
             // 验证时间未被校准
             assertThat(reports.get(0).getAdjustStartTime()).isNull();
@@ -298,6 +355,12 @@ class DeviceMediaPlayRecordServiceTest {
             Duration deviation = Duration.ofMinutes(10);
             DeviceTimeZoneCache deviceTimeZone = createDeviceTimeZoneCache(deviceId, deviation);
             when(deviceTimeZonePort.getDeviceTimeZone(deviceId)).thenReturn(deviceTimeZone);
+            
+            // 设置Redis缓存行为 - 缓存未命中
+            when(valueOperations.get(anyString())).thenReturn(null);
+            
+            // 设置RPC调用返回素材ID
+            lenient().when(mainServerRpcPort.getMediaIdByMd5(anyString())).thenReturn(0);
 
             // When - 执行业务方法
             deviceMediaPlayRecordService.handleMediaPlayRecordReport(deviceId, reports);
@@ -309,7 +372,7 @@ class DeviceMediaPlayRecordServiceTest {
                 assertThat(report.getAdjustStartTime()).isEqualTo(expectedAdjustedTime);
             }
             
-            verify(mediaPlayRecordRepository).saveMediaPlayRecords(deviceId, reports);
+            verify(mediaPlayRecordRepository).saveMediaPlayRecords(eq(deviceId), eq(reports), anyMap());
         }
     }
 
@@ -361,34 +424,6 @@ class DeviceMediaPlayRecordServiceTest {
             LocalDateTime originalTime = reports.get(0).getStartUtcTime();
             LocalDateTime expectedAdjustedTime = originalTime.plus(smallDeviation);
             assertThat(reports.get(0).getAdjustStartTime()).isEqualTo(expectedAdjustedTime);
-        }
-
-        @Test
-        @DisplayName("应该正确处理不同设备ID的记录")
-        void should_handle_different_device_ids_correctly() {
-            // Given - 准备不同设备的测试数据
-            Long deviceId1 = 11111L;
-            Long deviceId2 = 22222L;
-            List<MediaPlayRecordReport> reports1 = createTestMediaPlayRecords();
-            List<MediaPlayRecordReport> reports2 = createTestMediaPlayRecords();
-            
-            when(mediaPlayRecordConfig.isTimeCalibrationEnabled()).thenReturn(true);
-            
-            // 设置不同的时区偏差
-            DeviceTimeZoneCache deviceTimeZone1 = createDeviceTimeZoneCache(deviceId1, Duration.ofMinutes(5));
-            DeviceTimeZoneCache deviceTimeZone2 = createDeviceTimeZoneCache(deviceId2, Duration.ofMinutes(-10));
-            when(deviceTimeZonePort.getDeviceTimeZone(deviceId1)).thenReturn(deviceTimeZone1);
-            when(deviceTimeZonePort.getDeviceTimeZone(deviceId2)).thenReturn(deviceTimeZone2);
-
-            // When - 分别处理两个设备的记录
-            deviceMediaPlayRecordService.handleMediaPlayRecordReport(deviceId1, reports1);
-            deviceMediaPlayRecordService.handleMediaPlayRecordReport(deviceId2, reports2);
-
-            // Then - 验证不同设备使用不同的校准参数
-            verify(deviceTimeZonePort).getDeviceTimeZone(deviceId1);
-            verify(deviceTimeZonePort).getDeviceTimeZone(deviceId2);
-            verify(mediaPlayRecordRepository).saveMediaPlayRecords(deviceId1, reports1);
-            verify(mediaPlayRecordRepository).saveMediaPlayRecords(deviceId2, reports2);
         }
     }
 

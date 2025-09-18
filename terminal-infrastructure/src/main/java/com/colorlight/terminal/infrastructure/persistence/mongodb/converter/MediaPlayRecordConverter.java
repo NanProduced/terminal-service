@@ -8,6 +8,7 @@ import org.mapstruct.Named;
 import org.mapstruct.NullValueCheckStrategy;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 素材统计domain/doc转换
@@ -21,12 +22,25 @@ public interface MediaPlayRecordConverter {
     @Mapping(target = "mediaName", source = "report.resOriginName")
     @Mapping(target = "mediaMd5", source = "report.resMd5Name")
     @Mapping(target = "type", source = "report.itemType")
+    @Mapping(target = "mediaId", ignore = true)
     MediaPlayRecordDocument convertToMediaPlayRecordDocument(Long deviceId, MediaPlayRecordReport report);
 
     @Named("convertWithDeviceId")
     default List<MediaPlayRecordDocument> convertToMediaPlayRecordDocumentList(Long deviceId, List<MediaPlayRecordReport> reports) {
         return reports.stream()
                 .map(report -> convertToMediaPlayRecordDocument(deviceId, report))
+                .toList();
+    }
+
+    @Named("convertWithDeviceIdAndMediaIdMap")
+    default List<MediaPlayRecordDocument> convertToMediaPlayRecordDocumentList(Long deviceId, List<MediaPlayRecordReport> reports, Map<String, Integer> mediaIdMap) {
+        return reports.stream()
+                .map(report -> {
+                    MediaPlayRecordDocument document = convertToMediaPlayRecordDocument(deviceId, report);
+                    // 根据素材名称设置素材ID
+                    document.setMediaId(mediaIdMap.get(document.getMediaName()));
+                    return document;
+                })
                 .toList();
     }
 }

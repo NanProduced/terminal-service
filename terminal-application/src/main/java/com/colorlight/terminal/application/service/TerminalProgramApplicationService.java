@@ -17,4 +17,14 @@ public class TerminalProgramApplicationService implements TerminalProgramUseCase
     public String getSchedule(Long deviceId) {
         return mainServerRpcPort.getScheduleByDeviceId(deviceId);
     }
+
+    @Override
+    public String getProgram(Long deviceId) {
+        return mainServerRpcPort.getProgramByDeviceId(deviceId);
+    }
+
+    @Override
+    public String getMedia(Integer programId) {
+        return mainServerRpcPort.getMediaByProgramId(programId);
+    }
 }

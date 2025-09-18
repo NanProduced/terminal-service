@@ -11,12 +11,14 @@ import com.colorlight.terminal.boot.converter.CommandConverter;
 import com.colorlight.terminal.boot.converter.TerminalLogConverter;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
+import com.colorlight.terminal.commons.utils.JsonUtils;
 import com.colorlight.terminal.dto.command.DeviceApiCommand;
 import com.colorlight.terminal.dto.command.DeviceApiCommandConfirm;
 import com.colorlight.terminal.dto.log.DeviceApiTerminalLog;
 import com.colorlight.terminal.dto.media.DeviceApiMedia;
 import com.colorlight.terminal.dto.program.DeviceApiProgram;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -156,7 +158,11 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     public List<DeviceApiProgram> getPrograms(String clt_type) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.info("DeviceProgram - 终端 {} 获取节目", principal.getDeviceId());
-        // todo：实现获取节目接口
+        String program = terminalProgramUseCase.getProgram(principal.getDeviceId());
+        if (StringUtils.isNotBlank(program)) {
+            return JsonUtils.fromJson(program, new TypeReference<List<DeviceApiProgram>>() {
+            });
+        }
         return List.of();
     }
 
@@ -175,7 +181,10 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     public List<DeviceApiMedia> getMedia(Integer parent) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.info("DeviceMedia - 终端 {} 获取素材", principal.getDeviceId());
-        // todo：实现获取素材接口
+        String media = terminalProgramUseCase.getMedia(parent);
+        if (StringUtils.isNotBlank(media)) {
+            return JsonUtils.fromJson(media, new TypeReference<List<DeviceApiMedia>>() {});
+        }
         return List.of();
     }
 

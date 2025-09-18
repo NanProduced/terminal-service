@@ -4,6 +4,7 @@ import com.colorlight.ccloud.command.dto.CommandFinishDto;
 import com.colorlight.ccloud.command.interfaces.CommandFinishFacade;
 import com.colorlight.ccloud.command.interfaces.DeviceReportRpcService;
 import com.colorlight.ccloud.common.command.enums.CommandStatusEnum;
+import com.colorlight.ccloud.program.vo.RpcTerminalProgramVO;
 import com.colorlight.ccloud.schedule.dto.Schedule;
 import com.colorlight.ccloud.schedule.interfaces.TerminalScheduleRpcService;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
@@ -19,6 +20,9 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Collections;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -54,6 +58,9 @@ class DubboMainServiceRpcAdapterTest {
     @Mock
     private TerminalScheduleRpcService terminalScheduleRpcService;
 
+    @Mock
+    private com.colorlight.ccloud.program.interfaces.TerminalProgramRpcService terminalProgramRpcService;
+    
     @InjectMocks
     private DubboMainServiceRpcAdapter rpcAdapter;
 
@@ -408,6 +415,124 @@ class DubboMainServiceRpcAdapterTest {
             );
         }
 
+    }
+
+    @Nested
+    @DisplayName("节目获取测试")
+    class ProgramRetrievalTests {
+
+        @Mock
+        private com.colorlight.ccloud.program.interfaces.TerminalProgramRpcService terminalProgramRpcService;
+        
+        @InjectMocks
+        private DubboMainServiceRpcAdapter rpcAdapter;
+        
+        @Test
+        @DisplayName("应该成功获取设备节目并转换为JSON")
+        void should_successfully_get_device_programs_and_convert_to_json() {
+            // Given
+            List<com.colorlight.ccloud.program.vo.RpcTerminalProgramVO> mockPrograms = createMockPrograms();
+            when(terminalProgramRpcService.getTerminalPrograms(TEST_DEVICE_ID)).thenReturn(mockPrograms);
+
+            // When
+            String result = rpcAdapter.getProgramByDeviceId(TEST_DEVICE_ID);
+
+            // Then
+            assertAll(
+                    () -> assertThat(result).isNotNull(),
+                    () -> assertThat(result).isNotBlank()
+            );
+            
+            verify(terminalProgramRpcService).getTerminalPrograms(TEST_DEVICE_ID);
+        }
+
+        @Test
+        @DisplayName("应该处理空节目列表返回null")
+        void should_return_null_for_empty_program_list() {
+            // Given
+            when(terminalProgramRpcService.getTerminalPrograms(TEST_DEVICE_ID))
+                    .thenReturn(Collections.emptyList());
+
+            // When
+            String result = rpcAdapter.getProgramByDeviceId(TEST_DEVICE_ID);
+
+            // Then
+            assertThat(result).isNull();
+            verify(terminalProgramRpcService).getTerminalPrograms(TEST_DEVICE_ID);
+        }
+
+        @Test
+        @DisplayName("应该正确调用节目服务的getTerminalPrograms方法")
+        void should_correctly_call_program_service_get_terminal_programs() {
+            // Given
+            Long specificDeviceId = 99999L;
+            List<com.colorlight.ccloud.program.vo.RpcTerminalProgramVO> mockPrograms = createMockPrograms();
+            when(terminalProgramRpcService.getTerminalPrograms(specificDeviceId)).thenReturn(mockPrograms);
+
+            // When
+            rpcAdapter.getProgramByDeviceId(specificDeviceId);
+
+            // Then
+            verify(terminalProgramRpcService).getTerminalPrograms(specificDeviceId);
+        }
+
+        @Test
+        @DisplayName("应该处理节目服务RPC异常")
+        void should_handle_program_service_rpc_exception() {
+            // Given
+            when(terminalProgramRpcService.getTerminalPrograms(TEST_DEVICE_ID))
+                    .thenThrow(new RpcException("节目服务不可用"));
+
+            // When 
+            String result = rpcAdapter.getProgramByDeviceId(TEST_DEVICE_ID);
+
+            // Then - 应该返回null而不是抛出异常
+            assertThat(result).isNull();
+        }
+
+        @Test
+        @DisplayName("应该处理节目服务通用异常")
+        void should_handle_program_service_general_exception() {
+            // Given
+            when(terminalProgramRpcService.getTerminalPrograms(TEST_DEVICE_ID))
+                    .thenThrow(new RuntimeException("未知异常"));
+
+            // When 
+            String result = rpcAdapter.getProgramByDeviceId(TEST_DEVICE_ID);
+
+            // Then - 应该返回null而不是抛出异常
+            assertThat(result).isNull();
+        }
+
+        @Test
+        @DisplayName("应该处理复杂节目对象的JSON转换")
+        void should_handle_complex_program_object_json_conversion() {
+            // Given
+            List<com.colorlight.ccloud.program.vo.RpcTerminalProgramVO> complexPrograms = createMockPrograms();
+            when(terminalProgramRpcService.getTerminalPrograms(TEST_DEVICE_ID)).thenReturn(complexPrograms);
+
+            // When
+            String result = rpcAdapter.getProgramByDeviceId(TEST_DEVICE_ID);
+
+            // Then
+            assertAll(
+                    () -> assertThat(result).isNotNull(),
+                    () -> assertThat(result).isNotBlank()
+            );
+        }
+        
+        /**
+         * 创建测试用的节目列表
+         */
+        private List<com.colorlight.ccloud.program.vo.RpcTerminalProgramVO> createMockPrograms() {
+            com.colorlight.ccloud.program.vo.RpcTerminalProgramVO program = 
+                mock(com.colorlight.ccloud.program.vo.RpcTerminalProgramVO.class);
+            // 设置mock对象的行为，使其在JSON序列化时能产生有意义的数据
+            when(program.getId()).thenReturn(1);
+            when(program.getTitle()).thenReturn(new RpcTerminalProgramVO.Title("测试节目"));
+            when(program.getType()).thenReturn("video");
+            return Collections.singletonList(program);
+        }
     }
 
     @Nested

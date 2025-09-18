@@ -8,4 +8,8 @@ package com.colorlight.terminal.application.port.inbound.program;
 public interface TerminalProgramUseCase {
 
     String getSchedule(Long deviceId);
+
+    String getProgram(Long deviceId);
+
+    String getMedia(Integer programId);
 }

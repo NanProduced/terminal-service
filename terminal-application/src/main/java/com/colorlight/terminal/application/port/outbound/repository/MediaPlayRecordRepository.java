@@ -3,6 +3,7 @@ package com.colorlight.terminal.application.port.outbound.repository;
 import com.colorlight.terminal.application.domain.report.MediaPlayRecordReport;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 素材播放记录接口端口
@@ -17,4 +18,12 @@ public interface MediaPlayRecordRepository {
      * @param reports 上报记录
      */
     void saveMediaPlayRecords(Long deviceId, List<MediaPlayRecordReport> reports);
+
+    /**
+     * 保存素材播放记录
+     * @param deviceId 设备Id
+     * @param reports 上报记录
+     * @param mediaIdMap 素材Id映射
+     */
+    void saveMediaPlayRecords(Long deviceId, List<MediaPlayRecordReport> reports, Map<String, Integer> mediaIdMap);
 }

@@ -37,6 +37,32 @@ public interface MainServerRpcPort {
      */
     void notifyLedStatus(Long deviceId, String report);
 
+    /**
+     * 获取排程信息
+     * @param deviceId 设备Id
+     * @return 排程JSON
+     */
     String getScheduleByDeviceId(Long deviceId);
+
+    /**
+     * 获取节目信息
+     * @param deviceId 设备Id
+     * @return 节目JSON
+     */
+    String getProgramByDeviceId(Long deviceId);
+
+    /**
+     * 获取素材信息
+     * @param programId 节目Id
+     * @return 素材JSON
+     */
+    String getMediaByProgramId(Integer programId);
+
+    /**
+     * 获取素材Id
+     * @param mediaMd5 素材MD5
+     * @return 素材Id
+     */
+    Integer getMediaIdByMd5(String mediaMd5);
 
 }
