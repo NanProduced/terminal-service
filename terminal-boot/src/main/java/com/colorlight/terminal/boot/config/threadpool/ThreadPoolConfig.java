@@ -3,6 +3,7 @@ package com.colorlight.terminal.boot.config.threadpool;
 import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
 import com.colorlight.terminal.commons.exception.technical.TechnicalException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -12,12 +13,11 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
-import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * 统一线程池配置
- * 
+ * <p>
  * 统一管理所有异步任务和定时任务的线程池，包括：
  * 1. 定时任务调度器（deviceTaskScheduler）- 支持延迟启动
  * 2. 异步事件处理器（deviceEventExecutor）
@@ -28,7 +28,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 7. minio上传处理器（minioUploadExecutor）
  * 8. WebSocket连接处理器（websocketConnectionExecutor）- 避免阻塞EventLoop
  * 9. WebSocket业务处理器（websocketBusinessExecutor）- 处理耗时业务操作
- * 
+ * <p>
  * 所有线程池都配置了守护线程和优雅关闭机制
  * 定时任务支持通过配置控制延迟启动时间，避免启动时资源竞争
  * 
@@ -77,13 +77,23 @@ public class ThreadPoolConfig {
         
         return scheduler;
     }
-    
+
+    /**
+     * 定时任务调度器 - 用于指标监控
+     * 返回ThreadPoolTaskScheduler类型，供DeviceMetricsService监控使用
+     */
+    @Bean("deviceTaskSchedulerForMetrics")
+    public ThreadPoolTaskScheduler deviceTaskSchedulerForMetrics(
+            @Qualifier("deviceTaskScheduler") TaskScheduler taskScheduler) {
+        return (ThreadPoolTaskScheduler) taskScheduler;
+    }
+
     /**
      * 异步事件处理器
      * 专用于设备状态事件的异步处理
      */
     @Bean("deviceEventExecutor")
-    public Executor deviceEventExecutor() {
+    public ThreadPoolTaskExecutor deviceEventExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         
         // 核心线程数
@@ -121,7 +131,7 @@ public class ThreadPoolConfig {
      * 专用于设备状态的异步更新（高频操作）
      */
     @Bean("deviceStatusExecutor")
-    public Executor deviceStatusExecutor() {
+    public ThreadPoolTaskExecutor deviceStatusExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         
         // 核心线程数
@@ -160,7 +170,7 @@ public class ThreadPoolConfig {
      * 超时容错，失败仅记录日志不影响业务
      */
     @Bean("rpcNotificationExecutor")
-    public Executor rpcNotificationExecutor() {
+    public ThreadPoolTaskExecutor rpcNotificationExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         
         // 核心线程数 - 适中配置
@@ -201,7 +211,7 @@ public class ThreadPoolConfig {
      * 专用于高频次统计数据上报：素材播放、节目播放、GPS、传感器数据
      */
     @Bean("statisticsReportExecutor")
-    public Executor statisticsReportExecutor() {
+    public ThreadPoolTaskExecutor statisticsReportExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
         // 核心线程数 - 基于数据库连接池设计
@@ -239,7 +249,7 @@ public class ThreadPoolConfig {
     }
 
     @Bean("minioUploadExecutor")
-    public Executor minioUploadExecutor() {
+    public ThreadPoolTaskExecutor minioUploadExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
         // 核心线程数：处理稳定状态上传负载
@@ -272,7 +282,7 @@ public class ThreadPoolConfig {
      * 避免阻塞Netty EventLoop线程，提升WebSocket服务性能
      */
     @Bean("websocketConnectionExecutor")
-    public Executor websocketConnectionExecutor() {
+    public ThreadPoolTaskExecutor websocketConnectionExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
         // 核心线程数 - 基于WebSocket连接建立频率设计
@@ -315,7 +325,7 @@ public class ThreadPoolConfig {
      * 与连接处理器分离，避免连接建立被业务处理阻塞
      */
     @Bean("websocketBusinessExecutor")
-    public Executor websocketBusinessExecutor() {
+    public ThreadPoolTaskExecutor websocketBusinessExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
         // 核心线程数 - 基于并发消息处理需求设计
@@ -357,7 +367,7 @@ public class ThreadPoolConfig {
      */
     @Bean("defaultAsyncExecutor")
     @Primary
-    public Executor defaultAsyncExecutor() {
+    public ThreadPoolTaskExecutor defaultAsyncExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         
         // 核心线程数
@@ -388,5 +398,36 @@ public class ThreadPoolConfig {
                 executor.getCorePoolSize(), executor.getMaxPoolSize(), executor.getQueueCapacity());
         
         return executor;
+    }
+
+    /**
+     * 线程池数组配置 - 用于指标监控
+     * 收集所有ThreadPoolTaskExecutor实例，供DeviceMetricsService进行指标监控
+     */
+    @Bean("threadPoolExecutors")
+    public ThreadPoolTaskExecutor[] threadPoolExecutors(
+            @Qualifier("deviceEventExecutor") ThreadPoolTaskExecutor deviceEventExecutor,
+            @Qualifier("deviceStatusExecutor") ThreadPoolTaskExecutor deviceStatusExecutor,
+            @Qualifier("rpcNotificationExecutor") ThreadPoolTaskExecutor rpcNotificationExecutor,
+            @Qualifier("statisticsReportExecutor") ThreadPoolTaskExecutor statisticsReportExecutor,
+            @Qualifier("minioUploadExecutor") ThreadPoolTaskExecutor minioUploadExecutor,
+            @Qualifier("websocketConnectionExecutor") ThreadPoolTaskExecutor websocketConnectionExecutor,
+            @Qualifier("websocketBusinessExecutor") ThreadPoolTaskExecutor websocketBusinessExecutor,
+            @Qualifier("defaultAsyncExecutor") ThreadPoolTaskExecutor defaultAsyncExecutor
+    ) {
+        ThreadPoolTaskExecutor[] executors = {
+            deviceEventExecutor,
+            deviceStatusExecutor,
+            rpcNotificationExecutor,
+            statisticsReportExecutor,
+            minioUploadExecutor,
+            websocketConnectionExecutor,
+            websocketBusinessExecutor,
+            defaultAsyncExecutor
+        };
+
+        log.info("ThreadPool - 线程池数组配置完成，共收集到 {} 个线程池用于指标监控", executors.length);
+
+        return executors;
     }
 }

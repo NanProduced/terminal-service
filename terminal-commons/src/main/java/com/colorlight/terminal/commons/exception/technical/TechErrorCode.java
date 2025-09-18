@@ -44,7 +44,9 @@ public enum TechErrorCode implements ErrorCode {
 
     IO_EXCEPTION("TM0112", "I/O流处理异常", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR),
 
-    NETTY_START_ERROR("TM0113", "Netty服务器启动错误", ErrorLevel.FATAL, HttpStatusCode.INTERNAL_SERVER_ERROR);
+    NETTY_START_ERROR("TM0113", "Netty服务器启动错误", ErrorLevel.FATAL, HttpStatusCode.INTERNAL_SERVER_ERROR),
+
+    METRICS_ERROR("TM0114", "Metrics错误", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR);
     /**
      * 错误码
      */

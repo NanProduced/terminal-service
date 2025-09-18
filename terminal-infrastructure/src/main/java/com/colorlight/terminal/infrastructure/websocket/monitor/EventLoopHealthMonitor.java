@@ -4,12 +4,11 @@ import com.colorlight.terminal.infrastructure.websocket.server.NettyWebsocketSer
 import io.netty.channel.EventLoopGroup;
 import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.SingleThreadEventExecutor;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -29,7 +28,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Slf4j
 @Component("eventLoop")
-@RequiredArgsConstructor
 public class EventLoopHealthMonitor implements HealthIndicator {
 
     /**
@@ -61,8 +59,22 @@ public class EventLoopHealthMonitor implements HealthIndicator {
      * Netty WebSocket服务器引用
      * 用于获取EventLoopGroup进行监控
      */
-    @Autowired(required = false)
-    private NettyWebsocketServer nettyWebsocketServer;
+    private final NettyWebsocketServer nettyWebsocketServer;
+
+    /**
+     * Spring事件发布器
+     * 用于发布EventLoop告警事件
+     */
+    private final ApplicationEventPublisher eventPublisher;
+    
+    /**
+     * 构造函数注入依赖
+     */
+    public EventLoopHealthMonitor(ApplicationEventPublisher eventPublisher, 
+                                  NettyWebsocketServer nettyWebsocketServer) {
+        this.eventPublisher = eventPublisher;
+        this.nettyWebsocketServer = nettyWebsocketServer;
+    }
 
     /**
      * 定期监控EventLoop健康状态
@@ -118,15 +130,28 @@ public class EventLoopHealthMonitor implements HealthIndicator {
                 groupTotalPendingTasks += pendingTasks;
                 groupMaxPendingTasks = Math.max(groupMaxPendingTasks, pendingTasks);
 
-                // 检查是否超过告警阈值
+                // 检查是否超过告警阈值并发布事件
+                String eventExecutorInfo = eventExecutor.toString();
                 if (pendingTasks > PENDING_TASKS_CRITICAL_THRESHOLD) {
                     criticalCount.incrementAndGet();
+                    
+                    // 发布严重告警事件
+                    EventLoopAlertEvent criticalEvent = EventLoopAlertEvent.critical(
+                            pendingTasks, eventExecutorInfo, PENDING_TASKS_CRITICAL_THRESHOLD);
+                    eventPublisher.publishEvent(criticalEvent);
+                    
                     log.error("EventLoopMonitor - EventLoop严重阻塞: group={}, eventExecutor={}, pendingTasks={}",
-                            WORK_GROUP_FIELD_NAME, eventExecutor.toString(), pendingTasks);
+                            WORK_GROUP_FIELD_NAME, eventExecutorInfo, pendingTasks);
                 } else if (pendingTasks > PENDING_TASKS_WARNING_THRESHOLD) {
                     warningCount.incrementAndGet();
+                    
+                    // 发布告警事件
+                    EventLoopAlertEvent warningEvent = EventLoopAlertEvent.warning(
+                            pendingTasks, eventExecutorInfo, PENDING_TASKS_WARNING_THRESHOLD);
+                    eventPublisher.publishEvent(warningEvent);
+                    
                     log.warn("EventLoopMonitor - EventLoop可能阻塞: group={}, eventExecutor={}, pendingTasks={}",
-                            WORK_GROUP_FIELD_NAME, eventExecutor.toString(), pendingTasks);
+                            WORK_GROUP_FIELD_NAME, eventExecutorInfo, pendingTasks);
                 }
 
             } catch (Exception e) {
