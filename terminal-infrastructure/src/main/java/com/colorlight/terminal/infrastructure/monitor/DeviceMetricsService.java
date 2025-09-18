@@ -331,7 +331,7 @@ public class DeviceMetricsService {
 
     private double getOnlineDeviceCount() {
         try {
-            return connectionManagerPort.getConnectionCount();
+            return deviceOnlineStatusPort.getOnlineDeviceCount();
         } catch (Exception e) {
             log.warn("{} 获取在线设备数失败", MetricsConstant.LogTag.DEVICE, e);
             return 0.0;
