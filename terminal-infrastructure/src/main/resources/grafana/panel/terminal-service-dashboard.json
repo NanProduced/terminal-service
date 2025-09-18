@@ -21,12 +21,25 @@
       }
     ]
   },
-  "description": "Colorlight Terminal 设备监控面板 - 基于DeviceMetricsService优化指标",
+  "description": "Colorlight Terminal 设备监控大盘 - 企业级修复版本，基于DeviceMetricsService指标体系，修复了颜色模式、时间配置、表格重复列等问题",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": ["spring-boot"],
+      "targetBlank": true,
+      "title": "Spring Boot Dashboards",
+      "tooltip": "查看其他Spring Boot监控面板",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
   "liveNow": false,
   "panels": [
     {
@@ -39,7 +52,7 @@
       },
       "id": 100,
       "panels": [],
-      "title": "📱 系统核心指标 - 优化版",
+      "title": "🎯 业务概览 (Business Overview)",
       "type": "row"
     },
     {
@@ -47,20 +60,48 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "基于合并指标的在线设备数",
+      "description": "应用服务健康状态检查，基于Spring Boot Actuator health endpoint",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "single",
-            "fixedColor": "blue"
+            "mode": "thresholds"
           },
-          "mappings": [],
-          "unit": "short"
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "DOWN"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
+        "h": 4,
         "w": 6,
         "x": 0,
         "y": 1
@@ -68,7 +109,7 @@
       "id": 1,
       "options": {
         "colorMode": "background",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "center",
         "orientation": "horizontal",
         "reduceOptions": {
@@ -78,7 +119,7 @@
           ],
           "fields": ""
         },
-        "textMode": "auto"
+        "textMode": "value_and_name"
       },
       "pluginVersion": "10.1.0",
       "targets": [
@@ -87,12 +128,12 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "terminal_system_metrics{type=\"online_devices\"}",
-          "legendFormat": "在线设备",
+          "expr": "up{job=~\".*terminal.*\", instance=~\"$instance\"}",
+          "legendFormat": "服务状态",
           "refId": "A"
         }
       ],
-      "title": "在线设备数",
+      "title": "服务健康状态",
       "type": "stat"
     },
     {
@@ -100,27 +141,44 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "WebSocket连接数",
+      "description": "当前在线设备总数，这是最重要的业务指标",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "single",
-            "fixedColor": "green"
+            "mode": "fixed",
+            "fixedColor": "blue"
           },
           "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10000
+              },
+              {
+                "color": "red",
+                "value": 18000
+              }
+            ]
+          },
           "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
+        "h": 4,
         "w": 6,
         "x": 6,
         "y": 1
       },
       "id": 2,
       "options": {
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "center",
         "orientation": "horizontal",
@@ -140,7 +198,77 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "terminal_system_metrics{type=\"websocket_connections\"}",
+          "expr": "terminal_system_metrics{type=\"online_devices\", instance=~\"$instance\"}",
+          "legendFormat": "在线设备",
+          "refId": "A"
+        }
+      ],
+      "title": "在线设备总数",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "WebSocket长连接数量，实时通信能力指标",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 15000
+              },
+              {
+                "color": "red",
+                "value": 19000
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "terminal_system_metrics{type=\"websocket_connections\", instance=~\"$instance\"}",
           "legendFormat": "WebSocket连接",
           "refId": "A"
         }
@@ -153,14 +281,14 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "WebSocket连接成功率",
+      "description": "WebSocket连接成功率，衡量长连接服务质量",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
           "mappings": [],
-          "max": 100,
+          "max": 1,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -171,89 +299,20 @@
               },
               {
                 "color": "yellow",
-                "value": 30
+                "value": 0.7
               },
               {
                 "color": "green",
-                "value": 70
+                "value": 0.85
               }
             ]
           },
-          "unit": "percent"
+          "unit": "percentunit"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
-        "w": 6,
-        "x": 12,
-        "y": 1
-      },
-      "id": 3,
-      "options": {
-        "orientation": "auto",
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "pluginVersion": "10.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "terminal_system_metrics{type=\"websocket_ratio\"} * 100",
-          "legendFormat": "连接成功率",
-          "refId": "A"
-        }
-      ],
-      "title": "WebSocket连接率",
-      "type": "gauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "分片负载均衡状况",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "green",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
+        "h": 4,
         "w": 6,
         "x": 18,
         "y": 1
@@ -278,12 +337,12 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "terminal_system_metrics{type=\"balance_ratio\"} * 100",
-          "legendFormat": "负载均衡",
+          "expr": "terminal_system_metrics{type=\"websocket_ratio\", instance=~\"$instance\"}",
+          "legendFormat": "连接成功率",
           "refId": "A"
         }
       ],
-      "title": "负载均衡状态",
+      "title": "WebSocket连接率",
       "type": "gauge"
     },
     {
@@ -292,11 +351,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 5
       },
       "id": 101,
       "panels": [],
-      "title": "🔧 线程池详细监控",
+      "title": "⚡ 性能指标 (Performance Metrics)",
       "type": "row"
     },
     {
@@ -304,7 +363,140 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "所有线程池的利用率分布",
+      "description": "HTTP请求响应时间分布分位数分析:\n• P50 (中位数): 50%的请求在此时间内完成，反映典型用户体验\n• P95: 95%的请求在此时间内完成，衡量大部分用户的体验质量\n• P99: 99%的请求在此时间内完成，识别极端慢请求，用于发现性能瓶颈",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.5
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 6
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{instance=~\"$instance\"}[5m])) by (le))",
+          "legendFormat": "P50 (中位数)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{instance=~\"$instance\"}[5m])) by (le))",
+          "legendFormat": "P95 (95%用户)",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{instance=~\"$instance\"}[5m])) by (le))",
+          "legendFormat": "P99 (极端情况)",
+          "refId": "C"
+        }
+      ],
+      "title": "HTTP响应时间分布",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "HTTP请求错误率趋势，区分4xx客户端错误和5xx服务器错误",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -319,6 +511,247 @@
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx错误率"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 6
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{status=~\"4..\", instance=~\"$instance\"}[5m])) / sum(rate(http_server_requests_seconds_count{instance=~\"$instance\"}[5m]))",
+          "legendFormat": "4xx错误率",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\", instance=~\"$instance\"}[5m])) / sum(rate(http_server_requests_seconds_count{instance=~\"$instance\"}[5m]))",
+          "legendFormat": "5xx错误率",
+          "refId": "B"
+        }
+      ],
+      "title": "HTTP错误率趋势",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "系统吞吐量指标：HTTP请求QPS和WebSocket消息处理率",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 6
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{instance=~\"$instance\"}[5m]))",
+          "legendFormat": "HTTP请求QPS",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(rate(terminal_system_metrics{type=\"websocket_connections\", instance=~\"$instance\"}[5m])) * 60",
+          "legendFormat": "WebSocket变化率",
+          "refId": "B"
+        }
+      ],
+      "title": "系统吞吐量",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "id": 102,
+      "panels": [],
+      "title": "🧵 线程池监控 (Thread Pool Monitoring)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "所有线程池的利用率热力图，快速识别过载的线程池",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
@@ -351,8 +784,12 @@
                 "value": null
               },
               {
+                "color": "yellow",
+                "value": 70
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 90
               }
             ]
           },
@@ -364,19 +801,22 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 15
       },
-      "id": 6,
+      "id": 8,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
@@ -385,12 +825,12 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "terminal_threadpool_metrics{type=\"utilization\"}",
-          "legendFormat": "{{pool}}",
+          "expr": "terminal_threadpool_metrics{type=\"utilization\", instance=~\"$instance\"}",
+          "legendFormat": "{{pool}}线程池",
           "refId": "A"
         }
       ],
-      "title": "线程池利用率分布",
+      "title": "线程池利用率监控",
       "type": "timeseries"
     },
     {
@@ -398,7 +838,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "线程池状态汇总表",
+      "description": "线程池详细状态表，包含利用率、活跃线程、队列状况等关键指标",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -420,8 +860,12 @@
                 "value": null
               },
               {
+                "color": "yellow",
+                "value": 70
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 90
               }
             ]
           }
@@ -430,7 +874,33 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "利用率"
+              "options": "利用率 (%)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "队列利用率 (%)"
             },
             "properties": [
               {
@@ -451,9 +921,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 15
       },
-      "id": 7,
+      "id": 9,
       "options": {
         "cellHeight": "sm",
         "footer": {
@@ -464,7 +934,13 @@
           ],
           "show": false
         },
-        "showHeader": true
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "利用率 (%)"
+          }
+        ]
       },
       "pluginVersion": "10.1.0",
       "targets": [
@@ -473,7 +949,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "terminal_threadpool_metrics{type=\"utilization\"}",
+          "expr": "terminal_threadpool_metrics{type=\"utilization\", instance=~\"$instance\"}",
           "format": "table",
           "legendFormat": "__auto",
           "refId": "A"
@@ -483,7 +959,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "terminal_threadpool_metrics{type=\"active_threads\"}",
+          "expr": "terminal_threadpool_metrics{type=\"active_threads\", instance=~\"$instance\"}",
           "format": "table",
           "legendFormat": "__auto",
           "refId": "B"
@@ -493,13 +969,53 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "terminal_threadpool_metrics{type=\"queue_size\"}",
+          "expr": "terminal_threadpool_metrics{type=\"queue_size\", instance=~\"$instance\"}",
           "format": "table",
           "legendFormat": "__auto",
           "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "terminal_threadpool_metrics{type=\"queue_utilization\", instance=~\"$instance\"}",
+          "format": "table",
+          "legendFormat": "__auto",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "terminal_threadpool_metrics{type=\"completed_tasks\", instance=~\"$instance\"}",
+          "format": "table",
+          "legendFormat": "__auto",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "terminal_threadpool_metrics{type=\"current_threads\", instance=~\"$instance\"}",
+          "format": "table",
+          "legendFormat": "__auto",
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "terminal_threadpool_metrics{type=\"core_threads\", instance=~\"$instance\"}",
+          "format": "table",
+          "legendFormat": "__auto",
+          "refId": "G"
         }
       ],
-      "title": "线程池状态表",
+      "title": "线程池状态详情表",
       "transformations": [
         {
           "id": "joinByField",
@@ -513,17 +1029,80 @@
           "options": {
             "excludeByName": {
               "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Time 5": true,
+              "Time 6": true,
+              "Time 7": true,
               "__name__": true,
+              "__name__ 1": true,
+              "__name__ 2": true,
+              "__name__ 3": true,
+              "__name__ 4": true,
+              "__name__ 5": true,
+              "__name__ 6": true,
+              "__name__ 7": true,
               "instance": true,
+              "instance 1": true,
+              "instance 2": true,
+              "instance 3": true,
+              "instance 4": true,
+              "instance 5": true,
+              "instance 6": true,
+              "instance 7": true,
               "job": true,
-              "type": true
+              "job 1": true,
+              "job 2": true,
+              "job 3": true,
+              "job 4": true,
+              "job 5": true,
+              "job 6": true,
+              "job 7": true,
+              "type": true,
+              "type 1": true,
+              "type 2": true,
+              "type 3": true,
+              "type 4": true,
+              "type 5": true,
+              "type 6": true,
+              "type 7": true,
+              "application": true,
+              "application 1": true,
+              "application 2": true,
+              "application 3": true,
+              "application 4": true,
+              "application 5": true,
+              "application 6": true,
+              "application 7": true,
+              "environment": true,
+              "environment 1": true,
+              "environment 2": true,
+              "environment 3": true,
+              "environment 4": true,
+              "environment 5": true,
+              "environment 6": true,
+              "environment 7": true,
+              "version": true,
+              "version 1": true,
+              "version 2": true,
+              "version 3": true,
+              "version 4": true,
+              "version 5": true,
+              "version 6": true,
+              "version 7": true
             },
             "indexByName": {},
             "renameByName": {
-              "Value #A": "利用率",
+              "Value #A": "利用率 (%)",
               "Value #B": "活跃线程",
               "Value #C": "队列任务",
-              "pool": "线程池"
+              "Value #D": "队列利用率 (%)",
+              "Value #E": "已完成任务",
+              "Value #F": "当前线程数",
+              "Value #G": "核心线程数",
+              "pool": "线程池名称"
             }
           }
         }
@@ -536,11 +1115,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 23
       },
-      "id": 102,
+      "id": 103,
       "panels": [],
-      "title": "📈 分片负载分析",
+      "title": "⚡ EventLoop性能监控 (EventLoop Performance)",
       "type": "row"
     },
     {
@@ -548,137 +1127,12 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "各分片连接数分布",
+      "description": "EventLoop任务积压情况，监控异步处理能力",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "vis": false
-            }
-          },
-          "mappings": []
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 17
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true,
-          "values": [
-            "value"
-          ]
-        },
-        "pieType": "pie",
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "terminal_shard_metrics{type=\"connections\"} > 0",
-          "legendFormat": "分片{{shard_id}}",
-          "refId": "A"
-        }
-      ],
-      "title": "分片连接分布",
-      "type": "piechart"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Top 5 最繁忙的分片",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 50
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 17
-      },
-      "id": 9,
-      "options": {
-        "orientation": "horizontal",
-        "displayMode": "gradient",
-        "showValues": "auto",
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        }
-      },
-      "pluginVersion": "10.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "topk(5, terminal_shard_metrics{type=\"connections\"})",
-          "legendFormat": "分片{{shard_id}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Top 5 繁忙分片",
-      "type": "barchart"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "分片负载均衡分析",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
+            "mode": "fixed",
+            "fixedColor": "orange"
           },
           "custom": {
             "axisCenteredZero": false,
@@ -687,15 +1141,15 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
+            "fillOpacity": 20,
+            "gradientMode": "scheme",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "vis": false
             },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineInterpolation": "smooth",
+            "lineWidth": 3,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -707,7 +1161,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "area"
             }
           },
           "mappings": [],
@@ -718,6 +1172,14 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 1000
               }
             ]
           },
@@ -728,14 +1190,18 @@
       "gridPos": {
         "h": 8,
         "w": 8,
-        "x": 16,
-        "y": 17
+        "x": 0,
+        "y": 24
       },
       "id": 10,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
@@ -750,51 +1216,20 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max(terminal_shard_metrics{type=\"connections\"})",
-          "legendFormat": "最大连接数",
+          "expr": "terminal_eventloop_metrics{type=\"pending_tasks\", instance=~\"$instance\"}",
+          "legendFormat": "待处理任务数",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "min(terminal_shard_metrics{type=\"connections\"} > 0)",
-          "legendFormat": "最小连接数",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "avg(terminal_shard_metrics{type=\"connections\"} > 0)",
-          "legendFormat": "平均连接数",
-          "refId": "C"
         }
       ],
-      "title": "分片负载分析",
+      "title": "EventLoop任务积压",
       "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 25
-      },
-      "id": 103,
-      "panels": [],
-      "title": "🚨 EventLoop性能监控",
-      "type": "row"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "EventLoop任务积压趋势",
+      "description": "EventLoop告警频率统计，区分Warning和Critical级别",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -840,32 +1275,71 @@
                 "value": null
               },
               {
+                "color": "yellow",
+                "value": 1
+              },
+              {
                 "color": "red",
-                "value": 1000
+                "value": 5
               }
             ]
           },
-          "unit": "short"
+          "unit": "cpm"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Critical告警/分钟"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Warning告警/分钟"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 26
+        "w": 8,
+        "x": 8,
+        "y": 24
       },
       "id": 11,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
@@ -874,12 +1348,21 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "terminal_eventloop_metrics{type=\"pending_tasks\"}",
-          "legendFormat": "待处理任务",
+          "expr": "rate(terminal_eventloop_warnings_total{instance=~\"$instance\"}[5m]) * 60",
+          "legendFormat": "Warning告警/分钟",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "rate(terminal_eventloop_criticals_total{instance=~\"$instance\"}[5m]) * 60",
+          "legendFormat": "Critical告警/分钟",
+          "refId": "B"
         }
       ],
-      "title": "EventLoop任务积压",
+      "title": "EventLoop告警频率",
       "type": "timeseries"
     },
     {
@@ -887,7 +1370,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "EventLoop告警频率统计",
+      "description": "JVM堆内存使用情况，按内存区域分类显示，每个heap区域(Eden、Survivor、Old Gen等)使用不同颜色，监控内存泄漏和GC压力",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -931,16 +1414,103 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
               }
             ]
           },
-          "unit": "cpm"
+          "unit": "decbytes"
         },
         "overrides": [
           {
             "matcher": {
-              "id": "byName",
-              "options": "Critical告警"
+              "id": "byRegexp",
+              "options": ".*Eden.*已用.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Eden.*最大.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "points"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Survivor.*已用.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Survivor.*最大.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "points"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Old.*已用.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Old.*最大.*"
             },
             "properties": [
               {
@@ -949,6 +1519,10 @@
                   "mode": "fixed",
                   "fixedColor": "red"
                 }
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "points"
               }
             ]
           }
@@ -956,21 +1530,23 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 26
+        "w": 8,
+        "x": 16,
+        "y": 24
       },
       "id": 12,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
@@ -979,8 +1555,8 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(terminal_eventloop_warnings_total[5m]) * 60",
-          "legendFormat": "Warning告警/分钟",
+          "expr": "jvm_memory_used_bytes{area=\"heap\", instance=~\"$instance\"}",
+          "legendFormat": "{{id}} 已用内存",
           "refId": "A"
         },
         {
@@ -988,12 +1564,12 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(terminal_eventloop_criticals_total[5m]) * 60",
-          "legendFormat": "Critical告警/分钟",
+          "expr": "jvm_memory_max_bytes{area=\"heap\", instance=~\"$instance\"}",
+          "legendFormat": "{{id}} 最大内存",
           "refId": "B"
         }
       ],
-      "title": "EventLoop告警频率",
+      "title": "JVM堆内存分区使用情况",
       "type": "timeseries"
     },
     {
@@ -1002,11 +1578,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 32
       },
       "id": 104,
       "panels": [],
-      "title": "🔌 协议版本监控",
+      "title": "📊 分片负载分析 (Shard Load Analysis)",
       "type": "row"
     },
     {
@@ -1014,7 +1590,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "协议版本连接数分布",
+      "description": "各分片连接数分布饼图，直观显示负载分布",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1033,18 +1609,19 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 12,
         "x": 0,
-        "y": 35
+        "y": 33
       },
       "id": 13,
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
+          "displayMode": "table",
+          "placement": "right",
           "showLegend": true,
           "values": [
-            "value"
+            "value",
+            "percent"
           ]
         },
         "pieType": "pie",
@@ -1066,12 +1643,12 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "terminal_protocol_metrics{type=\"connections\"} > 0",
-          "legendFormat": "{{version}}",
+          "expr": "terminal_shard_metrics{type=\"connections\", instance=~\"$instance\"} > 0",
+          "legendFormat": "分片{{shard_id}}",
           "refId": "A"
         }
       ],
-      "title": "协议版本分布",
+      "title": "分片连接分布",
       "type": "piechart"
     },
     {
@@ -1079,7 +1656,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "各协议版本连接数趋势",
+      "description": "分片连接数时间趋势，监控负载变化",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1100,7 +1677,7 @@
               "vis": false
             },
             "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -1132,17 +1709,127 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 16,
-        "x": 8,
-        "y": 35
+        "w": 12,
+        "x": 12,
+        "y": 33
       },
-      "id": 14,
+      "id": 15,
       "options": {
         "legend": {
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "topk(5, terminal_shard_metrics{type=\"connections\", instance=~\"$instance\"})",
+          "legendFormat": "分片{{shard_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 5 繁忙分片趋势",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "id": 105,
+      "panels": [],
+      "title": "🔌 协议版本分析 (Protocol Version Analysis)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "协议版本连接数分布，监控版本迁移进度",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            }
+          },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "v1.0"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "v1.1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 42
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
         },
         "tooltip": {
           "mode": "single",
@@ -1155,7 +1842,131 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "terminal_protocol_metrics{version=\"v1.0\", type=\"connections\"}",
+          "expr": "terminal_protocol_metrics{type=\"connections\", instance=~\"$instance\"} > 0",
+          "legendFormat": "{{version}}",
+          "refId": "A"
+        }
+      ],
+      "title": "协议版本分布",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "各协议版本连接数趋势对比",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "协议v1.0连接数"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "协议v1.1连接数"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 8,
+        "y": 42
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "terminal_protocol_metrics{version=\"v1.0\", type=\"connections\", instance=~\"$instance\"}",
           "legendFormat": "协议v1.0连接数",
           "refId": "A"
         },
@@ -1164,16 +1975,16 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "terminal_protocol_metrics{version=\"v1.1\", type=\"connections\"}",
+          "expr": "terminal_protocol_metrics{version=\"v1.1\", type=\"connections\", instance=~\"$instance\"}",
           "legendFormat": "协议v1.1连接数",
           "refId": "B"
         }
       ],
-      "title": "协议版本连接趋势",
+      "title": "协议版本连接趋势对比",
       "type": "timeseries"
     }
   ],
-  "refresh": "5s",
+  "refresh": "10s",
   "revision": 1,
   "schemaVersion": 38,
   "style": "dark",
@@ -1181,8 +1992,9 @@
     "colorlight",
     "terminal",
     "device-metrics",
-    "optimized",
-    "performance"
+    "spring-boot",
+    "enterprise",
+    "fixed"
   ],
   "templating": {
     "list": [
@@ -1203,6 +2015,33 @@
         "regex": "",
         "skipUrlSync": false,
         "type": "datasource"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(terminal_system_metrics, instance)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "实例",
+        "multi": true,
+        "name": "instance",
+        "options": [],
+        "query": {
+          "query": "label_values(terminal_system_metrics, instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
       }
     ]
   },
@@ -1210,10 +2049,23 @@
     "from": "now-30m",
     "to": "now"
   },
-  "timepicker": {},
-  "timezone": "",
-  "title": "Colorlight Terminal 设备监控大盘",
-  "uid": "colorlight-terminal-device-metrics",
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ]
+  },
+  "timezone": "Asia/Shanghai",
+  "title": "设备服务监控",
+  "uid": "colorlight-terminal-service-v3",
   "version": 1,
   "weekStart": ""
 }
