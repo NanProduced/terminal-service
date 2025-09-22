@@ -24,6 +24,9 @@ AGENTS.md
 # Serena配置
 .serena/
 
+# k6压测
+.k6/
+
 # 本地文档
 .doc/
 

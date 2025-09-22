@@ -76,8 +76,6 @@ public class DeviceOfflineCheckScheduler {
             int onlineCount = deviceOnlineStatusUseCase.getOnlineDeviceCount();
             
             log.info("DeviceStatusScheduler -offline- 设备在线统计: 当前在线设备数={}", onlineCount);
-
-            performSimpleCalibration();
             
         } catch (Exception e) {
             log.error("DeviceStatusScheduler -offline- 设备统计信息输出失败", e);
@@ -86,6 +84,9 @@ public class DeviceOfflineCheckScheduler {
     
     /**
      * 扫描真实在线设备并校正索引和计数器
+     * <p>
+     *     注：高并发环境下会引起数据不一致，暂时不启用
+     * </p>
      */
     private void performSimpleCalibration() {
         log.debug("DeviceStatusScheduler - 开始简单缓存校准");
