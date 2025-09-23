@@ -69,7 +69,6 @@ public class RedisKeysExpirationListener implements MessageListener {
     public void onMessage(@NotNull Message message, byte[] pattern) {
         try {
             String expiredKey = message.toString();
-            log.debug("RedisTTL监听 - 检测到Redis键过期: {}", expiredKey);
             
             // 匹配设备状态键
             Matcher matcher = DEVICE_STATUS_PATTERN.matcher(expiredKey);
