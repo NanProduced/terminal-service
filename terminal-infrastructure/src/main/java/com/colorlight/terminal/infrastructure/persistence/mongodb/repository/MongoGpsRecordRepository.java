@@ -2,6 +2,8 @@ package com.colorlight.terminal.infrastructure.persistence.mongodb.repository;
 
 import com.colorlight.terminal.application.domain.sensor.GpsReport;
 import com.colorlight.terminal.application.port.outbound.repository.GpsRecordRepository;
+import com.colorlight.terminal.commons.exception.CommonErrorCode;
+import com.colorlight.terminal.commons.exception.business.BusinessException;
 import com.colorlight.terminal.infrastructure.generator.GpsIndexesGenerator;
 import com.colorlight.terminal.infrastructure.persistence.mongodb.converter.GpsRecordConverter;
 import com.colorlight.terminal.infrastructure.persistence.mongodb.document.GpsRecordDocument;
@@ -38,7 +40,7 @@ public class MongoGpsRecordRepository implements GpsRecordRepository {
             log.debug("GpsRepository - 空的GPS记录列表，跳过批量保存");
             return;
         }
-        
+
         try {
             // 数据转换 索引值添加
             List<GpsRecordDocument> documents = gpsRecordConverter.convertToGpsDocumentList(reports, gpsIndexesGenerator);
@@ -65,7 +67,7 @@ public class MongoGpsRecordRepository implements GpsRecordRepository {
         } catch (Exception e) {
             log.error("GpsRepository - GPS数据批量入库失败: size={}", reports.size(), e);
             // 重新抛出异常，让上层处理重试逻辑
-            throw new RuntimeException("GPS数据批量保存失败", e);
+            throw new BusinessException(CommonErrorCode.SYSTEM_ERROR, "GPS数据批量保存失败", e);
         }
     }
 }

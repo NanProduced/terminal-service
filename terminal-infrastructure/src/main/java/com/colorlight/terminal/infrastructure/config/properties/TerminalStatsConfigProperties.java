@@ -90,7 +90,7 @@ public class TerminalStatsConfigProperties {
         /**
          * 刷新间隔（s）
          */
-        private int flushInterval = 60;
+        private int flushInterval = 5000;
 
 
     }
