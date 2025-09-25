@@ -71,6 +71,11 @@ public class RedisKeyConstant {
      */
     public static final String DEVICE_STATUS_UPDATE_LOCK_KEY = "device:update:lock:%d";
 
+    /**
+     * 设备缓存维护锁（离线检测和校准任务共用）
+     */
+    public static final String DEVICE_CACHE_MAINTENANCE_LOCK_KEY = "device:cache:maintenance:lock";
+
     /*===================  素材Md5与素材Id映射 ====================== */
     /**
      * 素材Md5与素材Id映射 - 用于减少素材Md5查询（RPC）

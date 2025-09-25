@@ -20,6 +20,8 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.colorlight.terminal.application.domain.CommonConstant.Media.*;
+
 /**
  * 设备下载状态异步处理服务
  * 
@@ -104,15 +106,15 @@ public class DeviceDownloadingRedisService implements DeviceDownloadingPort {
 
         if (report instanceof ProgramDownloadingReport) {
             // 节目下载状态
-            fields.put("programStatus", JsonUtils.toJson(report));
-            fields.put("programUpdateTime", currentTime);
+            fields.put(PROGRAM_STATUS, JsonUtils.toJson(report));
+            fields.put(PROGRAM_UPDATE_TIME, currentTime);
 
             log.debug("DeviceDownloadingStatus - Redis更新节目下载状态: updateTime={}", currentTime);
 
         } else if (report instanceof UpgradePackageDownloadingReport) {
             // 升级包下载状态
-            fields.put("upgradeStatus", JsonUtils.toJson(report));
-            fields.put("upgradeUpdateTime", currentTime);
+            fields.put(UPGRADE_STATUS, JsonUtils.toJson(report));
+            fields.put(UPGRADE_UPDATE_TIME, currentTime);
 
             log.debug("DeviceDownloadingStatus - Redis更新升级包下载状态: updateTime={}", currentTime);
 
