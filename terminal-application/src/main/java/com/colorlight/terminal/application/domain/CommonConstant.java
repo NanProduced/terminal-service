@@ -1,11 +1,19 @@
 package com.colorlight.terminal.application.domain;
 
+/**
+ * 设备通用常量
+ *
+ * @author Nan
+ */
 public final class CommonConstant {
 
     private CommonConstant() {
     }
 
     public static final class Device {
+
+        private Device() {
+        }
 
         public static final String DEVICE_ID = "deviceId";
 
@@ -27,6 +35,9 @@ public final class CommonConstant {
     }
 
     public static final class Media {
+
+        private Media() {
+        }
 
         public static final String PROGRAM_STATUS = "programStatus";
 
