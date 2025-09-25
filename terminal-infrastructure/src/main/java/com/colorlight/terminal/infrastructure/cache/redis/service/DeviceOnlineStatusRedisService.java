@@ -18,6 +18,7 @@ import java.util.*;
 import java.util.function.LongConsumer;
 import java.util.stream.Collectors;
 
+import static com.colorlight.terminal.application.domain.CommonConstant.Device.*;
 import static com.colorlight.terminal.infrastructure.cache.redis.constant.RedisKeyConstant.DEVICE_STATUS_INDEX_KEY;
 
 /**
@@ -29,10 +30,6 @@ import static com.colorlight.terminal.infrastructure.cache.redis.constant.RedisK
 @Service
 @RequiredArgsConstructor
 public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
-    
-    // 定义常量以避免重复字符串字面量
-    private static final String STATUS_CHANGE_TIME_FIELD = "statusChangeTime";
-    private static final String STATUS_FIELD = "status";
     
     private final RedisTemplate<String, Object> redisTemplate;
     private final DeviceConfigPort deviceConfigPort;
@@ -568,8 +565,8 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                     operations.multi();
 
                     // 更新状态为离线
-                    operations.opsForHash().put(statusKey, STATUS_FIELD, OnlineStatus.OFFLINE.name());
-                    operations.opsForHash().put(statusKey, STATUS_CHANGE_TIME_FIELD, System.currentTimeMillis());
+                    operations.opsForHash().put(statusKey, STATUS, OnlineStatus.OFFLINE.name());
+                    operations.opsForHash().put(statusKey, STATUS_CHANGE_TIME, System.currentTimeMillis());
 
                     // 重置TTL为重连窗口时间
                     operations.expire(statusKey, getReconnectTtl());
@@ -625,25 +622,25 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         Map<String, Object> map = new HashMap<>();
 
         /* --------------------- 必更新字段 ---------------------*/
-        map.put("lastReportTime", status.getLastReportTime());
-        map.put("lastReportSource", status.getLastReportSource() != null ? status.getLastReportSource().name() : null);
-        map.put("clientIp", status.getClientIp());
+        map.put(LAST_REPORT_TIME, status.getLastReportTime());
+        map.put(LAST_REPORT_SOURCE, status.getLastReportSource() != null ? status.getLastReportSource().name() : null);
+        map.put(CLIENT_IP, status.getClientIp());
 
         /* --------------------- 动态更新字段 ---------------------*/
         if (status.getDeviceId() != null) {
-            map.put("deviceId", status.getDeviceId());
+            map.put(DEVICE_ID, status.getDeviceId());
         }
         if (status.getStatus() != null) {
-            map.put(STATUS_FIELD, status.getStatus().name());
+            map.put(STATUS, status.getStatus().name());
         }
         if (status.getVersion() != null) {
-            map.put("version", status.getVersion());
+            map.put(VERSION, status.getVersion());
         }
         if (status.getStatusChangeTime() != null) {
-            map.put(STATUS_CHANGE_TIME_FIELD, status.getStatusChangeTime());
+            map.put(STATUS_CHANGE_TIME, status.getStatusChangeTime());
         }
         if (status.getOnlineStartTime() != null) {
-            map.put("onlineStartTime", status.getOnlineStartTime());
+            map.put(ONLINE_START_TIME, status.getOnlineStartTime());
         }
         
         return map;
@@ -656,17 +653,17 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         DeviceOnlineStatus status = new DeviceOnlineStatus();
         
         status.setDeviceId(deviceId);
-        status.setLastReportTime(getLongValue(map.get("lastReportTime")));
+        status.setLastReportTime(getLongValue(map.get(LAST_REPORT_TIME)));
         
-        String sourceStr = (String) map.get("lastReportSource");
+        String sourceStr = (String) map.get(LAST_REPORT_SOURCE);
         status.setLastReportSource(sourceStr != null ? ReportSource.valueOf(sourceStr) : null);
         
-        String statusStr = (String) map.get(STATUS_FIELD);
+        String statusStr = (String) map.get(STATUS);
         status.setStatus(statusStr != null ? OnlineStatus.valueOf(statusStr) : OnlineStatus.OFFLINE);
         
-        status.setStatusChangeTime(getLongValue(map.get(STATUS_CHANGE_TIME_FIELD)));
-        status.setOnlineStartTime(getLongValue(map.get("onlineStartTime")));
-        status.setClientIp((String) map.get("clientIp"));
+        status.setStatusChangeTime(getLongValue(map.get(STATUS_CHANGE_TIME)));
+        status.setOnlineStartTime(getLongValue(map.get(ONLINE_START_TIME)));
+        status.setClientIp((String) map.get(CLIENT_IP));
         
         return status;
     }

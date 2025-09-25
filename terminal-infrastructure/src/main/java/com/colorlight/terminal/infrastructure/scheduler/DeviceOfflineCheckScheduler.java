@@ -1,5 +1,6 @@
 package com.colorlight.terminal.infrastructure.scheduler;
 
+import com.colorlight.terminal.application.domain.status.OnlineStatus;
 import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
 import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort;
 import com.colorlight.terminal.infrastructure.cache.redis.constant.RedisKeyConstant;
@@ -13,13 +14,14 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.time.Duration;
 import org.springframework.data.util.Pair;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.RedisOperations;
 import org.jetbrains.annotations.NotNull;
+
+import static com.colorlight.terminal.application.domain.CommonConstant.Device.*;
 
 /**
  * 设备离线检测定时任务
@@ -215,8 +217,8 @@ public class DeviceOfflineCheckScheduler {
                 return false;
             }
 
-            String currentStatus = (String) statusMap.get("status");
-            if ("OFFLINE".equals(currentStatus)) {
+            String currentStatus = (String) statusMap.get(STATUS);
+            if (OnlineStatus.OFFLINE.name().equals(currentStatus)) {
                 log.debug("DeviceStatusScheduler - 设备已为离线状态，跳过处理: deviceId={}", deviceId);
                 return false;
             }
@@ -228,8 +230,8 @@ public class DeviceOfflineCheckScheduler {
                     operations.multi();
 
                     // 设置离线状态和时间
-                    operations.opsForHash().put(statusKey, "status", "OFFLINE");
-                    operations.opsForHash().put(statusKey, "statusChangeTime", System.currentTimeMillis());
+                    operations.opsForHash().put(statusKey, STATUS, OnlineStatus.OFFLINE.name());
+                    operations.opsForHash().put(statusKey, STATUS_CHANGE_TIME, System.currentTimeMillis());
 
                     // 重置TTL为重连窗口时间（关键：避免孤儿数据长期存在）
                     operations.expire(statusKey, Duration.ofSeconds(deviceConfigPort.getReconnectTtl()));
@@ -280,8 +282,8 @@ public class DeviceOfflineCheckScheduler {
 
                     // 检查设备状态并分类
                     try {
-                        Object lastReportTimeObj = redisTemplate.opsForHash().get(statusKey, "lastReportTime");
-                        Object statusObj = redisTemplate.opsForHash().get(statusKey, "status");
+                        Object lastReportTimeObj = redisTemplate.opsForHash().get(statusKey, LAST_REPORT_TIME);
+                        Object statusObj = redisTemplate.opsForHash().get(statusKey, STATUS);
 
                         if (lastReportTimeObj != null && statusObj != null) {
                             long lastReportTime = Long.parseLong(lastReportTimeObj.toString());
@@ -289,7 +291,7 @@ public class DeviceOfflineCheckScheduler {
 
                             // 判断设备是否在线（时间阈值 + 状态检查）
                             boolean isOnline = (currentTime - lastReportTime <= offlineThreshold)
-                                             && !"OFFLINE".equals(status);
+                                             && !OnlineStatus.OFFLINE.name().equals(status);
 
                             if (isOnline) {
                                 onlineDevices.add(deviceId);
