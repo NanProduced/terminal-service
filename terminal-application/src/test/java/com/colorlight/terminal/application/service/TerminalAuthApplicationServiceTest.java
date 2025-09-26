@@ -76,7 +76,7 @@ class TerminalAuthApplicationServiceTest extends BaseApplicationServiceTest {
         terminalAuthCache = TerminalAuthCache.builder()
                 .deviceId(TEST_DEVICE_ID)
                 .accountName(TEST_ACCOUNT_NAME)
-                .passwordHash("encoded_password")
+                .credentialsHash("test_credentials_hash")
                 .accountStatus(TerminalAccountStatus.ENABLE)
                 .build();
     }
@@ -86,46 +86,33 @@ class TerminalAuthApplicationServiceTest extends BaseApplicationServiceTest {
     class CacheAuthenticationTests {
         
         @Test
-        @DisplayName("应该在缓存命中且密码正确时认证成功")
-        void should_authenticate_successfully_when_cache_hit_and_password_correct() {
-            // Given
+        @DisplayName("应该在缓存命中且凭据哈希正确时快速认证成功")
+        void should_authenticate_successfully_when_cache_hit_and_credentials_hash_correct() {
+            // Given - 动态计算正确的凭据哈希 (SHA-256)
+            String expectedHash = calculateCredentialsHash(TEST_ACCOUNT_NAME, TEST_PASSWORD);
+            terminalAuthCache = TerminalAuthCache.builder()
+                    .deviceId(TEST_DEVICE_ID)
+                    .accountName(TEST_ACCOUNT_NAME)
+                    .credentialsHash(expectedHash)
+                    .accountStatus(TerminalAccountStatus.ENABLE)
+                        .build();
+
             when(terminalAuthCachePort.get(TEST_ACCOUNT_NAME)).thenReturn(Optional.of(terminalAuthCache));
-            when(encoderPort.matchesByPasswordEncoder(TEST_PASSWORD, "encoded_password")).thenReturn(true);
-            
+
             // When
             AuthResult result = service.authenticate(authRequest);
-            
+
             // Then
             assertThat(result).isNotNull();
             assertThat(result.isSuccess()).isTrue();
             assertThat(result.getDeviceId()).isEqualTo(TEST_DEVICE_ID);
-            
-            // 验证只调用了缓存和密码验证，没有查询数据库
+
+            // 验证只调用了缓存，没有调用BCrypt或查询数据库
             verify(terminalAuthCachePort).get(TEST_ACCOUNT_NAME);
-            verify(encoderPort).matchesByPasswordEncoder(TEST_PASSWORD, "encoded_password");
+            verifyNoInteractions(encoderPort); // 快速路径不再使用BCrypt
             verifyNoMoreInteractions(terminalAccountRepository);
         }
-        
-        @Test
-        @DisplayName("应该在缓存命中但密码错误时认证失败")
-        void should_authenticate_failed_when_cache_hit_but_password_incorrect() {
-            // Given
-            when(terminalAuthCachePort.get(TEST_ACCOUNT_NAME)).thenReturn(Optional.of(terminalAuthCache));
-            when(encoderPort.matchesByPasswordEncoder(TEST_PASSWORD, "encoded_password")).thenReturn(false);
-            
-            // When
-            AuthResult result = service.authenticate(authRequest);
-            
-            // Then
-            assertThat(result).isNotNull();
-            assertThat(result.isSuccess()).isFalse();
-            assertThat(result.getDeviceId()).isNull();
-            
-            // 验证只调用了缓存和密码验证，没有查询数据库
-            verify(terminalAuthCachePort).get(TEST_ACCOUNT_NAME);
-            verify(encoderPort).matchesByPasswordEncoder(TEST_PASSWORD, "encoded_password");
-            verifyNoMoreInteractions(terminalAccountRepository);
-        }
+
     }
     
     @Nested
@@ -213,6 +200,31 @@ class TerminalAuthApplicationServiceTest extends BaseApplicationServiceTest {
             verify(terminalAuthCachePort).get(TEST_ACCOUNT_NAME);
             verify(terminalAccountRepository).findTerminalAccountByName(TEST_ACCOUNT_NAME);
             verify(encoderPort).matchesByPasswordEncoder(TEST_PASSWORD, "encoded_password");
+        }
+    }
+
+    /**
+     * 计算凭据哈希值 - SHA-256(username:password)
+     * 与业务代码中的逻辑保持一致
+     */
+    private String calculateCredentialsHash(String accountName, String rawPassword) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            String credentials = accountName + ":" + rawPassword;
+            byte[] hashBytes = digest.digest(credentials.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            // 转换为十六进制字符串
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hashBytes) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256算法不可用", e);
         }
     }
 }

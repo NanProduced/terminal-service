@@ -136,11 +136,11 @@ public class ThreadPoolConfig {
         int maxPoolSize = Math.max(20, CPU_COUNT * 4);
         executor.setMaxPoolSize(maxPoolSize);
         
-        // 队列容量
-        executor.setQueueCapacity(1000);
+        // 队列容量（事件数量最多）
+        executor.setQueueCapacity(10000);
         
         // 线程空闲时间(秒)
-        executor.setKeepAliveSeconds(60);
+        executor.setKeepAliveSeconds(120);
         
         // 线程名前缀
         executor.setThreadNamePrefix("device-event-");
@@ -299,12 +299,14 @@ public class ThreadPoolConfig {
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(120);
 
-        // 拒绝策略：丢弃最旧任务
-        executor.setRejectedExecutionHandler((task, ext) -> {
-            log.error("ThreadPool - 统计任务被拒绝: queue={}, active={}",
-                    ext.getQueue().size(), ext.getActiveCount());
-            // 考虑：收集监控指标
-            throw new TechnicalException(TechErrorCode.THREAD_POOL_REJECTED_ERROR);
+        // 拒绝策略：由调用线程执行
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy() {
+            @Override
+            public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
+                log.warn("ThreadPool - 统计任务队列已满，由调用线程执行: queue={}, active={}",
+                        executor.getQueue().size(), executor.getActiveCount());
+                super.rejectedExecution(r, executor);
+            }
         });
 
         executor.initialize();
@@ -462,6 +464,53 @@ public class ThreadPoolConfig {
     }
 
     /**
+     * Redis消息监听器专用线程池
+     * 专用于Redis键过期事件监听处理，替代SimpleAsyncTaskExecutor避免线程泄漏
+     * <p>
+     * 【任务分析】实际执行：
+     * • RedisKeysExpirationListener.onMessage() - Redis键过期事件处理
+     * • handleDeviceStatusExpiration() - 设备状态过期处理 + RPC调用
+     * • handleDeviceCommandExpiration() - 设备指令过期处理 + 数据库操作
+     * <p>
+     * 【分类】I/O密集型 - Redis事件处理 + 数据库操作 + RPC调用
+     * 【策略】core = CPU×2, max = CPU×3 (支持Redis事件处理并发)
+     */
+    @Bean("redisMessageListenerExecutor")
+    public ThreadPoolTaskExecutor redisMessageListenerExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+
+        // 核心线程数 - I/O密集型：Redis事件处理 + 数据库操作
+        int corePoolSize = Math.max(4, CPU_COUNT * 2);
+        executor.setCorePoolSize(corePoolSize);
+
+        // 最大线程数 - 支持Redis事件处理高峰
+        int maxPoolSize = Math.max(16, CPU_COUNT * 3);
+        executor.setMaxPoolSize(maxPoolSize);
+
+        // 队列容量 - 缓冲Redis过期事件
+        executor.setQueueCapacity(1000);
+
+        // 线程空闲时间 - 较长保活，适应过期事件波动
+        executor.setKeepAliveSeconds(300);
+
+        // 线程命名
+        executor.setThreadNamePrefix("redis-listener-");
+
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(60);
+
+        // 拒绝策略：Redis过期键监听不重要 直接丢弃
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy());
+
+        executor.initialize();
+
+        log.info("ThreadPool - Redis消息监听器线程池初始化完成: core={}, max={}, queue={} (CPU核心数: {})",
+                executor.getCorePoolSize(), executor.getMaxPoolSize(), executor.getQueueCapacity(), CPU_COUNT);
+
+        return executor;
+    }
+
+    /**
      * 默认异步执行器
      * 用于其他通用异步任务（不知道怎么分类的就用这个）
      * <p>
@@ -522,6 +571,7 @@ public class ThreadPoolConfig {
             @Qualifier("minioUploadExecutor") ThreadPoolTaskExecutor minioUploadExecutor,
             @Qualifier("websocketConnectionExecutor") ThreadPoolTaskExecutor websocketConnectionExecutor,
             @Qualifier("websocketBusinessExecutor") ThreadPoolTaskExecutor websocketBusinessExecutor,
+            @Qualifier("redisMessageListenerExecutor") ThreadPoolTaskExecutor redisMessageListenerExecutor,
             @Qualifier("defaultAsyncExecutor") ThreadPoolTaskExecutor defaultAsyncExecutor
     ) {
         ThreadPoolTaskExecutor[] executors = {
@@ -532,6 +582,7 @@ public class ThreadPoolConfig {
             minioUploadExecutor,
             websocketConnectionExecutor,
             websocketBusinessExecutor,
+            redisMessageListenerExecutor,
             defaultAsyncExecutor
         };
 

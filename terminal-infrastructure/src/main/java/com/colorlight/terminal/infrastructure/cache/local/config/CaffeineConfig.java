@@ -36,8 +36,8 @@ public class CaffeineConfig {
     public Cache<String, TerminalAuthCache> terminalAuthenticationCache() {
         return Caffeine.newBuilder()
                 .maximumSize(10_000L)
-                .expireAfterWrite(Duration.ofMinutes(5))
-                .expireAfterAccess(Duration.ofMinutes(3))
+                .expireAfterWrite(Duration.ofMinutes(30))
+                .expireAfterAccess(Duration.ofMinutes(15))
                 .recordStats()
                 .removalListener(createRemovalListener("TERMINAL_AUTH_CACHE"))
                 .build();

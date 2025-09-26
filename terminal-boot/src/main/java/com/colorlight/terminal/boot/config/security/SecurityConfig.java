@@ -84,12 +84,13 @@ public class SecurityConfig {
 
     /**
      * 密码编码器
-     * 适中强度，平衡安全与性能
+     * 优化强度，针对随机生成的设备凭据进行性能优化
+     * 强度4对随机凭据提供充分安全性，同时大幅提升性能(~100x)
      * @return
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(10);
+        return new BCryptPasswordEncoder(4);
     }
 
     /**
