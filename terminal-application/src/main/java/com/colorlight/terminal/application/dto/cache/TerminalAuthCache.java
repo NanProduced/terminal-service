@@ -36,12 +36,13 @@ public class TerminalAuthCache implements Serializable {
     private String accountName;
 
     /**
-     * 密码哈希值 - BCrypt加密
+     * 凭据哈希值 - SHA-256快速验证，格式: SHA-256(username:password)
      */
-    private String passwordHash;
+    private String credentialsHash;
 
     /**
      * 账户状态
      */
     private TerminalAccountStatus accountStatus;
+
 }

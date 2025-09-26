@@ -11,11 +11,16 @@ import com.colorlight.terminal.application.port.outbound.cache.TerminalAuthCache
 import com.colorlight.terminal.application.port.outbound.repository.TerminalAccountRepository;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
+import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
+import com.colorlight.terminal.commons.exception.technical.TechnicalException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
 
 @Slf4j
@@ -33,7 +38,12 @@ public class TerminalAuthApplicationService implements TerminalAuthUseCase {
         // 先检查缓存
         Optional<TerminalAuthCache> terminalAuthCache = terminalAuthCachePort.get(authRequest.getAccountName());
         if (terminalAuthCache.isPresent()) {
-            return checkAuthenticationCache(authRequest.getRawPassword(), terminalAuthCache.get());
+            AuthResult cacheResult = checkAuthenticationCache(authRequest.getAccountName(), authRequest.getRawPassword(), terminalAuthCache.get());
+            if (cacheResult.isSuccess()) {
+                return cacheResult;
+            }
+            // 验证失败，清除缓存并继续完整认证
+            terminalAuthCachePort.remove(authRequest.getAccountName());
         }
 
         // 缓存未命中，查询数据库进行完整认证
@@ -52,24 +62,57 @@ public class TerminalAuthApplicationService implements TerminalAuthUseCase {
             throw new DeviceResponseException(CommonErrorCode.ACCOUNT_DISABLED);
         }
 
-        // 缓存认证信息
+        // 缓存认证信息 - 使用SHA-256快速验证
+        String credentialsHash = calculateCredentialsHash(authRequest.getAccountName(), authRequest.getRawPassword());
         terminalAuthCachePort.cache(terminalAccount.getAccountName(), TerminalAuthCache.builder()
                         .deviceId(terminalAccount.getDeviceId())
                         .accountName(terminalAccount.getAccountName())
-                        .passwordHash(terminalAccount.getPasswordHash())
+                        .credentialsHash(credentialsHash)
                         .accountStatus(terminalAccount.getStatus())
                         .build());
 
         return AuthResult.success(terminalAccount.getDeviceId());
     }
 
-    private AuthResult checkAuthenticationCache(String rawPassword, TerminalAuthCache authCache) {
-
-        if (encoderPort.matchesByPasswordEncoder(rawPassword, authCache.getPasswordHash())) {
+    private AuthResult checkAuthenticationCache(String accountName, String rawPassword, TerminalAuthCache authCache) {
+        String credentialsHash = calculateCredentialsHash(accountName, rawPassword);
+        if (credentialsHash.equals(authCache.getCredentialsHash())) {
+            log.debug("快速认证成功: accountName={}, deviceId={}", accountName, authCache.getDeviceId());
             return AuthResult.success(authCache.getDeviceId());
         }
         else {
+            log.debug("快速认证失败: accountName={}", accountName);
             return AuthResult.failed();
+        }
+    }
+
+    /**
+     * 计算凭据哈希值 - SHA-256(username:password)
+     * 用于快速认证缓存验证，避免昂贵的BCrypt操作
+     *
+     * @param accountName 账户名
+     * @param rawPassword 原始密码
+     * @return SHA-256哈希值的十六进制字符串
+     */
+    private String calculateCredentialsHash(String accountName, String rawPassword) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            String credentials = accountName + ":" + rawPassword;
+            byte[] hashBytes = digest.digest(credentials.getBytes(StandardCharsets.UTF_8));
+
+            // 转换为十六进制字符串
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hashBytes) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            log.error("SHA-256算法不可用", e);
+            throw new TechnicalException(TechErrorCode.ALGORITHM_ERROR, "SHA-256算法不可用", e);
         }
     }
 }
