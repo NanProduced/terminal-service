@@ -163,9 +163,10 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
                     
                     // 达到批处理大小或缓冲池已空，执行批量更新
                     if (batch.size() >= batchSize || bufferPool.isEmpty()) {
-                        processBatch(new ArrayList<>(batch));
                         processedCount += batch.size();
-                        batch.clear();
+                        processBatch(batch);
+                        // 重新创建batch容器，避免clear()操作
+                        batch = new ArrayList<>(batchSize);
                     }
                 }
             }
