@@ -13,10 +13,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.Cursor;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.SessionCallback;
-import org.springframework.data.redis.core.SetOperations;
+import org.springframework.data.redis.core.*;
+
+import static org.mockito.Mockito.spy;
 
 import java.time.Duration;
 import java.util.*;
@@ -55,7 +54,7 @@ class DeviceOnlineStatusRedisServiceTest {
         lenient().when(deviceConfigPort.getStreamQueryTimeoutMs()).thenReturn(30000L);
 
         // 创建测试对象
-        redisService = new DeviceOnlineStatusRedisService(mockRedisTemplate, deviceConfigPort);
+        redisService = spy(new DeviceOnlineStatusRedisService(mockRedisTemplate, deviceConfigPort));
     }
 
     @Nested
@@ -558,6 +557,163 @@ class DeviceOnlineStatusRedisServiceTest {
                 .doesNotThrowAnyException();
             
             verify(mockRedisTemplate.opsForValue()).set(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY, count);
+        }
+    }
+
+    @Nested
+    @DisplayName("批量离线标记测试")
+    class BatchMarkOfflineAndResetTtlTests {
+
+        @Test
+        @DisplayName("应该成功批量标记多个设备离线")
+        void should_batch_mark_devices_offline_successfully() {
+            // Given - 准备在线设备数据
+            List<Long> deviceIds = Arrays.asList(10001L, 10002L, 10003L);
+
+            // 模拟批量获取设备状态 - 都是在线状态
+            Map<Long, DeviceOnlineStatus> currentStatuses = new HashMap<>();
+            for (Long deviceId : deviceIds) {
+                DeviceOnlineStatus status = InfrastructureTestDataFactory.createDeviceOnlineStatus(deviceId, OnlineStatus.ONLINE);
+                currentStatuses.put(deviceId, status);
+            }
+
+            // Mock批量获取方法
+            doReturn(currentStatuses).when(redisService).batchGetDeviceStatus(deviceIds);
+
+            // When - 批量标记离线
+            List<DeviceOnlineStatus> result = redisService.batchMarkOfflineAndResetTtl(deviceIds);
+
+            // Then - 验证结果
+
+            // 验证所有返回的状态都已标记为离线
+            assertThat(result).hasSize(3).allMatch(status -> status.getStatus() == OnlineStatus.OFFLINE);
+
+            // 验证调用了Pipeline执行
+            verify(mockRedisTemplate).executePipelined(any(RedisCallback.class));
+        }
+
+        @Test
+        @DisplayName("应该过滤掉无效设备并只处理有效设备")
+        void should_filter_invalid_devices_and_process_valid_only() {
+            // Given - 准备混合状态的设备数据
+            List<Long> deviceIds = Arrays.asList(10001L, 10002L, 10003L, 10004L);
+
+            Map<Long, DeviceOnlineStatus> currentStatuses = new HashMap<>();
+            // 10001: 在线设备 - 有效
+            currentStatuses.put(10001L, InfrastructureTestDataFactory.createDeviceOnlineStatus(10001L, OnlineStatus.ONLINE));
+            // 10002: 已离线设备 - 无效
+            currentStatuses.put(10002L, InfrastructureTestDataFactory.createDeviceOnlineStatus(10002L, OnlineStatus.OFFLINE));
+            // 10003: 设备不存在 - 无效
+            currentStatuses.put(10003L, null);
+            // 10004: 在线设备 - 有效
+            currentStatuses.put(10004L, InfrastructureTestDataFactory.createDeviceOnlineStatus(10004L, OnlineStatus.ONLINE));
+
+            doReturn(currentStatuses).when(redisService).batchGetDeviceStatus(deviceIds);
+
+            // When - 批量标记离线
+            List<DeviceOnlineStatus> result = redisService.batchMarkOfflineAndResetTtl(deviceIds);
+
+            // Then - 只有有效的在线设备被处理
+            assertThat(result).hasSize(2);
+            assertThat(result).extracting(DeviceOnlineStatus::getDeviceId)
+                    .containsExactlyInAnyOrder(10001L, 10004L);
+        }
+
+        @Test
+        @DisplayName("应该处理空设备列表")
+        void should_handle_empty_device_list() {
+            // Given - 空设备列表
+            List<Long> emptyDeviceIds = Collections.emptyList();
+
+            // When - 批量标记离线
+            List<DeviceOnlineStatus> result = redisService.batchMarkOfflineAndResetTtl(emptyDeviceIds);
+
+            // Then - 返回空列表
+            assertThat(result).isEmpty();
+
+            // 验证没有调用Redis操作
+            verify(mockRedisTemplate, never()).executePipelined(any(RedisCallback.class));
+        }
+
+        @Test
+        @DisplayName("应该处理null设备列表")
+        void should_handle_null_device_list() {
+            // When - null设备列表
+            List<DeviceOnlineStatus> result = redisService.batchMarkOfflineAndResetTtl(null);
+
+            // Then - 返回空列表
+            assertThat(result).isEmpty();
+
+            // 验证没有调用Redis操作
+            verify(mockRedisTemplate, never()).executePipelined(any(RedisCallback.class));
+        }
+
+        @Test
+        @DisplayName("应该在批量获取状态失败时返回空列表")
+        void should_return_empty_list_when_batch_get_fails() {
+            // Given - 批量获取失败
+            List<Long> deviceIds = Arrays.asList(10001L, 10002L);
+            doThrow(new RuntimeException("Redis连接失败")).when(redisService).batchGetDeviceStatus(deviceIds);
+
+            // When - 批量标记离线
+            List<DeviceOnlineStatus> result = redisService.batchMarkOfflineAndResetTtl(deviceIds);
+
+            // Then - 返回空列表
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("应该在Pipeline执行失败时返回空列表")
+        void should_return_empty_list_when_pipeline_fails() {
+            // Given - 准备有效设备数据
+            List<Long> deviceIds = List.of(10001L);
+            Map<Long, DeviceOnlineStatus> currentStatuses = new HashMap<>();
+            currentStatuses.put(10001L, InfrastructureTestDataFactory.createDeviceOnlineStatus(10001L, OnlineStatus.ONLINE));
+
+            doReturn(currentStatuses).when(redisService).batchGetDeviceStatus(deviceIds);
+
+            // 模拟Pipeline执行失败
+            doThrow(new RuntimeException("Pipeline执行失败"))
+                    .when(mockRedisTemplate).executePipelined(any(RedisCallback.class));
+
+            // When - 批量标记离线
+            List<DeviceOnlineStatus> result = redisService.batchMarkOfflineAndResetTtl(deviceIds);
+
+            // Then - 返回空列表
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("批量处理性能应该优于单独处理")
+        void batch_processing_should_be_more_efficient_than_individual() {
+            // Given - 准备大量设备数据（模拟性能测试）
+            List<Long> deviceIds = new ArrayList<>();
+            Map<Long, DeviceOnlineStatus> currentStatuses = new HashMap<>();
+
+            for (long i = 10001L; i <= 10050L; i++) { // 50个设备
+                deviceIds.add(i);
+                currentStatuses.put(i, InfrastructureTestDataFactory.createDeviceOnlineStatus(i, OnlineStatus.ONLINE));
+            }
+
+            doReturn(currentStatuses).when(redisService).batchGetDeviceStatus(deviceIds);
+
+            // When - 批量处理
+            long batchStart = System.currentTimeMillis();
+            List<DeviceOnlineStatus> batchResult = redisService.batchMarkOfflineAndResetTtl(deviceIds);
+            long batchDuration = System.currentTimeMillis() - batchStart;
+
+            // Then - 验证批量处理结果
+            assertThat(batchResult).hasSize(50);
+
+            // 验证只调用了一次Pipeline（而不是50次单独调用）
+            verify(mockRedisTemplate, times(1)).executePipelined(any(RedisCallback.class));
+
+            // 批量处理应该在合理时间内完成（这里主要验证调用次数，性能在实际Redis环境中更明显）
+            assertThat(batchDuration).isLessThan(1000L); // 1秒内完成（Mock环境下应该很快）
+
+            // 记录性能指标用于分析
+            System.out.printf("批量处理50个设备耗时: %dms, 平均每设备: %.2fms%n",
+                            batchDuration, (double) batchDuration / 50);
         }
     }
 }

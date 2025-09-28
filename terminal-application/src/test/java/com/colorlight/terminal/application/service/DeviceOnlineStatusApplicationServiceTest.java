@@ -693,19 +693,21 @@ class DeviceOnlineStatusApplicationServiceTest {
             
             when(deviceOnlineStatusPort.findExpiredDevices(anyLong())).thenReturn(expiredDeviceIds);
             
-            // 模拟标记离线成功
+            // 模拟批量标记离线成功
             DeviceOnlineStatus offlineStatus1 = TestDataBuilder.createOfflineStatus(10001L);
             DeviceOnlineStatus offlineStatus2 = TestDataBuilder.createOfflineStatus(10002L);
-            when(deviceOnlineStatusPort.markOfflineAndResetTtl(10001L)).thenReturn(offlineStatus1);
-            when(deviceOnlineStatusPort.markOfflineAndResetTtl(10002L)).thenReturn(offlineStatus2);
-            when(deviceOnlineStatusPort.markOfflineAndResetTtl(10003L)).thenReturn(null); // 第三个失败
+            List<DeviceOnlineStatus> batchResult = Arrays.asList(offlineStatus1, offlineStatus2); // 第三个失败，不在结果中
+            when(deviceOnlineStatusPort.batchMarkOfflineAndResetTtl(expiredDeviceIds)).thenReturn(batchResult);
             
             // When - 处理离线设备
             int processedCount = service.processOfflineDevices();
             
             // Then - 验证处理结果
             assertThat(processedCount).isEqualTo(2);
-            
+
+            // 验证调用了批量离线标记方法
+            verify(deviceOnlineStatusPort).batchMarkOfflineAndResetTtl(expiredDeviceIds);
+
             // 验证批量发布离线事件
             verify(deviceStatusEventPort).batchPublishStatusEvents(eventListCaptor.capture());
             List<DeviceStatusEvent> events = eventListCaptor.getValue();
@@ -733,16 +735,19 @@ class DeviceOnlineStatusApplicationServiceTest {
             List<Long> expiredDeviceIds = Arrays.asList(10001L, 10002L);
             when(deviceOnlineStatusPort.findExpiredDevices(anyLong())).thenReturn(expiredDeviceIds);
             
-            when(deviceOnlineStatusPort.markOfflineAndResetTtl(10001L))
-                    .thenReturn(TestDataBuilder.createOfflineStatus(10001L));
-            when(deviceOnlineStatusPort.markOfflineAndResetTtl(10002L))
-                    .thenThrow(new RuntimeException("处理失败"));
+            // 模拟批量处理部分成功
+            List<DeviceOnlineStatus> batchResult = Arrays.asList(TestDataBuilder.createOfflineStatus(10001L));
+            when(deviceOnlineStatusPort.batchMarkOfflineAndResetTtl(expiredDeviceIds)).thenReturn(batchResult);
             
             // When - 处理离线设备
             int processedCount = service.processOfflineDevices();
             
             // Then - 验证只处理成功的设备
             assertThat(processedCount).isEqualTo(1);
+
+            // 验证调用了批量离线标记方法
+            verify(deviceOnlineStatusPort).batchMarkOfflineAndResetTtl(expiredDeviceIds);
+
             verify(deviceStatusEventPort).batchPublishStatusEvents(eventListCaptor.capture());
             assertThat(eventListCaptor.getValue()).hasSize(1);
         }

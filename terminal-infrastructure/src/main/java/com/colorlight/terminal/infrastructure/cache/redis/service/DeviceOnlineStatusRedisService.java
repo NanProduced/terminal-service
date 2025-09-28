@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.connection.StringRedisConnection;
 import org.springframework.data.redis.core.*;
 import org.springframework.stereotype.Service;
 
@@ -538,7 +540,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             // 先获取当前状态信息
             Optional<DeviceOnlineStatus> currentStatusOpt = getDeviceStatus(deviceId);
             if (currentStatusOpt.isEmpty()) {
-                log.debug("DeviceOnlineStatus - 设备状态不存在，无法标记离线: deviceId={}", deviceId);
+                log.debug("DeviceOnlineStatus -single- 设备状态不存在，无法标记离线: deviceId={}", deviceId);
                 return null;
             }
 
@@ -547,13 +549,13 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
 
             // 检查是否为在线相关状态
             if (status != OnlineStatus.ONLINE && status != OnlineStatus.GO_LIVE && status != OnlineStatus.RECONNECT) {
-                log.debug("DeviceOnlineStatus - 设备非在线状态，跳过离线处理: deviceId={}, status={}", deviceId, status);
+                log.debug("DeviceOnlineStatus -single- 设备非在线状态，跳过离线处理: deviceId={}, status={}", deviceId, status);
                 return null;
             }
 
             // 验证时间信息完整性
             if (currentStatus.getOnlineStartTime() == null || currentStatus.getLastReportTime() == null) {
-                log.warn("DeviceOnlineStatus - 设备时间信息不完整，跳过离线处理: deviceId={}, onlineStartTime={}, lastReportTime={}",
+                log.warn("DeviceOnlineStatus -single- 设备时间信息不完整，跳过离线处理: deviceId={}, onlineStartTime={}, lastReportTime={}",
                         deviceId, currentStatus.getOnlineStartTime(), currentStatus.getLastReportTime());
                 return null;
             }
@@ -595,6 +597,113 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         }
     }
     
+    @Override
+    public List<DeviceOnlineStatus> batchMarkOfflineAndResetTtl(List<Long> deviceIds) {
+        if (deviceIds == null || deviceIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        try {
+            long startTime = System.currentTimeMillis();
+
+            // 第一步：批量获取当前状态
+            Map<Long, DeviceOnlineStatus> currentStatuses = batchGetDeviceStatus(deviceIds);
+
+            // 过滤出需要处理的设备（在线状态且时间信息完整）
+            List<Long> validDeviceIds = new ArrayList<>();
+            List<DeviceOnlineStatus> validStatuses = new ArrayList<>();
+
+            for (Long deviceId : deviceIds) {
+                DeviceOnlineStatus status = currentStatuses.get(deviceId);
+                if (isValidForOfflineProcessing(deviceId, status)) {
+                    validDeviceIds.add(deviceId);
+                    validStatuses.add(status);
+                }
+            }
+
+            if (validDeviceIds.isEmpty()) {
+                log.debug("DeviceOnlineStatus - 批量标记离线: 无有效设备需要处理");
+                return new ArrayList<>();
+            }
+
+            // 第二步：使用Pipeline批量执行离线操作
+            long currentTime = System.currentTimeMillis();
+            Duration reconnectTtl = getReconnectTtl();
+
+            redisTemplate.executePipelined(new RedisCallback<Object>() {
+                @Override
+                public Object doInRedis(@NotNull RedisConnection connection) throws DataAccessException {
+                    StringRedisConnection stringConnection = (StringRedisConnection) connection;
+
+                    for (Long deviceId : validDeviceIds) {
+                        String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
+
+                        // 更新状态为离线
+                        stringConnection.hSet(statusKey, STATUS, OnlineStatus.OFFLINE.name());
+                        stringConnection.hSet(statusKey, STATUS_CHANGE_TIME, String.valueOf(currentTime));
+
+                        // 重置TTL为重连窗口时间
+                        stringConnection.expire(statusKey, reconnectTtl.getSeconds());
+
+                        // 从在线设备索引中移除
+                        stringConnection.sRem(DEVICE_STATUS_INDEX_KEY, deviceId.toString());
+                    }
+
+                    // 批量减少在线设备计数
+                    if (validDeviceIds.size() > 1) {
+                        stringConnection.decrBy(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY, validDeviceIds.size());
+                    } else {
+                        stringConnection.decr(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
+                    }
+
+                    return null;
+                }
+            });
+
+            // 第三步：标记返回的状态对象为离线
+            for (DeviceOnlineStatus status : validStatuses) {
+                status.markOffline();
+            }
+
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("DeviceOnlineStatus - 批量标记设备离线完成: total={}, valid={}, duration={}ms, reconnectTtl={}s",
+                    deviceIds.size(), validDeviceIds.size(), duration, reconnectTtl.getSeconds());
+
+            return validStatuses;
+
+        } catch (Exception e) {
+            log.error("DeviceOnlineStatus - 批量标记设备离线失败: deviceCount={}", deviceIds.size(), e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 检查设备状态是否适合离线处理
+     */
+    private boolean isValidForOfflineProcessing(Long deviceId, DeviceOnlineStatus status) {
+        if (status == null) {
+            log.debug("DeviceOnlineStatus -batch- 设备状态不存在，跳过离线处理: deviceId={}", deviceId);
+            return false;
+        }
+
+        OnlineStatus currentStatus = status.getStatus();
+        if (currentStatus != OnlineStatus.ONLINE &&
+            currentStatus != OnlineStatus.GO_LIVE &&
+            currentStatus != OnlineStatus.RECONNECT) {
+            log.debug("DeviceOnlineStatus -batch- 设备非在线状态，跳过离线处理: deviceId={}, status={}",
+                     deviceId, currentStatus);
+            return false;
+        }
+
+        if (status.getOnlineStartTime() == null || status.getLastReportTime() == null) {
+            log.warn("DeviceOnlineStatus -batch- 设备时间信息不完整，跳过离线处理: deviceId={}, onlineStartTime={}, lastReportTime={}",
+                    deviceId, status.getOnlineStartTime(), status.getLastReportTime());
+            return false;
+        }
+
+        return true;
+    }
+
     @Override
     public int getOnlineDeviceCount() {
         try {

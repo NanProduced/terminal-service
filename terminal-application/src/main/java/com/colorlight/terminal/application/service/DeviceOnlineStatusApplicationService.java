@@ -312,32 +312,32 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
             
             log.info("ApplicationService - 发现可能离线设备: count={}", candidateDeviceIds.size());
             
-            // 处理离线设备并收集事件
-            List<DeviceStatusEvent> offlineEvents = new ArrayList<>();
+            // 批量处理离线设备
             int processedCount = 0;
-            
-            for (Long deviceId : candidateDeviceIds) {
-                try {
-                    // 使用新的原子化方法：检查+标记离线+重置TTL
-                    DeviceOnlineStatus offlineStatus = deviceOnlineStatusPort.markOfflineAndResetTtl(deviceId);
-                    
-                    if (offlineStatus != null) {
-                        // 创建离线事件
-                        DeviceStatusEvent event = DeviceStatusEvent.createDetectedOfflineEvent(
-                            deviceId, 
-                            offlineStatus.getOnlineStartTime(), 
-                            offlineStatus.getLastReportTime()
-                        );
-                        offlineEvents.add(event);
-                        processedCount++;
-                        
-                        log.debug("ApplicationService - 设备标记离线成功: deviceId={}", deviceId);
-                    }
-                    
-                } catch (Exception e) {
-                    log.warn("ApplicationService - 处理单个设备离线失败: deviceId={}", deviceId, e);
-                }
-            }
+
+            // 使用批量处理优化网络往返
+            List<DeviceOnlineStatus> offlineStatuses = deviceOnlineStatusPort.batchMarkOfflineAndResetTtl(candidateDeviceIds);
+
+            // 创建离线事件
+            List<DeviceStatusEvent> offlineEvents = offlineStatuses.stream()
+                    .map(offlineStatus -> {
+                        try {
+                            DeviceStatusEvent e = DeviceStatusEvent.createDetectedOfflineEvent(
+                                    offlineStatus.getDeviceId(),
+                                    offlineStatus.getOnlineStartTime(),
+                                    offlineStatus.getLastReportTime()
+                            );
+                            log.debug("ApplicationService - 设备标记离线成功: deviceId={}", offlineStatus.getDeviceId());
+                            return e;
+                        } catch (Exception ex) {
+                            log.warn("ApplicationService - 处理单个设备离线失败: deviceId={}", offlineStatus.getDeviceId(), ex);
+                            return null; // 出错的跳过
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .toList();
+
+            processedCount += offlineEvents.size();
             
             // 批量发布离线事件
             if (!offlineEvents.isEmpty()) {

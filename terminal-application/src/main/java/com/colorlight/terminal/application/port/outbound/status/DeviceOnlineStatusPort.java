@@ -96,11 +96,20 @@ public interface DeviceOnlineStatusPort {
     /**
      * 标记单个设备为离线状态并重置TTL为重连窗口
      * 用于离线检测时的原子化操作
-     * 
+     *
      * @param deviceId 设备ID
      * @return 包含时间信息的状态对象，用于保存在线时长记录；如果设备不存在返回null
      */
     DeviceOnlineStatus markOfflineAndResetTtl(Long deviceId);
+
+    /**
+     * 批量标记设备为离线状态并重置TTL
+     * 使用Pipeline优化网络往返，提升批量处理性能
+     *
+     * @param deviceIds 设备ID列表
+     * @return 成功标记离线的设备状态列表，包含时间信息用于保存在线时长记录
+     */
+    List<DeviceOnlineStatus> batchMarkOfflineAndResetTtl(List<Long> deviceIds);
     
     /**
      * 获取在线设备数量
