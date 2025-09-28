@@ -1,6 +1,7 @@
 package com.colorlight.terminal.infrastructure.cache.redis.service;
 
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
+import com.colorlight.terminal.application.dto.result.CommandFetchResult;
 import com.colorlight.terminal.application.port.outbound.config.CommandConfigPort;
 import com.colorlight.terminal.commons.utils.JsonUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,11 +15,10 @@ import org.springframework.data.redis.core.*;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -323,7 +323,7 @@ class TerminalCommandRedisServiceTest {
             // Given - 存在过期指令
             List<Object> commandIds = List.of(TEST_COMMAND_ID, TEST_COMMAND_ID + 1);
             lenient().when(listOperations.range(anyString(), eq(0L), eq(-1L))).thenReturn(commandIds);
-            
+
             // Mock一个过期指令和一个有效指令
             TerminalCommand validCommand = TerminalCommand.builder()
                     .commandId(TEST_COMMAND_ID + 1)
@@ -333,21 +333,25 @@ class TerminalCommandRedisServiceTest {
                     .commandId(TEST_COMMAND_ID)
                     .expireTime(LocalDateTime.now().minusDays(1))
                     .build();
-            lenient().when(valueOperations.get(anyString()))
-                    .thenReturn(JsonUtils.toJson(expiredCommand))
-                    .thenReturn(JsonUtils.toJson(validCommand));
-            
-            // Mock removeCommand方法中需要的getCommand调用
-            String detailKeyForRemove = String.format("terminal:command:detail:%d:%d", TEST_DEVICE_ID, TEST_COMMAND_ID);
-            lenient().when(redisTemplate.delete(eq(detailKeyForRemove))).thenReturn(true);
-            lenient().when(listOperations.remove(anyString(), eq(1L), eq(TEST_COMMAND_ID))).thenReturn(1L);
-            lenient().when(hashOperations.delete(anyString(), anyString())).thenReturn(1L);
-            
+
+            // 使用multiGet Mock (批量优化版本)
+            List<Object> commandJsons = List.of(
+                JsonUtils.toJson(expiredCommand),
+                JsonUtils.toJson(validCommand)
+            );
+            lenient().when(valueOperations.multiGet(anyList())).thenReturn(commandJsons);
+
+            // Mock Pipeline执行用于批量删除
+            lenient().when(redisTemplate.executePipelined(any(RedisCallback.class))).thenReturn(List.of());
+
             // When - 清理过期指令
             int cleanedCount = service.cleanExpiredCommands(TEST_DEVICE_ID);
-            
+
             // Then - 应该清理了1个过期指令
             assertThat(cleanedCount).isEqualTo(1);
+            // 验证使用了批量优化方案
+            verify(valueOperations).multiGet(anyList());
+            verify(redisTemplate).executePipelined(any(RedisCallback.class));
         }
         
         @Test
@@ -369,14 +373,22 @@ class TerminalCommandRedisServiceTest {
             // Given - 指令ID存在但详情不存在
             List<Object> commandIds = List.of(TEST_COMMAND_ID);
             lenient().when(listOperations.range(anyString(), eq(0L), eq(-1L))).thenReturn(commandIds);
-            lenient().when(valueOperations.get(anyString())).thenReturn(null); // 详情不存在
-            
+
+            // 使用Arrays.asList以支持null元素
+            List<Object> commandJsons = Collections.singletonList((Object) null); // 详情不存在
+            lenient().when(valueOperations.multiGet(anyList())).thenReturn(commandJsons);
+
+            // Mock Pipeline执行用于批量删除
+            lenient().when(redisTemplate.executePipelined(any(RedisCallback.class))).thenReturn(List.of());
+
             // When - 清理过期指令
             int cleanedCount = service.cleanExpiredCommands(TEST_DEVICE_ID);
-            
-            // Then - 应该清理了1个指令
+
+            // Then - 应该清理了1个指令(详情缺失的指令)
             assertThat(cleanedCount).isEqualTo(1);
-            verify(listOperations).remove(anyString(), eq(1L), eq(TEST_COMMAND_ID));
+            // 验证使用了批量优化方案
+            verify(valueOperations).multiGet(anyList());
+            verify(redisTemplate).executePipelined(any(RedisCallback.class));
         }
     }
     
@@ -423,7 +435,212 @@ class TerminalCommandRedisServiceTest {
             assertThat(result).isFalse();
         }
     }
-    
+
+    @Nested
+    @DisplayName("整合获取指令并清理过期测试")
+    class IntegratedCommandFetchWithCleanupTest {
+
+        @Test
+        @DisplayName("应该成功整合获取指令并清理过期指令（使用批量优化）")
+        void should_fetch_commands_with_cleanup_using_batch_optimization() {
+            // Given - 存在有效和过期指令的混合情况
+            List<Object> commandIds = List.of(TEST_COMMAND_ID, TEST_COMMAND_ID + 1, TEST_COMMAND_ID + 2);
+            lenient().when(listOperations.range(anyString(), eq(0L), eq(-1L))).thenReturn(commandIds);
+
+            // Mock指令详情 - 一个有效，两个过期
+            TerminalCommand validCommand = createTestCommand();
+            validCommand.setCommandId(TEST_COMMAND_ID);
+            validCommand.setExpireTime(LocalDateTime.now().plusHours(1)); // 有效指令
+
+            TerminalCommand expiredCommand1 = createTestCommand();
+            expiredCommand1.setCommandId(TEST_COMMAND_ID + 1);
+            expiredCommand1.setExpireTime(LocalDateTime.now().minusHours(1)); // 过期指令
+
+            TerminalCommand expiredCommand2 = createTestCommand();
+            expiredCommand2.setCommandId(TEST_COMMAND_ID + 2);
+            expiredCommand2.setExpireTime(LocalDateTime.now().minusHours(2)); // 过期指令
+
+            List<Object> commandJsons = List.of(
+                JsonUtils.toJson(validCommand),
+                JsonUtils.toJson(expiredCommand1),
+                JsonUtils.toJson(expiredCommand2)
+            );
+            lenient().when(valueOperations.multiGet(anyList())).thenReturn(commandJsons);
+
+            // Mock Pipeline执行用于删除过期指令
+            lenient().when(redisTemplate.executePipelined(any(RedisCallback.class))).thenReturn(List.of());
+
+            // When - 整合获取指令并清理
+            CommandFetchResult result = service.getPendingCommandsWithCleanup(TEST_DEVICE_ID);
+
+            // Then - 验证结果
+            assertThat(result).isNotNull();
+            assertThat(result.getValidCommands()).hasSize(1);
+            assertThat(result.getValidCommands().get(0).getCommandId()).isEqualTo(TEST_COMMAND_ID);
+            assertThat(result.getExpiredCleanedCount()).isEqualTo(2);
+            assertThat(result.getTotalCandidateCount()).isEqualTo(3);
+            assertThat(result.isUsedBatchOptimization()).isTrue();
+            assertThat(result.getExecutionTimeMs()).isGreaterThanOrEqualTo(0);
+            assertThat(result.getCleanupEfficiencyPercent()).isCloseTo(66.67, within());
+
+            // 验证Redis操作
+            verify(listOperations).range(anyString(), eq(0L), eq(-1L));
+            verify(valueOperations).multiGet(anyList());
+            verify(redisTemplate).executePipelined(any(RedisCallback.class));
+        }
+
+        @Test
+        @DisplayName("应该正确处理无待执行指令的情况")
+        void should_handle_no_pending_commands_correctly() {
+            // Given - 没有待执行指令
+            lenient().when(listOperations.range(anyString(), eq(0L), eq(-1L))).thenReturn(List.of());
+
+            // When - 整合获取指令并清理
+            CommandFetchResult result = service.getPendingCommandsWithCleanup(TEST_DEVICE_ID);
+
+            // Then - 验证结果
+            assertThat(result).isNotNull();
+            assertThat(result.getValidCommands()).isEmpty();
+            assertThat(result.getExpiredCleanedCount()).isZero();
+            assertThat(result.getTotalCandidateCount()).isZero();
+            assertThat(result.isUsedBatchOptimization()).isTrue();
+            assertThat(result.getExecutionTimeMs()).isGreaterThanOrEqualTo(0); // 修改为大于等于0
+            assertThat(result.getCleanupEfficiencyPercent()).isEqualTo(0.0);
+
+            // 验证没有进行后续操作
+            verify(listOperations).range(anyString(), eq(0L), eq(-1L));
+            verify(valueOperations, never()).multiGet(anyList());
+            verify(redisTemplate, never()).executePipelined(any(RedisCallback.class));
+        }
+
+        @Test
+        @DisplayName("应该正确处理指令详情缺失的情况")
+        void should_handle_missing_command_details_correctly() {
+            // Given - 存在指令ID但详情缺失
+            List<Object> commandIds = List.of(TEST_COMMAND_ID, TEST_COMMAND_ID + 1);
+            lenient().when(listOperations.range(anyString(), eq(0L), eq(-1L))).thenReturn(commandIds);
+
+            // Mock指令详情 - 一个存在，一个缺失
+            TerminalCommand validCommand = createTestCommand();
+            validCommand.setCommandId(TEST_COMMAND_ID);
+            validCommand.setExpireTime(LocalDateTime.now().plusHours(1));
+
+            // 使用Arrays.asList而不是List.of，因为List.of不允许null元素
+            List<Object> commandJsons = Arrays.asList(
+                JsonUtils.toJson(validCommand),
+                null // 详情缺失
+            );
+            lenient().when(valueOperations.multiGet(anyList())).thenReturn(commandJsons);
+
+            // Mock Pipeline执行用于删除过期指令
+            lenient().when(redisTemplate.executePipelined(any(RedisCallback.class))).thenReturn(List.of());
+
+            // When - 整合获取指令并清理
+            CommandFetchResult result = service.getPendingCommandsWithCleanup(TEST_DEVICE_ID);
+
+            // Then - 验证结果
+            assertThat(result).isNotNull();
+            assertThat(result.getValidCommands()).hasSize(1);
+            assertThat(result.getExpiredCleanedCount()).isEqualTo(1); // 详情缺失的被清理
+            assertThat(result.getTotalCandidateCount()).isEqualTo(2);
+            assertThat(result.isUsedBatchOptimization()).isTrue();
+        }
+
+        @Test
+        @DisplayName("应该正确处理JSON解析失败的情况")
+        void should_handle_json_parsing_failures_correctly() {
+            // Given - 存在无效JSON的指令
+            List<Object> commandIds = List.of(TEST_COMMAND_ID, TEST_COMMAND_ID + 1);
+            lenient().when(listOperations.range(anyString(), eq(0L), eq(-1L))).thenReturn(commandIds);
+
+            // Mock指令详情 - 一个有效，一个无效JSON
+            TerminalCommand validCommand = createTestCommand();
+            validCommand.setCommandId(TEST_COMMAND_ID);
+            validCommand.setExpireTime(LocalDateTime.now().plusHours(1));
+
+            // 使用Arrays.asList而不是List.of，因为List.of不允许null元素
+            List<Object> commandJsons = Arrays.asList(
+                JsonUtils.toJson(validCommand),
+                "invalid_json" // 无效JSON
+            );
+            lenient().when(valueOperations.multiGet(anyList())).thenReturn(commandJsons);
+
+            // Mock Pipeline执行用于删除过期指令
+            lenient().when(redisTemplate.executePipelined(any(RedisCallback.class))).thenReturn(List.of());
+
+            // When - 整合获取指令并清理
+            CommandFetchResult result = service.getPendingCommandsWithCleanup(TEST_DEVICE_ID);
+
+            // Then - 验证结果
+            assertThat(result).isNotNull();
+            assertThat(result.getValidCommands()).hasSize(1);
+            assertThat(result.getExpiredCleanedCount()).isEqualTo(1); // 解析失败的被清理
+            assertThat(result.getTotalCandidateCount()).isEqualTo(2);
+            assertThat(result.isUsedBatchOptimization()).isTrue();
+        }
+
+
+
+        @Test
+        @DisplayName("应该正确记录性能指标和清理统计")
+        void should_record_performance_metrics_and_cleanup_statistics_correctly() {
+            // Given - 准备测试数据
+            List<Object> commandIds = List.of(TEST_COMMAND_ID, TEST_COMMAND_ID + 1, TEST_COMMAND_ID + 2, TEST_COMMAND_ID + 3);
+            lenient().when(listOperations.range(anyString(), eq(0L), eq(-1L))).thenReturn(commandIds);
+
+            // Mock指令详情 - 2个有效，2个过期
+            TerminalCommand validCommand1 = createTestCommand();
+            validCommand1.setCommandId(TEST_COMMAND_ID);
+            validCommand1.setExpireTime(LocalDateTime.now().plusHours(1));
+
+            TerminalCommand validCommand2 = createTestCommand();
+            validCommand2.setCommandId(TEST_COMMAND_ID + 1);
+            validCommand2.setExpireTime(LocalDateTime.now().plusHours(2));
+
+            TerminalCommand expiredCommand1 = createTestCommand();
+            expiredCommand1.setCommandId(TEST_COMMAND_ID + 2);
+            expiredCommand1.setExpireTime(LocalDateTime.now().minusHours(1));
+
+            TerminalCommand expiredCommand2 = createTestCommand();
+            expiredCommand2.setCommandId(TEST_COMMAND_ID + 3);
+            expiredCommand2.setExpireTime(LocalDateTime.now().minusHours(2));
+
+            // 使用Arrays.asList而不是List.of，因为List.of不允许null元素
+            List<Object> commandJsons = Arrays.asList(
+                JsonUtils.toJson(validCommand1),
+                JsonUtils.toJson(validCommand2),
+                JsonUtils.toJson(expiredCommand1),
+                JsonUtils.toJson(expiredCommand2)
+            );
+            lenient().when(valueOperations.multiGet(anyList())).thenReturn(commandJsons);
+
+            // Mock Pipeline执行
+            lenient().when(redisTemplate.executePipelined(any(RedisCallback.class))).thenReturn(List.of());
+
+            // When - 整合获取指令并清理
+            CommandFetchResult result = service.getPendingCommandsWithCleanup(TEST_DEVICE_ID);
+
+            // Then - 验证性能指标和统计
+            assertThat(result).isNotNull();
+            assertThat(result.getValidCommandCount()).isEqualTo(2);
+            assertThat(result.getExpiredCleanedCount()).isEqualTo(2);
+            assertThat(result.getTotalCandidateCount()).isEqualTo(4);
+            assertThat(result.getCleanupEfficiencyPercent()).isEqualTo(50.0); // 2/4 = 50%
+            assertThat(result.isUsedBatchOptimization()).isTrue();
+            assertThat(result.getExecutionTimeMs()).isGreaterThanOrEqualTo(0);
+
+            // 验证有效指令内容
+            assertThat(result.getValidCommands()).hasSize(2);
+            assertThat(result.getValidCommands())
+                    .extracting(TerminalCommand::getCommandId)
+                    .containsExactlyInAnyOrder(TEST_COMMAND_ID, TEST_COMMAND_ID + 1);
+        }
+
+        private static org.assertj.core.data.Offset<Double> within() {
+            return org.assertj.core.data.Offset.offset(0.01);
+        }
+    }
+
     // ===================== 测试数据构建辅助方法 =====================
     
     /**
