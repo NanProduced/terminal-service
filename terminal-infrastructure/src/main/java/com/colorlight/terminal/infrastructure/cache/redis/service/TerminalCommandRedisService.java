@@ -343,9 +343,11 @@ public class TerminalCommandRedisService implements CommandCachePort {
             if (commandJson == null) {
                 // 指令详情不存在，标记为需清理
                 expiredCommandIds.add(commandId);
+                expiredAuthorUrls.add(null); // 保持索引对齐
                 log.debug("TerminalCommandCache - 指令详情缺失: deviceId={}, commandId={}", deviceId, commandId);
 
-            } else {
+            }
+            else {
                 try {
                     TerminalCommand command = JsonUtils.fromJson(commandJson.toString(), TerminalCommand.class);
                     if (command.isExpired()) {
@@ -359,6 +361,7 @@ public class TerminalCommandRedisService implements CommandCachePort {
                     log.warn("TerminalCommandCache - 解析指令数据失败: deviceId={}, commandId={}", deviceId, commandId, e);
                     // 解析失败的也视为需清理
                     expiredCommandIds.add(commandId);
+                    expiredAuthorUrls.add(null); // 保持索引对齐
                 }
             }
         }
@@ -393,9 +396,12 @@ public class TerminalCommandRedisService implements CommandCachePort {
                     // 删除指令详情
                     stringConnection.del(detailKey);
 
-                    // 从索引中移除(如果有authorUrl)
-                    if (i < expiredAuthorUrls.size() && expiredAuthorUrls.get(i) != null) {
-                        stringConnection.hDel(indexKey, expiredAuthorUrls.get(i));
+                    // 从索引中移除(如果有authorUrl且不为null)
+                    if (i < expiredAuthorUrls.size()) {
+                        String authorUrl = expiredAuthorUrls.get(i);
+                        if (authorUrl != null) {
+                            stringConnection.hDel(indexKey, authorUrl);
+                        }
                     }
                 }
 
@@ -589,6 +595,7 @@ public class TerminalCommandRedisService implements CommandCachePort {
             if (commandJson == null) {
                 // 指令详情不存在，标记为需清理
                 expiredCommandIds.add(commandId);
+                expiredAuthorUrls.add(null); // 保持索引对齐
             } 
             else {
                 processCommandJson(deviceId, commandId, commandJson, validCommands, expiredCommandIds, expiredAuthorUrls);
@@ -618,6 +625,7 @@ public class TerminalCommandRedisService implements CommandCachePort {
             log.warn("TerminalCommandCache - 解析指令数据失败: deviceId={}, commandId={}", deviceId, commandId, e);
             // 解析失败的也视为需清理
             expiredCommandIds.add(commandId);
+            expiredAuthorUrls.add(null); // 保持索引对齐
         }
     }
 

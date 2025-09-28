@@ -95,11 +95,13 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                     operations.opsForHash().putAll(statusKey, statusMap);
                     operations.expire(statusKey, getStatusTtl());
 
-                    // 添加到设备索引
-                    operations.opsForSet().add(DEVICE_STATUS_INDEX_KEY, status.getDeviceId());
+                    // 添加到设备索引并根据返回值决定是否增加计数
+                    Long addResult = operations.opsForSet().add(DEVICE_STATUS_INDEX_KEY, status.getDeviceId());
 
-                    // 增加在线设备计数
-                    operations.opsForValue().increment(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
+                    // 只有当设备是新加入时才增加计数（SADD返回1表示新增，0表示已存在）
+                    if (addResult != null && addResult > 0) {
+                        operations.opsForValue().increment(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
+                    }
                     
                     return operations.exec();
                 }

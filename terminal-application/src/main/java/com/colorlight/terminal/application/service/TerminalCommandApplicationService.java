@@ -48,7 +48,7 @@ public class TerminalCommandApplicationService implements TerminalCommandUseCase
             boolean cached = commandCachePort.saveCommand(command);
             if (!cached) {
                 log.error("ApplicationService - 指令缓存失败, commandId: {}", command.getCommandId());
-                return CommandSendResult.failed("CACHE_ERROR", "指令缓存失败");
+                return CommandSendResult.failed(CommonErrorCode.SYSTEM_ERROR.getCode(), "指令缓存失败");
             }
             
             log.debug("ApplicationService - 指令已缓存至Redis, commandId: {}", command.getCommandId());
