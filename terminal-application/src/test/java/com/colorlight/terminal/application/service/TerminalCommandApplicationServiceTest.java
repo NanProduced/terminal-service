@@ -3,6 +3,7 @@ package com.colorlight.terminal.application.service;
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.dto.request.SendCommandRequest;
+import com.colorlight.terminal.application.dto.result.CommandFetchResult;
 import com.colorlight.terminal.application.dto.result.CommandSendResult;
 import com.colorlight.terminal.application.port.outbound.command.CommandCachePort;
 import com.colorlight.terminal.application.port.outbound.command.CommandWebSocketPort;
@@ -247,7 +248,7 @@ class TerminalCommandApplicationServiceTest extends BaseApplicationServiceTest {
             assertThat(result).isNotNull();
             assertThat(result.isSuccess()).isFalse();
             assertThat(result.getSendMethod()).isEqualTo(CommandSendResult.SendMethod.FAILED);
-            assertThat(result.getErrorCode()).isEqualTo("CACHE_ERROR");
+            assertThat(result.getErrorCode()).isEqualTo("TM0006");
             assertThat(result.getMessage()).isEqualTo("指令缓存失败");
             
             // 验证没有进行后续操作
@@ -302,71 +303,93 @@ class TerminalCommandApplicationServiceTest extends BaseApplicationServiceTest {
     @Nested
     @DisplayName("获取待执行指令测试")
     class GetPendingCommandsTests {
-        
+
         @Test
-        @DisplayName("应该成功返回待执行指令并清理过期指令")
-        void should_return_pending_commands_and_clean_expired() {
+        @DisplayName("应该成功返回待执行指令并清理过期指令（使用整合方法）")
+        void should_return_pending_commands_with_integrated_cleanup() {
             // Given - 有待执行指令和过期指令
             List<TerminalCommand> expectedCommands = TestDataBuilder.createPendingCommandsList();
-            when(commandCachePort.cleanExpiredCommands(TEST_DEVICE_ID)).thenReturn(3);
-            when(commandCachePort.getPendingCommands(TEST_DEVICE_ID)).thenReturn(expectedCommands);
-            
+            CommandFetchResult fetchResult = CommandFetchResult.success(
+                    expectedCommands, 3, 8, 150L, true);
+            when(commandCachePort.getPendingCommandsWithCleanup(TEST_DEVICE_ID)).thenReturn(fetchResult);
+
             // When - 获取待执行指令
             List<TerminalCommand> result = service.getPendingCommands(TEST_DEVICE_ID);
-            
+
             // Then - 验证结果
             assertThat(result).isEqualTo(expectedCommands);
-            
-            // 验证调用顺序
-            var inOrder = inOrder(commandCachePort);
-            inOrder.verify(commandCachePort).cleanExpiredCommands(TEST_DEVICE_ID);
-            inOrder.verify(commandCachePort).getPendingCommands(TEST_DEVICE_ID);
+
+            // 验证调用了整合方法
+            verify(commandCachePort).getPendingCommandsWithCleanup(TEST_DEVICE_ID);
+            // 验证不再调用旧的分步方法
+            verify(commandCachePort, never()).cleanExpiredCommands(any());
+            verify(commandCachePort, never()).getPendingCommands(any());
         }
-        
+
         @Test
         @DisplayName("应该在无待执行指令时返回空列表")
         void should_return_empty_list_when_no_pending_commands() {
-            // Given - 无待执行指令
-            when(commandCachePort.cleanExpiredCommands(TEST_DEVICE_ID)).thenReturn(0);
-            when(commandCachePort.getPendingCommands(TEST_DEVICE_ID)).thenReturn(Collections.emptyList());
-            
+            // Given - 无待执行指令但有清理统计
+            CommandFetchResult fetchResult = CommandFetchResult.success(
+                    Collections.emptyList(), 2, 2, 80L, true);
+            when(commandCachePort.getPendingCommandsWithCleanup(TEST_DEVICE_ID)).thenReturn(fetchResult);
+
             // When - 获取待执行指令
             List<TerminalCommand> result = service.getPendingCommands(TEST_DEVICE_ID);
-            
+
             // Then - 验证空列表
             assertThat(result).isEmpty();
+            verify(commandCachePort).getPendingCommandsWithCleanup(TEST_DEVICE_ID);
         }
-        
+
         @Test
-        @DisplayName("应该在清理过期指令异常时返回空列表")
-        void should_return_empty_list_when_clean_expired_fails() {
-            // Given - 清理过期指令异常
-            when(commandCachePort.cleanExpiredCommands(TEST_DEVICE_ID)).thenThrow(new RuntimeException("清理异常"));
-            
+        @DisplayName("应该在整合方法异常时返回空列表")
+        void should_return_empty_list_when_integrated_method_fails() {
+            // Given - 整合方法异常
+            when(commandCachePort.getPendingCommandsWithCleanup(TEST_DEVICE_ID))
+                    .thenThrow(new RuntimeException("整合方法异常"));
+
             // When - 获取待执行指令
             List<TerminalCommand> result = service.getPendingCommands(TEST_DEVICE_ID);
-            
+
             // Then - 验证返回空列表（因为整个方法会捕获异常）
             assertThat(result).isEmpty();
-            
-            // 验证只调用了清理方法
-            verify(commandCachePort).cleanExpiredCommands(TEST_DEVICE_ID);
-            verify(commandCachePort, never()).getPendingCommands(any());
+            verify(commandCachePort).getPendingCommandsWithCleanup(TEST_DEVICE_ID);
         }
-        
+
         @Test
-        @DisplayName("应该在获取指令异常时返回空列表")
-        void should_return_empty_list_when_get_commands_fails() {
-            // Given - 获取指令时发生异常
-            when(commandCachePort.cleanExpiredCommands(TEST_DEVICE_ID)).thenReturn(0);
-            when(commandCachePort.getPendingCommands(TEST_DEVICE_ID))
-                    .thenThrow(new RuntimeException("获取指令异常"));
-            
+        @DisplayName("应该记录性能和清理统计")
+        void should_log_performance_and_cleanup_statistics() {
+            // Given - 有清理统计的结果
+            List<TerminalCommand> commands = TestDataBuilder.createPendingCommandsList();
+            CommandFetchResult fetchResult = CommandFetchResult.success(
+                    commands, 5, 10, 200L, true);
+            when(commandCachePort.getPendingCommandsWithCleanup(TEST_DEVICE_ID)).thenReturn(fetchResult);
+
             // When - 获取待执行指令
             List<TerminalCommand> result = service.getPendingCommands(TEST_DEVICE_ID);
-            
-            // Then - 验证返回空列表避免接口异常
-            assertThat(result).isEmpty();
+
+            // Then - 验证结果和调用
+            assertThat(result).isEqualTo(commands);
+            verify(commandCachePort).getPendingCommandsWithCleanup(TEST_DEVICE_ID);
+            // 注意：日志验证通常通过日志框架的测试工具完成，这里主要验证业务逻辑
+        }
+
+        @Test
+        @DisplayName("应该处理批量优化降级的情况")
+        void should_handle_batch_optimization_fallback() {
+            // Given - 使用降级方案的结果
+            List<TerminalCommand> commands = TestDataBuilder.createPendingCommandsList();
+            CommandFetchResult fetchResult = CommandFetchResult.success(
+                    commands, 1, 3, 300L, false); // 未使用批量优化
+            when(commandCachePort.getPendingCommandsWithCleanup(TEST_DEVICE_ID)).thenReturn(fetchResult);
+
+            // When - 获取待执行指令
+            List<TerminalCommand> result = service.getPendingCommands(TEST_DEVICE_ID);
+
+            // Then - 验证结果正确
+            assertThat(result).isEqualTo(commands);
+            verify(commandCachePort).getPendingCommandsWithCleanup(TEST_DEVICE_ID);
         }
     }
     

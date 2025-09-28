@@ -3,6 +3,7 @@ package com.colorlight.terminal.application.service;
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.dto.request.SendCommandRequest;
+import com.colorlight.terminal.application.dto.result.CommandFetchResult;
 import com.colorlight.terminal.application.dto.result.CommandSendResult;
 import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
 import com.colorlight.terminal.application.port.outbound.command.CommandCachePort;
@@ -47,7 +48,7 @@ public class TerminalCommandApplicationService implements TerminalCommandUseCase
             boolean cached = commandCachePort.saveCommand(command);
             if (!cached) {
                 log.error("ApplicationService - 指令缓存失败, commandId: {}", command.getCommandId());
-                return CommandSendResult.failed("CACHE_ERROR", "指令缓存失败");
+                return CommandSendResult.failed(CommonErrorCode.SYSTEM_ERROR.getCode(), "指令缓存失败");
             }
             
             log.debug("ApplicationService - 指令已缓存至Redis, commandId: {}", command.getCommandId());
@@ -82,20 +83,23 @@ public class TerminalCommandApplicationService implements TerminalCommandUseCase
     @Override
     public List<TerminalCommand> getPendingCommands(Long deviceId) {
         log.debug("ApplicationService - 获取设备待执行指令, deviceId: {}", deviceId);
-        
+
         try {
-            // 清理过期指令
-            int cleanedCount = commandCachePort.cleanExpiredCommands(deviceId);
-            if (cleanedCount > 0) {
-                log.debug("ApplicationService - 清理过期指令 {} 条, deviceId: {}", cleanedCount, deviceId);
+            // 使用整合方法：一次查询同时获取指令和清理过期
+            CommandFetchResult result = commandCachePort.getPendingCommandsWithCleanup(deviceId);
+
+            // 记录性能和清理统计
+            if (result.getExpiredCleanedCount() > 0) {
+                log.debug("ApplicationService - 整合操作完成: 有效指令={}, 清理过期={}, 耗时={}ms, 优化={}",
+                         result.getValidCommandCount(), result.getExpiredCleanedCount(),
+                         result.getExecutionTimeMs(), result.isUsedBatchOptimization() ? "已启用" : "降级");
+            } else {
+                log.debug("ApplicationService - 获取 {} 条待执行指令, 耗时={}ms, deviceId: {}",
+                         result.getValidCommandCount(), result.getExecutionTimeMs(), deviceId);
             }
-            
-            // 获取有效指令
-            List<TerminalCommand> commands = commandCachePort.getPendingCommands(deviceId);
-            log.debug("ApplicationService - 返回 {} 条待执行指令, deviceId: {}", commands.size(), deviceId);
-            
-            return commands;
-            
+
+            return result.getValidCommands();
+
         } catch (Exception e) {
             log.error("ApplicationService - 获取待执行指令异常, deviceId: {}", deviceId, e);
             return List.of(); // 返回空列表避免接口异常

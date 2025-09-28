@@ -62,13 +62,13 @@ public interface AsyncDeviceStatusUpdatePort {
      * 缓冲池状态信息
      */
     record BufferPoolStatus(int currentSize, int maxSize, double utilizationRate, long lastFlushTime,
-                            long totalProcessed, long totalFlushed) {
+                            long totalProcessed, long totalFlushed, long totalDropped) {
 
     @Override
         public String toString() {
             return String.format("BufferPoolStatus{currentSize=%d, maxSize=%d, utilizationRate=%.2f%%, " +
-                            "lastFlushTime=%d, totalProcessed=%d, totalFlushed=%d}",
-                    currentSize, maxSize, utilizationRate * 100, lastFlushTime, totalProcessed, totalFlushed);
+                            "lastFlushTime=%d, totalProcessed=%d, totalFlushed=%d, totalDropped=%d}",
+                    currentSize, maxSize, utilizationRate * 100, lastFlushTime, totalProcessed, totalFlushed, totalDropped);
         }
     }
 }

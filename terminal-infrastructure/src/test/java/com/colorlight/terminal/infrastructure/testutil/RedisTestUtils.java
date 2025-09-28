@@ -2,6 +2,7 @@ package com.colorlight.terminal.infrastructure.testutil;
 
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.data.redis.connection.StringRedisConnection;
 import org.springframework.data.redis.core.*;
 
 import java.time.Duration;
@@ -41,7 +42,30 @@ public class RedisTestUtils {
         
         return mockRedisTemplate;
     }
-    
+
+    /**
+     * 创建完整配置的StringRedisTemplate Mock对象
+     */
+    @SuppressWarnings("unchecked")
+    public static StringRedisTemplate createMockStringRedisTemplate() {
+        StringRedisTemplate mockStringRedisTemplate = mock(StringRedisTemplate.class);
+
+        // Mock各种操作类
+        ValueOperations<String, String> mockValueOps = mock(ValueOperations.class);
+        HashOperations<String, Object, Object> mockHashOps = mock(HashOperations.class);
+        SetOperations<String, String> mockSetOps = mock(SetOperations.class);
+
+        // 配置操作类返回
+        lenient().when(mockStringRedisTemplate.opsForValue()).thenReturn(mockValueOps);
+        lenient().when(mockStringRedisTemplate.opsForHash()).thenReturn(mockHashOps);
+        lenient().when(mockStringRedisTemplate.opsForSet()).thenReturn(mockSetOps);
+
+        // 配置基本操作
+        setupStringBasicOperations(mockStringRedisTemplate, mockValueOps, mockHashOps, mockSetOps);
+
+        return mockStringRedisTemplate;
+    }
+
     /**
      * 配置基本的Redis操作Mock行为
      */
@@ -189,15 +213,140 @@ public class RedisTestUtils {
             @SuppressWarnings("unchecked")
             RedisOperations<String, Object> mockOps = mock(RedisOperations.class);
             lenient().when(mockOps.opsForHash()).thenReturn(mockHashOps);
-            
+            lenient().when(mockOps.opsForSet()).thenReturn(mockSetOps);
+            lenient().when(mockOps.opsForValue()).thenReturn(mockValueOps);
+            lenient().when(mockOps.expire(anyString(), any(Duration.class))).thenReturn(true);
+
             // 执行pipeline操作
             callback.execute(mockOps);
-            
+
             // 返回模拟的批量结果
             return Arrays.asList(new HashMap<>(), new HashMap<>(), new HashMap<>());
         });
     }
-    
+
+    /**
+     * 配置基本的StringRedisTemplate操作Mock行为
+     */
+    @SuppressWarnings("unchecked")
+    private static void setupStringBasicOperations(
+            StringRedisTemplate mockStringRedisTemplate,
+            ValueOperations<String, String> mockValueOps,
+            HashOperations<String, Object, Object> mockHashOps,
+            SetOperations<String, String> mockSetOps) {
+
+        // 内存存储模拟Redis数据
+        Map<String, String> redisMemory = new HashMap<>();
+        Map<String, Map<String, String>> redisHashMemory = new HashMap<>();
+        Map<String, Set<String>> redisSetMemory = new HashMap<>();
+
+        // === Value Operations ===
+        lenient().when(mockValueOps.get(anyString())).thenAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            return redisMemory.get(key);
+        });
+
+        lenient().doAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            String value = invocation.getArgument(1);
+            redisMemory.put(key, value);
+            return null;
+        }).when(mockValueOps).set(anyString(), anyString());
+
+        lenient().when(mockValueOps.decrement(anyString())).thenAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            String current = redisMemory.get(key);
+            long currentVal = current != null ? Long.parseLong(current) : 0L;
+            long newValue = currentVal - 1;
+            redisMemory.put(key, String.valueOf(newValue));
+            return newValue;
+        });
+
+        // === Hash Operations ===
+        lenient().when(mockHashOps.entries(anyString())).thenAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            Map<String, String> result = redisHashMemory.getOrDefault(key, new HashMap<>());
+            Map<Object, Object> objectMap = new HashMap<>();
+            result.forEach(objectMap::put);
+            return objectMap;
+        });
+
+        lenient().doAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            String field = invocation.getArgument(1);
+            String value = invocation.getArgument(2);
+            redisHashMemory.computeIfAbsent(key, k -> new HashMap<>()).put(field, value);
+            return null;
+        }).when(mockHashOps).put(anyString(), anyString(), anyString());
+
+        // === Set Operations ===
+        lenient().when(mockSetOps.remove(anyString(), any())).thenAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            String[] values = Arrays.copyOfRange(invocation.getArguments(), 1, invocation.getArguments().length, String[].class);
+            Set<String> set = redisSetMemory.get(key);
+            if (set == null) return 0L;
+            long removed = 0;
+            for (String value : values) {
+                if (set.remove(value)) {
+                    removed++;
+                }
+            }
+            return removed;
+        });
+
+        // === 基本操作 ===
+        lenient().when(mockStringRedisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
+
+        // === Pipeline操作 ===
+        lenient().when(mockStringRedisTemplate.executePipelined(any(RedisCallback.class))).thenAnswer(invocation -> {
+            RedisCallback<?> callback = invocation.getArgument(0);
+
+            // Mock StringRedisConnection
+            StringRedisConnection mockConnection = mock(StringRedisConnection.class);
+
+            // Mock hSet操作
+            lenient().doAnswer(setInvocation -> {
+                String key = setInvocation.getArgument(0);
+                String field = setInvocation.getArgument(1);
+                String value = setInvocation.getArgument(2);
+                redisHashMemory.computeIfAbsent(key, k -> new HashMap<>()).put(field, value);
+                return true;
+            }).when(mockConnection).hSet(anyString(), anyString(), anyString());
+
+            // Mock expire操作
+            lenient().when(mockConnection.expire(anyString(), anyLong())).thenReturn(true);
+
+            // Mock sRem操作
+            lenient().when(mockConnection.sRem(anyString(), anyString())).thenReturn(1L);
+
+            // Mock decrBy和decr操作
+            lenient().when(mockConnection.decrBy(anyString(), anyLong())).thenAnswer(decrInvocation -> {
+                String key = decrInvocation.getArgument(0);
+                Long decrement = decrInvocation.getArgument(1);
+                String current = redisMemory.get(key);
+                long currentVal = current != null ? Long.parseLong(current) : 0L;
+                long newValue = currentVal - decrement;
+                redisMemory.put(key, String.valueOf(newValue));
+                return newValue;
+            });
+
+            lenient().when(mockConnection.decr(anyString())).thenAnswer(decrInvocation -> {
+                String key = decrInvocation.getArgument(0);
+                String current = redisMemory.get(key);
+                long currentVal = current != null ? Long.parseLong(current) : 0L;
+                long newValue = currentVal - 1;
+                redisMemory.put(key, String.valueOf(newValue));
+                return newValue;
+            });
+
+            // 执行callback
+            callback.doInRedis(mockConnection);
+
+            // 返回模拟的批量结果
+            return Arrays.asList("OK", "OK", "OK");
+        });
+    }
+
     /**
      * 创建Mock的Cursor对象用于Scan操作
      */

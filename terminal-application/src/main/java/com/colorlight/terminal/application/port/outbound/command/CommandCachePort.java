@@ -1,6 +1,7 @@
 package com.colorlight.terminal.application.port.outbound.command;
 
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
+import com.colorlight.terminal.application.dto.result.CommandFetchResult;
 
 import java.util.List;
 import java.util.Optional;
@@ -58,9 +59,18 @@ public interface CommandCachePort {
     
     /**
      * 检查设备是否有待执行指令
-     * 
+     *
      * @param deviceId 设备ID
      * @return 是否有待执行指令
      */
     boolean hasPendingCommands(Long deviceId);
+
+    /**
+     * 获取待执行指令并自动清理过期指令（性能优化版本）
+     * 一次查询同时完成清理过期和获取有效指令，减少Redis往返次数
+     *
+     * @param deviceId 设备ID
+     * @return 指令获取结果，包含有效指令列表和清理统计
+     */
+    CommandFetchResult getPendingCommandsWithCleanup(Long deviceId);
 }

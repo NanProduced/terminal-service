@@ -10,6 +10,7 @@ import com.colorlight.terminal.rpc.dto.result.SingleCommandSendResultDTO;
 import com.colorlight.terminal.rpc.service.TerminalCommandRpcService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.springframework.stereotype.Component;
 
@@ -35,6 +36,10 @@ public class TerminalCommandRpcServiceImpl implements TerminalCommandRpcService 
         try {
             log.info("RPC - 收到指令下发请求, deviceId: {}, authorUrl: {}", 
                     request.getDeviceId(), request.getCommand().getAuthorUrl());
+
+            if (StringUtils.isBlank(request.getCommand().getAuthorUrl())) {
+                return RpcResult.error(CommonErrorCode.INVALID_PARAMETER.getCode(), "author_url can not be null");
+            }
             
             // 转换RPC请求为Application层请求
             SendCommandRequest appRequest = SendCommandRequest.builder()
