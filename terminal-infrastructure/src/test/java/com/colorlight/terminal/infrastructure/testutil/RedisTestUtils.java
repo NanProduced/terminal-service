@@ -213,10 +213,13 @@ public class RedisTestUtils {
             @SuppressWarnings("unchecked")
             RedisOperations<String, Object> mockOps = mock(RedisOperations.class);
             lenient().when(mockOps.opsForHash()).thenReturn(mockHashOps);
-            
+            lenient().when(mockOps.opsForSet()).thenReturn(mockSetOps);
+            lenient().when(mockOps.opsForValue()).thenReturn(mockValueOps);
+            lenient().when(mockOps.expire(anyString(), any(Duration.class))).thenReturn(true);
+
             // 执行pipeline操作
             callback.execute(mockOps);
-            
+
             // 返回模拟的批量结果
             return Arrays.asList(new HashMap<>(), new HashMap<>(), new HashMap<>());
         });

@@ -10,8 +10,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.dao.DataAccessException;
-import org.springframework.data.redis.connection.RedisConnection;
-import org.springframework.data.redis.connection.StringRedisConnection;
 import org.springframework.data.redis.core.*;
 import org.springframework.stereotype.Service;
 
@@ -34,7 +32,6 @@ import static com.colorlight.terminal.infrastructure.cache.redis.constant.RedisK
 public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
 
     private final RedisTemplate<String, Object> redisTemplate;
-    private final StringRedisTemplate stringRedisTemplate;
     private final DeviceConfigPort deviceConfigPort;
     
     /**
@@ -599,6 +596,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     }
     
     @Override
+    @SuppressWarnings("unchecked")
     public List<DeviceOnlineStatus> batchMarkOfflineAndResetTtl(List<Long> deviceIds) {
         if (deviceIds == null || deviceIds.isEmpty()) {
             return new ArrayList<>();
@@ -631,30 +629,28 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             long currentTime = System.currentTimeMillis();
             Duration reconnectTtl = getReconnectTtl();
 
-            stringRedisTemplate.executePipelined(new RedisCallback<Object>() {
+            redisTemplate.executePipelined(new SessionCallback<Object>() {
                 @Override
-                public Object doInRedis(@NotNull RedisConnection connection) throws DataAccessException {
-                    StringRedisConnection stringConnection = (StringRedisConnection) connection;
-
+                public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                     for (Long deviceId : validDeviceIds) {
                         String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
 
                         // 更新状态为离线
-                        stringConnection.hSet(statusKey, STATUS, OnlineStatus.OFFLINE.name());
-                        stringConnection.hSet(statusKey, STATUS_CHANGE_TIME, String.valueOf(currentTime));
+                        operations.opsForHash().put(statusKey, STATUS, OnlineStatus.OFFLINE.name());
+                        operations.opsForHash().put(statusKey, STATUS_CHANGE_TIME, currentTime);
 
                         // 重置TTL为重连窗口时间
-                        stringConnection.expire(statusKey, reconnectTtl.getSeconds());
+                        operations.expire(statusKey, reconnectTtl);
 
                         // 从在线设备索引中移除
-                        stringConnection.sRem(DEVICE_STATUS_INDEX_KEY, deviceId.toString());
+                        operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
                     }
 
                     // 批量减少在线设备计数
                     if (validDeviceIds.size() > 1) {
-                        stringConnection.decrBy(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY, validDeviceIds.size());
+                        operations.opsForValue().decrement(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY, validDeviceIds.size());
                     } else {
-                        stringConnection.decr(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
+                        operations.opsForValue().decrement(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
                     }
 
                     return null;

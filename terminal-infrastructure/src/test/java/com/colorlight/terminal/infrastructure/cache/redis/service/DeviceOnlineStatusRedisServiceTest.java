@@ -38,14 +38,12 @@ class DeviceOnlineStatusRedisServiceTest {
     private DeviceConfigPort deviceConfigPort;
 
     private RedisTemplate<String, Object> mockRedisTemplate;
-    private StringRedisTemplate mockStringRedisTemplate;
     private DeviceOnlineStatusRedisService redisService;
 
     @BeforeEach
     void setUp() {
         // 创建Mock RedisTemplate
         mockRedisTemplate = RedisTestUtils.createMockRedisTemplate();
-        mockStringRedisTemplate = RedisTestUtils.createMockStringRedisTemplate();
 
         // 配置设备配置端口的默认行为 - 使用lenient避免UnnecessaryStubbingException
         lenient().when(deviceConfigPort.getRedisStatusTtl()).thenReturn(3600L); // 1小时
@@ -56,7 +54,7 @@ class DeviceOnlineStatusRedisServiceTest {
         lenient().when(deviceConfigPort.getStreamQueryTimeoutMs()).thenReturn(30000L);
 
         // 创建测试对象
-        redisService = spy(new DeviceOnlineStatusRedisService(mockRedisTemplate, mockStringRedisTemplate, deviceConfigPort));
+        redisService = spy(new DeviceOnlineStatusRedisService(mockRedisTemplate, deviceConfigPort));
     }
 
     @Nested
@@ -591,7 +589,7 @@ class DeviceOnlineStatusRedisServiceTest {
             assertThat(result).hasSize(3).allMatch(status -> status.getStatus() == OnlineStatus.OFFLINE);
 
             // 验证调用了Pipeline执行
-            verify(mockStringRedisTemplate).executePipelined(any(RedisCallback.class));
+            verify(mockRedisTemplate).executePipelined(any(SessionCallback.class));
         }
 
         @Test
@@ -621,7 +619,7 @@ class DeviceOnlineStatusRedisServiceTest {
                     .containsExactlyInAnyOrder(10001L, 10004L);
 
             // 验证调用了Pipeline执行
-            verify(mockStringRedisTemplate).executePipelined(any(RedisCallback.class));
+            verify(mockRedisTemplate).executePipelined(any(SessionCallback.class));
         }
 
         @Test
@@ -637,7 +635,7 @@ class DeviceOnlineStatusRedisServiceTest {
             assertThat(result).isEmpty();
 
             // 验证没有调用Redis操作
-            verify(mockStringRedisTemplate, never()).executePipelined(any(RedisCallback.class));
+            verify(mockRedisTemplate, never()).executePipelined(any(SessionCallback.class));
         }
 
         @Test
@@ -650,7 +648,7 @@ class DeviceOnlineStatusRedisServiceTest {
             assertThat(result).isEmpty();
 
             // 验证没有调用Redis操作
-            verify(mockStringRedisTemplate, never()).executePipelined(any(RedisCallback.class));
+            verify(mockRedisTemplate, never()).executePipelined(any(SessionCallback.class));
         }
 
         @Test
