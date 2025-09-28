@@ -248,7 +248,7 @@ class TerminalCommandApplicationServiceTest extends BaseApplicationServiceTest {
             assertThat(result).isNotNull();
             assertThat(result.isSuccess()).isFalse();
             assertThat(result.getSendMethod()).isEqualTo(CommandSendResult.SendMethod.FAILED);
-            assertThat(result.getErrorCode()).isEqualTo("CACHE_ERROR");
+            assertThat(result.getErrorCode()).isEqualTo("TM0006");
             assertThat(result.getMessage()).isEqualTo("指令缓存失败");
             
             // 验证没有进行后续操作
