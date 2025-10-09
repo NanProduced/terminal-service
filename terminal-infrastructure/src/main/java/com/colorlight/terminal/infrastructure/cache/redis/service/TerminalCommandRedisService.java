@@ -8,6 +8,7 @@ import com.colorlight.terminal.commons.utils.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.RedisConnection;
@@ -50,8 +51,11 @@ public class TerminalCommandRedisService implements CommandCachePort {
         String indexKey = String.format(COMMAND_INDEX_KEY, command.getDeviceId());
         String detailKey = String.format(COMMAND_DETAIL_KEY, command.getDeviceId(), command.getCommandId());
 
+        // 特殊处理，如果authorUrl为null，使用空字符串代替，避免后续hash操作失败
+        String indexAuthorUrl = StringUtils.defaultIfBlank(command.getAuthorUrl(), "");
+
         // 1. 检查是否存在相同类型的指令(去重逻辑)
-        Object existingCommandIdObj = redisTemplate.opsForHash().get(indexKey, command.getAuthorUrl());
+        Object existingCommandIdObj = redisTemplate.opsForHash().get(indexKey, indexAuthorUrl);
         if (existingCommandIdObj != null) {
             Integer existingCommandId = Integer.valueOf(existingCommandIdObj.toString());
             log.debug("TerminalCommandCache - 发现重复指令类型，执行覆盖操作, authorUrl: {}, oldCommandId: {}",
@@ -73,7 +77,7 @@ public class TerminalCommandRedisService implements CommandCachePort {
         redisTemplate.expire(queueKey, Duration.ofHours(ttlHours));
 
         // 4. 更新去重索引
-        redisTemplate.opsForHash().put(indexKey, command.getAuthorUrl(), command.getCommandId());
+        redisTemplate.opsForHash().put(indexKey, indexAuthorUrl, command.getCommandId());
         redisTemplate.expire(indexKey, Duration.ofHours(ttlHours));
 
         log.info("TerminalCommandCache - 指令保存成功, deviceId: {}, commandId: {}, authorUrl: {}",
@@ -252,8 +256,8 @@ public class TerminalCommandRedisService implements CommandCachePort {
             // 2. 从队列中移除
             Long removedCount = redisTemplate.opsForList().remove(queueKey, 1, commandId);
             
-            // 3. 从索引中移除
-            commandOpt.ifPresent(terminalCommand -> redisTemplate.opsForHash().delete(indexKey, terminalCommand.getAuthorUrl()));
+            // 3. 从索引中移除(特殊处理，如果为null则转为空字符串)
+            commandOpt.ifPresent(terminalCommand -> redisTemplate.opsForHash().delete(indexKey, terminalCommand.getAuthorUrl() == null ? "" : terminalCommand.getAuthorUrl()));
             
             // 4. 删除详情
             redisTemplate.delete(detailKey);
