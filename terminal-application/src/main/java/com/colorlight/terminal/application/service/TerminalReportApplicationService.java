@@ -20,6 +20,7 @@ import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.business.BusinessException;
 import com.colorlight.terminal.commons.utils.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -155,7 +156,13 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     @Async("statisticsReportExecutor")
     public void asyncHandleSensorReport(Long deviceId, LocalDateTime reportTime, String reportStr) {
         try {
-            
+
+            // 适配HTTP上报封装
+            final JsonNode jsonNode = JsonUtils.fromJson(reportStr);
+            if (jsonNode.has("gps")) {
+                reportStr = jsonNode.get("gps").toString();
+            }
+
             // JSON反序列化
             List<SensorReport> reports = JsonUtils.fromJson(reportStr, new TypeReference<List<SensorReport>>() {});
             if (CollectionUtils.isEmpty(reports)) {
