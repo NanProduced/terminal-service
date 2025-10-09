@@ -265,6 +265,8 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
             log.debug("ApplicationService -GPS- 上报数据无效:{}", report);
             return;
         }
+        // 通知主服务
+        mainServerRpcPort.notifyGpsReport(deviceId, report);
         deviceGpsHandlePort.receiveGpsRecord(report);
     }
 

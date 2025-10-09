@@ -1,5 +1,6 @@
 package com.colorlight.terminal.application.port.outbound.rpc;
 
+import com.colorlight.terminal.application.domain.sensor.GpsReport;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 
@@ -36,6 +37,13 @@ public interface MainServerRpcPort {
      * @param report 上报
      */
     void notifyLedStatus(Long deviceId, String report);
+
+    /**
+     * 发送GPS上报
+     * @param deviceId 设备Id
+     * @param report GPS上报
+     */
+    void notifyGpsReport(Long deviceId, GpsReport report);
 
     /**
      * 获取排程信息

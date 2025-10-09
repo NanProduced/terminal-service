@@ -4,6 +4,7 @@ import com.colorlight.ccloud.attachment.interfaces.AttachmentRpcService;
 import com.colorlight.ccloud.attachment.interfaces.TerminalAttachmentRpcService;
 import com.colorlight.ccloud.attachment.vo.RpcTerminalAttachmentVO;
 import com.colorlight.ccloud.command.dto.CommandFinishDto;
+import com.colorlight.ccloud.command.dto.entity.DeviceGpsRequest;
 import com.colorlight.ccloud.command.interfaces.CommandFinishFacade;
 import com.colorlight.ccloud.command.interfaces.DeviceReportRpcService;
 import com.colorlight.ccloud.common.command.enums.CommandStatusEnum;
@@ -11,10 +12,12 @@ import com.colorlight.ccloud.program.interfaces.TerminalProgramRpcService;
 import com.colorlight.ccloud.program.vo.RpcTerminalProgramVO;
 import com.colorlight.ccloud.schedule.dto.Schedule;
 import com.colorlight.ccloud.schedule.interfaces.TerminalScheduleRpcService;
+import com.colorlight.terminal.application.domain.sensor.GpsReport;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
 import com.colorlight.terminal.commons.utils.JsonUtils;
+import com.colorlight.terminal.commons.utils.TimeUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -159,6 +162,43 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
         } catch (RpcException e) {
             long duration = System.currentTimeMillis() - startTime;
             log.warn("RpcAdapter - Led_statusRPC调用失败，已记录: error={}, duration={}ms",
+                    e.getMessage(), duration);
+            // RPC失败仅记录日志，不中断业务流程
+        }
+    }
+
+    /**
+     * 上报GPS信息
+     * @param deviceId 设备Id
+     * @param report GPS上报
+     */
+    @Override
+    @Async("rpcNotificationExecutor")
+    public void notifyGpsReport(Long deviceId, GpsReport report) {
+        long startTime = System.currentTimeMillis();
+        try {
+            DeviceGpsRequest gps = DeviceGpsRequest.builder()
+                    .deviceId(deviceId)
+                    .reportTime(TimeUtils.convertLocalDateTimeToTimestamp(report.getServerTime()))
+                    .longitude(report.getLongitude())
+                    .latitude(report.getLatitude())
+                    .altitude(report.getAltitude())
+                    .accuracy(report.getAccuracy())
+                    .speed(report.getSpeed())
+                    .direct(report.getDirect())
+                    .satellites(report.getSatellites())
+                    .build();
+            deviceReportRpcService.reportDeviceGps(gps);
+            long duration = System.currentTimeMillis() - startTime;
+            log.debug("RpcAdapter - GPS上报RPC调用成功: duration={}ms", duration);
+
+            // 性能监控：记录调用时长
+            if (duration > 500) {
+                log.warn("RpcPerf - GPS上报RPC调用较慢: duration={}ms", duration);
+            }
+        } catch (RpcException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.warn("RpcAdapter - GPS RPC调用失败，已记录: error={}, duration={}ms",
                     e.getMessage(), duration);
             // RPC失败仅记录日志，不中断业务流程
         }
