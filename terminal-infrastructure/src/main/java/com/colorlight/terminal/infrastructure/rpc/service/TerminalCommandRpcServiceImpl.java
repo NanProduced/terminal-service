@@ -36,10 +36,6 @@ public class TerminalCommandRpcServiceImpl implements TerminalCommandRpcService 
         try {
             log.info("RPC - 收到指令下发请求, deviceId: {}, authorUrl: {}", 
                     request.getDeviceId(), request.getCommand().getAuthorUrl());
-
-            if (StringUtils.isBlank(request.getCommand().getAuthorUrl())) {
-                return RpcResult.error(CommonErrorCode.INVALID_PARAMETER.getCode(), "author_url can not be null");
-            }
             
             // 转换RPC请求为Application层请求
             SendCommandRequest appRequest = SendCommandRequest.builder()
