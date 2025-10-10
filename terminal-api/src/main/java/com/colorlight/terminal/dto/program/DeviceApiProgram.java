@@ -1,5 +1,6 @@
 package com.colorlight.terminal.dto.program;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -42,9 +43,10 @@ public class DeviceApiProgram {
     private Title title;
 
     @Schema(description = "获取素材接口")
+    @JsonProperty("_links")
     private Links links;
 
-
+    @Data
     @Schema(description = "节目名对象，设计如此")
     public static class Title {
 
@@ -52,13 +54,16 @@ public class DeviceApiProgram {
         private String rendered;
     }
 
+    @Data
     @Schema(description = "获取素材接口")
     public static class Links {
 
         @Schema(description = "节目地址对象")
+        @JsonProperty("wp:attachment")
         private List<AttachmentUrl> attachmentUrls;
     }
 
+    @Data
     @Schema(description = "节目地址对象")
     public static class AttachmentUrl {
 
