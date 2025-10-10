@@ -28,12 +28,14 @@ public class DeviceApiProgram {
     private String date;
 
     @Schema(description = "GMT创建时间")
+    @JsonProperty("date_gmt")
     private String dateGmt;
 
     @Schema(description = "修改时间")
     private String modified;
 
     @Schema(description = "GMT修改时间")
+    @JsonProperty("modified_gmt")
     private String modifiedGmt;
 
     @Schema(description = "节目类型")
