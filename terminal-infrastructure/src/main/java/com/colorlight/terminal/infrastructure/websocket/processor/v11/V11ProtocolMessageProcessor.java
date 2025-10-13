@@ -122,7 +122,8 @@ public class V11ProtocolMessageProcessor implements ProtocolMessageProcessor {
      */
     private TextMessageProcessResult handleHeartbeat(MessageProcessingContext context) {
         if (context.sendMessage(HEARTBEAT_RESPONSE)) {
-            // 心跳没有业务逻辑
+            // 响应空报文
+            context.sendMessage("");
             return TextMessageProcessResult.ofSuccess(true);
         }
         return TextMessageProcessResult.ofFailure("PONG消息发送失败");
