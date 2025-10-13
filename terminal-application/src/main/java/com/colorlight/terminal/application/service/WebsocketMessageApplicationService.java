@@ -106,13 +106,27 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
             if (added) {
                 // 更新设备在线状态（WebSocket连接建立）
                 deviceOnlineStatusUseCase.updateLastReportTime(
-                        deviceId, 
-                        ReportSource.WEBSOCKET, 
+                        deviceId,
+                        ReportSource.WEBSOCKET,
                         connection.getClientIp()
                 );
-                
+
                 log.info("ApplicationService - ws - 设备连接建立成功: deviceId={}, 总连接数={}",
                         deviceId, connectionManagerPort.getConnectionCount());
+
+                // 调用协议特定的连接建立钩子（如V1.1协议的主动指令推送）
+                try {
+                    ProtocolMessageProcessor processor = protocolProcessorPort.getProcessor(protocolVersion);
+                    MessageProcessingContext context = MessageProcessingContext.create(connection, "");
+                    processor.onConnectionEstablished(context);
+                    log.debug("ApplicationService - ws - 协议连接建立回调完成: deviceId={}, protocol={}",
+                             deviceId, protocolVersion);
+                } catch (Exception e) {
+                    // 连接建立回调失败不应影响连接本身，仅记录错误
+                    log.error("ApplicationService - ws - 协议连接建立回调异常: deviceId={}, protocol={}",
+                             deviceId, protocolVersion, e);
+                }
+
                 return connection;
             } else {
                 log.warn("ApplicationService - ws - 设备连接添加失败: deviceId={}", deviceId);

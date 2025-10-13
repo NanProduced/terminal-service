@@ -39,6 +39,24 @@ public class V11ProtocolMessageProcessor implements ProtocolMessageProcessor {
     }
 
     /**
+     * V1.1协议连接建立回调 - 主动推送待执行指令
+     *
+     * <p>V1.1协议特性：</p>
+     * <ul>
+     *   <li>连接建立后，服务器主动推送待执行指令列表</li>
+     *   <li>推送消息的receiptId为null，表示服务器主动推送</li>
+     *   <li>设备接收指令后，通过COMMAND消息再次获取指令或通过CONFIRM_COMMAND确认执行</li>
+     * </ul>
+     *
+     * @param context 消息处理上下文，包含设备连接信息
+     */
+    @Override
+    public void onConnectionEstablished(MessageProcessingContext context) {
+        log.info("V11ProtocolMessageProcessor - 连接建立，开始主动推送指令: deviceId={}", context.getDeviceId());
+        operationHandleRouter.pushCommandsOnConnection(context);
+    }
+
+    /**
      * 处理V1.1文本消息。
      *
      * @param context 消息处理上下文，包含发送和接收消息所需的信息

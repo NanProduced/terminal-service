@@ -321,6 +321,81 @@ class WebsocketMessageApplicationServiceTest extends BaseApplicationServiceTest 
             verify(connectionManagerPort).addConnection(eq(TEST_DEVICE_ID), any(TerminalConnection.class));
             verify(deviceOnlineStatusUseCase, never()).updateLastReportTime(any(), any(), any());
         }
+
+        @Test
+        @DisplayName("应该在连接建立成功后调用协议处理器的连接建立回调")
+        void should_invoke_protocol_processor_callback_on_connection_established() {
+            // Given - Mock会话、连接管理器和协议处理器
+            WebSocketSession session = TestDataBuilder.createMockWebSocketSession();
+            ProtocolMessageProcessor processor = TestDataBuilder.createMockProtocolProcessor(ProtocolVersion.V1_1);
+
+            given(connectionManagerPort.addConnection(eq(TEST_DEVICE_ID), any(TerminalConnection.class)))
+                .willReturn(true);
+            given(connectionManagerPort.getConnectionCount()).willReturn(TEST_CONNECTION_COUNT);
+            given(protocolProcessorPort.getProcessor(ProtocolVersion.V1_1)).willReturn(processor);
+
+            // When - 建立V1.1协议连接
+            TerminalConnection result = service.handleConnectionEstablished(TEST_DEVICE_ID, session, ProtocolVersion.V1_1);
+
+            // Then - 验证连接建立成功且协议回调被调用
+            assertThat(result).isNotNull();
+
+            verify(connectionManagerPort).addConnection(eq(TEST_DEVICE_ID), any(TerminalConnection.class));
+            verify(deviceOnlineStatusUseCase).updateLastReportTime(TEST_DEVICE_ID, ReportSource.WEBSOCKET, TEST_CLIENT_IP);
+            verify(protocolProcessorPort).getProcessor(ProtocolVersion.V1_1);
+            verify(processor).onConnectionEstablished(any(MessageProcessingContext.class));
+        }
+
+        @Test
+        @DisplayName("应该处理协议连接建立回调失败的情况但不影响连接本身")
+        void should_handle_protocol_callback_failure_without_affecting_connection() {
+            // Given - Mock会话和协议处理器抛出异常
+            WebSocketSession session = TestDataBuilder.createMockWebSocketSession();
+            ProtocolMessageProcessor processor = TestDataBuilder.createMockProtocolProcessor(ProtocolVersion.V1_1);
+
+            given(connectionManagerPort.addConnection(eq(TEST_DEVICE_ID), any(TerminalConnection.class)))
+                .willReturn(true);
+            given(connectionManagerPort.getConnectionCount()).willReturn(TEST_CONNECTION_COUNT);
+            given(protocolProcessorPort.getProcessor(ProtocolVersion.V1_1)).willReturn(processor);
+            doThrow(new RuntimeException("推送指令失败"))
+                .when(processor).onConnectionEstablished(any(MessageProcessingContext.class));
+
+            // When - 建立连接（回调失败）
+            TerminalConnection result = service.handleConnectionEstablished(TEST_DEVICE_ID, session, ProtocolVersion.V1_1);
+
+            // Then - 验证连接仍然成功建立（回调失败不影响连接）
+            assertThat(result).isNotNull();
+            assertThat(result.getDeviceId()).isEqualTo(TEST_DEVICE_ID);
+
+            verify(connectionManagerPort).addConnection(eq(TEST_DEVICE_ID), any(TerminalConnection.class));
+            verify(deviceOnlineStatusUseCase).updateLastReportTime(TEST_DEVICE_ID, ReportSource.WEBSOCKET, TEST_CLIENT_IP);
+            verify(protocolProcessorPort).getProcessor(ProtocolVersion.V1_1);
+            verify(processor).onConnectionEstablished(any(MessageProcessingContext.class));
+        }
+
+        @Test
+        @DisplayName("V1.0协议连接建立时不应调用协议回调（默认空实现）")
+        void should_not_invoke_callback_for_v10_protocol() {
+            // Given - Mock V1.0协议会话和处理器
+            WebSocketSession session = TestDataBuilder.createMockWebSocketSession();
+            ProtocolMessageProcessor processor = TestDataBuilder.createMockProtocolProcessor(ProtocolVersion.V1_0);
+
+            given(connectionManagerPort.addConnection(eq(TEST_DEVICE_ID), any(TerminalConnection.class)))
+                .willReturn(true);
+            given(connectionManagerPort.getConnectionCount()).willReturn(TEST_CONNECTION_COUNT);
+            given(protocolProcessorPort.getProcessor(ProtocolVersion.V1_0)).willReturn(processor);
+
+            // When - 建立V1.0协议连接
+            TerminalConnection result = service.handleConnectionEstablished(TEST_DEVICE_ID, session, ProtocolVersion.V1_0);
+
+            // Then - 验证连接建立成功且协议回调被调用（但V1.0默认空实现无副作用）
+            assertThat(result).isNotNull();
+
+            verify(connectionManagerPort).addConnection(eq(TEST_DEVICE_ID), any(TerminalConnection.class));
+            verify(deviceOnlineStatusUseCase).updateLastReportTime(TEST_DEVICE_ID, ReportSource.WEBSOCKET, TEST_CLIENT_IP);
+            verify(protocolProcessorPort).getProcessor(ProtocolVersion.V1_0);
+            verify(processor).onConnectionEstablished(any(MessageProcessingContext.class));
+        }
     }
 
     @Nested

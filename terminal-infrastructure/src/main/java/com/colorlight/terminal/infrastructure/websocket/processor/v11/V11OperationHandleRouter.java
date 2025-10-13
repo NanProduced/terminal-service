@@ -119,6 +119,58 @@ public class V11OperationHandleRouter {
     /* =================== 指令类型对应的处理方法 =================== */
 
     /**
+     * 主动推送指令给设备（连接建立时调用）
+     * 异步化处理：避免Redis查询阻塞EventLoop线程
+     *
+     * <p>与handleGetCommand的区别：</p>
+     * <ul>
+     *   <li>handleGetCommand：响应设备的主动请求，receiptId = messageId</li>
+     *   <li>pushCommandsOnConnection：服务器主动推送，receiptId = null</li>
+     * </ul>
+     *
+     * @param context 消息处理上下文，包含设备ID等信息
+     */
+    public void pushCommandsOnConnection(MessageProcessingContext context) {
+        Long deviceId = context.getDeviceId();
+
+        // 异步执行Redis查询操作，避免阻塞EventLoop线程
+        // getPendingCommands可能涉及多次Redis操作：List查询 + 批量Get操作
+        CompletableFuture
+                .supplyAsync(() -> {
+                    try {
+                        // 执行可能耗时的Redis查询操作
+                        List<TerminalCommand> pendingCommands = terminalCommandUseCase.getPendingCommands(deviceId);
+                        return dtoConverter.convertToCommandResponses(pendingCommands);
+                    } catch (Exception e) {
+                        log.error("V11Router -ws- #PUSH_COMMAND#【连接建立推送指令异常】deviceId:{}", deviceId, e);
+                        throw e; // 重新抛出异常，由whenComplete处理
+                    }
+                }, websocketBusinessExecutor)
+                .whenComplete((commandResponses, throwable) -> {
+                    // 回调必须在EventLoop线程中执行，确保sendMessage的线程安全
+                    TerminalWebsocketSession session = (TerminalWebsocketSession) context.getConnection().getSession();
+                    Channel channel = session.getNettyChannel();
+                    channel.eventLoop().execute(() -> {
+                        try {
+                            if (throwable == null) {
+                                // 成功获取指令，发送响应
+                                // receiptId为null，表示服务器主动推送（区别于设备请求的响应）
+                                context.sendMessage(new V11WebsocketMessage(
+                                        V11WebsocketMessageTypeEnum.COMMAND.getId(), null, commandResponses));
+                                log.info("V11Router -ws- #PUSH_COMMAND#【连接建立推送指令成功】deviceId:{}, commandIds:{}",
+                                        deviceId, commandResponses.stream().map(CommandResponse::getId).toList());
+                            } else {
+                                // 处理异常，记录错误但不发送错误响应（避免干扰正常流程）
+                                log.error("V11Router -ws- #PUSH_COMMAND#【连接建立推送指令失败】deviceId:{}", deviceId, throwable);
+                            }
+                        } catch (Exception e) {
+                            log.error("V11Router -ws- #PUSH_COMMAND#【发送推送消息异常】deviceId:{}", deviceId, e);
+                        }
+                    });
+                });
+    }
+
+    /**
      * 处理获取指令的命令。
      * 异步化处理：避免Redis查询阻塞EventLoop线程
      *

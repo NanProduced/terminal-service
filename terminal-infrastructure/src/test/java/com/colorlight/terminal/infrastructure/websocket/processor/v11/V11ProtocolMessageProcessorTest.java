@@ -20,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -127,18 +128,52 @@ class V11ProtocolMessageProcessorTest {
     @Nested
     @DisplayName("协议版本支持测试")
     class ProtocolVersionSupportTest {
-        
+
         @Test
         @DisplayName("应该支持V1.1协议版本")
         void should_support_v11_protocol_version() {
             // When - 获取支持的协议版本
             ProtocolVersion supportedVersion = processor.getSupportedVersion();
-            
+
             // Then - 验证支持V1.1协议
             assertThat(supportedVersion).isEqualTo(ProtocolVersion.V1_1);
         }
     }
-    
+
+    @Nested
+    @DisplayName("连接建立回调测试")
+    class ConnectionEstablishedTest {
+
+        @Test
+        @DisplayName("应该在连接建立时调用路由器推送指令")
+        void should_call_router_to_push_commands_on_connection_established() {
+            // Given - 准备连接上下文
+            // 已在setUp中配置
+
+            // When - 触发连接建立回调
+            processor.onConnectionEstablished(messageProcessingContext);
+
+            // Then - 验证调用路由器的推送方法
+            verify(operationHandleRouter).pushCommandsOnConnection(messageProcessingContext);
+        }
+
+        @Test
+        @DisplayName("连接建立回调失败应该抛出异常")
+        void should_throw_exception_when_push_fails() {
+            // Given - 路由器推送失败
+            doThrow(new RuntimeException("推送指令失败")).when(operationHandleRouter)
+                    .pushCommandsOnConnection(any());
+
+            // When & Then - 验证异常被抛出（异常处理由上层WebsocketMessageApplicationService负责）
+            assertThatThrownBy(() -> processor.onConnectionEstablished(messageProcessingContext))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("推送指令失败");
+
+            // 验证调用了推送方法
+            verify(operationHandleRouter).pushCommandsOnConnection(messageProcessingContext);
+        }
+    }
+
     @Nested
     @DisplayName("心跳消息处理测试")
     class HeartbeatMessageTest {

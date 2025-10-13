@@ -353,7 +353,64 @@ class V11OperationHandleRouterTest {
     @Nested
     @DisplayName("指令处理测试")
     class CommandHandlingTest {
-        
+
+        @Test
+        @DisplayName("应该在连接建立时主动推送指令")
+        void should_push_commands_on_connection_established() {
+            // Given - 准备连接建立场景
+            List<TerminalCommand> pendingCommands = TestDataBuilder.buildTerminalCommands();
+            List<CommandResponse> commandResponses = TestDataBuilder.buildCommandResponses();
+
+            when(terminalCommandUseCase.getPendingCommands(12345L)).thenReturn(pendingCommands);
+            when(dtoConverter.convertToCommandResponses(pendingCommands)).thenReturn(commandResponses);
+
+            // When - 连接建立时主动推送指令
+            router.pushCommandsOnConnection(messageProcessingContext);
+
+            // Then - 验证指令推送流程（使用同步执行器确保立即执行）
+            verify(terminalCommandUseCase).getPendingCommands(12345L);
+            verify(dtoConverter).convertToCommandResponses(pendingCommands);
+
+            verify(messageProcessingContext).sendMessage(messageCaptor.capture());
+            V11WebsocketMessage response = messageCaptor.getValue();
+            assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.COMMAND.getId());
+            assertThat(response.getReceiptId()).isNull(); // 主动推送，receiptId为null
+            assertThat(response.getData()).isEqualTo(commandResponses);
+        }
+
+        @Test
+        @DisplayName("应该处理连接建立时的空指令列表")
+        void should_handle_empty_commands_on_connection() {
+            // Given - 准备空的指令列表
+            when(terminalCommandUseCase.getPendingCommands(12345L)).thenReturn(Collections.emptyList());
+            when(dtoConverter.convertToCommandResponses(Collections.emptyList())).thenReturn(Collections.emptyList());
+
+            // When - 连接建立时主动推送
+            router.pushCommandsOnConnection(messageProcessingContext);
+
+            // Then - 验证处理空列表（使用同步执行器确保立即执行）
+            verify(terminalCommandUseCase).getPendingCommands(12345L);
+            verify(messageProcessingContext).sendMessage(messageCaptor.capture());
+
+            V11WebsocketMessage response = messageCaptor.getValue();
+            assertThat(response.getReceiptId()).isNull(); // 主动推送标识
+            assertThat(response.getData()).isEqualTo(Collections.emptyList());
+        }
+
+        @Test
+        @DisplayName("当连接建立推送指令失败时应该记录错误但不发送错误响应")
+        void should_log_error_but_not_send_error_response_when_push_fails() {
+            // Given - 准备失败场景
+            when(terminalCommandUseCase.getPendingCommands(anyLong()))
+                    .thenThrow(new RuntimeException("Redis连接失败"));
+
+            // When - 连接建立时尝试推送
+            router.pushCommandsOnConnection(messageProcessingContext);
+
+            // Then - 验证不发送错误消息（避免干扰连接建立流程）
+            verify(messageProcessingContext, never()).sendMessage(any(V11WebsocketMessage.class));
+        }
+
         @Test
         @DisplayName("应该异步获取待执行指令")
         void should_get_pending_commands_asynchronously() {
