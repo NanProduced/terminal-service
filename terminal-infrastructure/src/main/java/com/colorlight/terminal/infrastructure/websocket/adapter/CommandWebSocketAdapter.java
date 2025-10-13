@@ -136,7 +136,7 @@ public class CommandWebSocketAdapter implements CommandWebSocketPort {
         }
         else if (protocolVersion == ProtocolVersion.V1_1) {
             // 适配V11协议data为数组
-            return JsonUtils.toJson(Collections.singletonList(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.COMMAND.getId(), data)));
+            return JsonUtils.toJson(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.COMMAND.getId(), Collections.singletonList(data)));
         }
         else {
             return JsonUtils.toJson(new WebsocketTerminalCommand(List.of(data), command.getDeviceId().intValue()));
