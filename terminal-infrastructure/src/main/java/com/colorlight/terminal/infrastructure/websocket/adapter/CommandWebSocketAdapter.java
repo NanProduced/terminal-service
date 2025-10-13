@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -134,7 +135,8 @@ public class CommandWebSocketAdapter implements CommandWebSocketPort {
             return JsonUtils.toJson(new WebsocketTerminalCommand(List.of(data), command.getDeviceId().intValue()));
         }
         else if (protocolVersion == ProtocolVersion.V1_1) {
-            return JsonUtils.toJson(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.COMMAND.getId(), data));
+            // 适配V11协议data为数组
+            return JsonUtils.toJson(Collections.singletonList(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.COMMAND.getId(), data)));
         }
         else {
             return JsonUtils.toJson(new WebsocketTerminalCommand(List.of(data), command.getDeviceId().intValue()));
