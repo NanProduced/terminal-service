@@ -1,7 +1,10 @@
 package com.colorlight.terminal.infrastructure.websocket.adapter;
 
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
+import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
+import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketMessage;
+import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketMessageTypeEnum;
 import com.colorlight.terminal.application.port.outbound.command.CommandWebSocketPort;
 import com.colorlight.terminal.application.port.outbound.connection.ConnectionManagerPort;
 import com.colorlight.terminal.commons.utils.JsonUtils;
@@ -48,19 +51,18 @@ public class CommandWebSocketAdapter implements CommandWebSocketPort {
                 log.warn("CommandWebSocketAdapter - 设备连接无效, deviceId: {}", command.getDeviceId());
                 return false;
             }
-            
+
             // 3. 构造WebSocket消息格式
-            WebsocketTerminalCommand message = buildWebSocketMessage(command);
-            String messageJson = JsonUtils.toJson(message);
+            String message = buildWebSocketMessage(command, connection.getProtocolVersion());
             
             // 4. 发送消息
             Object session = connection.getSession();
             if (session instanceof TerminalWebsocketSession websocketSession) {
-                boolean sent = websocketSession.sendMessage(messageJson);
+                boolean sent = websocketSession.sendMessage(message);
                 
                 if (sent) {
                     log.info("CommandWebSocketAdapter - WebSocket指令发送成功, deviceId: {}, command: {}",
-                            command.getDeviceId(), messageJson);
+                            command.getDeviceId(), message);
                     return true;
                 } else {
                     log.warn("CommandWebSocketAdapter - WebSocket指令发送失败, deviceId: {}, commandId: {}",
@@ -108,18 +110,34 @@ public class CommandWebSocketAdapter implements CommandWebSocketPort {
         
         return false;
     }
-    
+
+
     /**
      * 构建WebSocket消息格式
      * 根据文档，WebSocket指令格式比HTTP稍有不同，包含额外的led_id字段
+     *
+     * @param command 指令对象，包含要发送给终端的指令信息
+     * @param protocolVersion 协议版本，决定消息的封装格式
+     * @return 封装后的WebSocket消息字符串
      */
-    private WebsocketTerminalCommand buildWebSocketMessage(TerminalCommand command) {
+    private String buildWebSocketMessage(TerminalCommand command, ProtocolVersion protocolVersion) {
+        // 创建WebSocket内容对象
         WebsocketTerminalCommand.WebsocketContent content = new WebsocketTerminalCommand.WebsocketContent(command.getContentRaw());
+        // 构造WebSocket指令数据
         WebsocketTerminalCommand.WebsocketCommand data = new WebsocketTerminalCommand.WebsocketCommand(command.getCommandId(),
                 command.getDeviceId().intValue(),
                 command.getAuthorUrl(),
                 command.getKarma(),
                 content);
-        return new WebsocketTerminalCommand(List.of(data), command.getDeviceId().intValue());
+        // 根据协议版本选择不同的消息封装格式
+        if (protocolVersion == null || protocolVersion == ProtocolVersion.V1_0) {
+            return JsonUtils.toJson(new WebsocketTerminalCommand(List.of(data), command.getDeviceId().intValue()));
+        }
+        else if (protocolVersion == ProtocolVersion.V1_1) {
+            return JsonUtils.toJson(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.COMMAND.getId(), data));
+        }
+        else {
+            return JsonUtils.toJson(new WebsocketTerminalCommand(List.of(data), command.getDeviceId().intValue()));
+        }
     }
 }
