@@ -1,5 +1,6 @@
 package com.colorlight.terminal.infrastructure.websocket.processor.v11;
 
+import com.colorlight.ccloud.program.vo.RpcTerminalProgramVO;
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
 import com.colorlight.terminal.application.domain.connection.MessageProcessingContext;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
@@ -238,10 +239,10 @@ public class V11OperationHandleRouter {
      * @param messageId 消息ID，用于响应时关联请求
      */
     private void handleGetProgram(MessageProcessingContext context, Integer messageId) {
-        String program = terminalProgramUseCase.getProgram(context.getDeviceId());
-
+        String programStr = terminalProgramUseCase.getProgram(context.getDeviceId());
+        List<RpcTerminalProgramVO> programs = JsonUtils.fromJson(programStr, new TypeReference<List<RpcTerminalProgramVO>>(){});
         // 下发节目
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.PROGRAMS.getId(), messageId, program));
+        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.PROGRAMS.getId(), messageId, programs));
         log.info("V11Router -ws- #GET_PROGRAMS#【获取节目】deviceId:{}", context.getDeviceId());
     }
 
