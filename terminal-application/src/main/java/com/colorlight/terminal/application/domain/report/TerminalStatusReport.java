@@ -333,6 +333,11 @@ public class TerminalStatusReport {
          * 播放内容来源
          */
         private String source;
+
+        /**
+         * 播放类型
+         */
+        private String type;
     }
 
     /**
