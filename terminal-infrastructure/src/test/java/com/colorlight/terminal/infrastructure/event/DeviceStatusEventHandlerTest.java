@@ -1,14 +1,17 @@
 package com.colorlight.terminal.infrastructure.event;
 
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
+import com.colorlight.terminal.application.domain.status.OnlineStatus;
 import com.colorlight.terminal.application.domain.status.ReportSource;
 import com.colorlight.terminal.application.dto.record.TerminalOnlineTimeRecord;
 import com.colorlight.terminal.application.dto.record.TerminalReconnectRecord;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalAccountRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalOnlineTimeRepository;
+import com.colorlight.terminal.application.port.outbound.repository.TerminalOnlineStatusRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalReconnectRepository;
 import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
 import com.colorlight.terminal.application.port.outbound.status.AsyncTerminalLoginUpdatePort;
+import com.colorlight.terminal.commons.utils.TimeUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +26,7 @@ import java.util.concurrent.Executor;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.*;
 
 /**
@@ -55,6 +59,9 @@ class DeviceStatusEventHandlerTest {
     private TerminalOnlineTimeRepository terminalOnlineTimeRepository;
     
     @Mock
+    private TerminalOnlineStatusRepository terminalOnlineStatusRepository;
+    
+    @Mock
     private TerminalReconnectRepository terminalReconnectRepository;
     
     @Mock
@@ -82,6 +89,7 @@ class DeviceStatusEventHandlerTest {
         deviceStatusEventHandler = new DeviceStatusEventHandler(
                 terminalAccountRepository,
                 terminalOnlineTimeRepository,
+                terminalOnlineStatusRepository,
                 terminalReconnectRepository,
                 asyncTerminalLoginUpdatePort,
                 mainServerRpcPort,
@@ -105,8 +113,11 @@ class DeviceStatusEventHandlerTest {
         assertDoesNotThrow(() -> deviceStatusEventHandler.handleDeviceOnline(goLiveEvent));
 
         // Then: 验证立即更新登录时间被调用
+        LocalDateTime expectedGoLiveStart = TimeUtils.convertTimestampToLocalDateTime(currentTime);
         then(terminalAccountRepository).should().updateLoginTimeImmediate(
                 eq(sampleDeviceId), eq(sampleClientIp), any(LocalDateTime.class));
+        then(terminalOnlineStatusRepository).should().upsertOnlineState(
+                eq(sampleDeviceId), eq(OnlineStatus.GO_LIVE), eq(expectedGoLiveStart));
         
         // 验证RPC通知被调用（通过Executor异步执行）
         ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
@@ -132,6 +143,7 @@ class DeviceStatusEventHandlerTest {
 
         // Then: 验证不执行任何操作
         then(terminalAccountRepository).should(never()).updateLoginTimeImmediate(any(), any(), any());
+        then(terminalOnlineStatusRepository).should(never()).upsertOnlineState(any(), any(), any());
         then(rpcExecutor).should(never()).execute(any(Runnable.class));
     }
 
@@ -158,6 +170,9 @@ class DeviceStatusEventHandlerTest {
         // Then: 验证异步更新登录时间被调用
         then(asyncTerminalLoginUpdatePort).should().submitLoginUpdate(
                 eq(sampleDeviceId), eq(sampleClientIp), any(LocalDateTime.class));
+        LocalDateTime expectedReconnectStart = TimeUtils.convertTimestampToLocalDateTime(onlineStartTime);
+        then(terminalOnlineStatusRepository).should().upsertOnlineState(
+                eq(sampleDeviceId), eq(OnlineStatus.RECONNECT), eq(expectedReconnectStart));
         
         // 验证保存重连记录被调用
         ArgumentCaptor<TerminalReconnectRecord> reconnectCaptor = ArgumentCaptor.forClass(TerminalReconnectRecord.class);
@@ -194,8 +209,10 @@ class DeviceStatusEventHandlerTest {
 
         // When: 处理设备离线事件
         deviceStatusEventHandler.handleDetectedDeviceOffline(offlineEvent);
+        long expectedDurationSeconds = (lastReportTime - onlineStartTime) / 1000;
+        LocalDateTime expectedSessionStart = TimeUtils.convertTimestampToLocalDateTime(onlineStartTime);
 
-        // Then: 验证保存在线时长记录被调用
+        // Then: 验证在线时长被记录
         ArgumentCaptor<TerminalOnlineTimeRecord> onlineTimeCaptor = ArgumentCaptor.forClass(TerminalOnlineTimeRecord.class);
         then(terminalOnlineTimeRepository).should().saveTerminalOnlineTime(onlineTimeCaptor.capture());
         
@@ -203,7 +220,14 @@ class DeviceStatusEventHandlerTest {
         assertEquals(sampleDeviceId, savedRecord.getDeviceId());
         assertNotNull(savedRecord.getStartTime());
         assertNotNull(savedRecord.getEndTime());
+                ArgumentCaptor<LocalDateTime> sessionStartCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        ArgumentCaptor<Long> durationCaptor = ArgumentCaptor.forClass(Long.class);
+        then(terminalOnlineStatusRepository).should().finalizeOnlineSession(
+                eq(sampleDeviceId), sessionStartCaptor.capture(), durationCaptor.capture());
+        assertEquals(expectedSessionStart, sessionStartCaptor.getValue());
+        assertEquals(expectedDurationSeconds, durationCaptor.getValue().longValue());
     }
+
 
     @Test
     @DisplayName("处理设备检测离线事件 - 时间为空")
@@ -222,6 +246,8 @@ class DeviceStatusEventHandlerTest {
 
         // Then: 验证不保存在线时长记录
         then(terminalOnlineTimeRepository).should(never()).saveTerminalOnlineTime(any());
+        then(terminalOnlineStatusRepository).should(never()).finalizeOnlineSession(any(), any(LocalDateTime.class), anyLong());
+        then(terminalOnlineStatusRepository).should(never()).finalizeOnlineSession(any(), any(LocalDateTime.class), anyLong());
     }
 
     @Test
@@ -237,10 +263,12 @@ class DeviceStatusEventHandlerTest {
         // When: 处理事件（仅记录日志，无其他操作）
         assertDoesNotThrow(() -> deviceStatusEventHandler.handleConfirmDeviceOffline(confirmOfflineEvent));
 
-        // Then: 验证没有调用任何业务操作
+        // Then: 验证仅更新Mongo状态，不触发其他业务操作
+        then(terminalOnlineStatusRepository).should(never()).updateStatus(any(), any());
         then(terminalAccountRepository).should(never()).updateLoginTimeImmediate(any(), any(), any());
         then(asyncTerminalLoginUpdatePort).should(never()).submitLoginUpdate(any(), any(), any());
         then(terminalOnlineTimeRepository).should(never()).saveTerminalOnlineTime(any());
+        then(terminalOnlineStatusRepository).should(never()).finalizeOnlineSession(any(), any(LocalDateTime.class), anyLong());
     }
 
     @Test
@@ -261,6 +289,7 @@ class DeviceStatusEventHandlerTest {
         // Then: 验证异步更新登录时间被调用
         then(asyncTerminalLoginUpdatePort).should().submitLoginUpdate(
                 eq(sampleDeviceId), eq(sampleClientIp), any(LocalDateTime.class));
+        then(terminalOnlineStatusRepository).should(never()).updateStatus(any(), any());
         
         // 验证RPC通知被调用（通过Executor异步执行）
         ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
@@ -377,6 +406,8 @@ class DeviceStatusEventHandlerTest {
 
         // Then: 验证异步更新被调用，异常被捕获
         then(asyncTerminalLoginUpdatePort).should().submitLoginUpdate(any(), any(), any());
+        then(terminalOnlineStatusRepository).should().upsertOnlineState(
+                eq(sampleDeviceId), eq(OnlineStatus.RECONNECT), eq(TimeUtils.convertTimestampToLocalDateTime(currentTime - 3600000L)));
         // 其他操作仍然应该正常执行
         then(terminalReconnectRepository).should().saveReconnectRecord(any());
         // RPC通知仍然应该被调用（通过Executor异步执行）
@@ -408,6 +439,7 @@ class DeviceStatusEventHandlerTest {
 
         // Then: 验证不保存在线时长记录（因为时间顺序异常）
         then(terminalOnlineTimeRepository).should(never()).saveTerminalOnlineTime(any());
+        then(terminalOnlineStatusRepository).should(never()).finalizeOnlineSession(any(), any(LocalDateTime.class), anyLong());
     }
 
     @Test
@@ -449,6 +481,7 @@ class DeviceStatusEventHandlerTest {
 
         // When: 处理连接时长刚好1秒的离线事件
         assertDoesNotThrow(() -> deviceStatusEventHandler.handleDetectedDeviceOffline(boundaryEvent));
+        long expectedDurationSeconds = 1L;
 
         // Then: 验证保存在线时长记录（因为连接时长等于1秒，符合要求）
         ArgumentCaptor<TerminalOnlineTimeRecord> recordCaptor = ArgumentCaptor.forClass(TerminalOnlineTimeRecord.class);
@@ -458,5 +491,11 @@ class DeviceStatusEventHandlerTest {
         assertEquals(sampleDeviceId, savedRecord.getDeviceId());
         assertNotNull(savedRecord.getStartTime());
         assertNotNull(savedRecord.getEndTime());
+                ArgumentCaptor<LocalDateTime> boundaryStartCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        ArgumentCaptor<Long> boundaryDurationCaptor = ArgumentCaptor.forClass(Long.class);
+        then(terminalOnlineStatusRepository).should().finalizeOnlineSession(
+                eq(sampleDeviceId), boundaryStartCaptor.capture(), boundaryDurationCaptor.capture());
+        assertEquals(TimeUtils.convertTimestampToLocalDateTime(boundaryOnlineStartTime), boundaryStartCaptor.getValue());
+        assertEquals(expectedDurationSeconds, boundaryDurationCaptor.getValue().longValue());
     }
 }
