@@ -31,6 +31,11 @@ public final class CommonConstant {
 
         public static final String VERSION = "version";
 
+        public static final String TOTAL_ONLINE_TIME = "totalOnlineTime";
+
+        public static final String CREATED_AT = "createdAt";
+
+        public static final String UPDATED_AT = "updatedAt";
 
     }
 

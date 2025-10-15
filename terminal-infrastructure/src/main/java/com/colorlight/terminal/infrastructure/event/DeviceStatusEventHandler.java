@@ -1,10 +1,12 @@
 package com.colorlight.terminal.infrastructure.event;
 
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
+import com.colorlight.terminal.application.domain.status.OnlineStatus;
 import com.colorlight.terminal.application.dto.record.TerminalOnlineTimeRecord;
 import com.colorlight.terminal.application.dto.record.TerminalReconnectRecord;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalAccountRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalOnlineTimeRepository;
+import com.colorlight.terminal.application.port.outbound.repository.TerminalOnlineStatusRepository;
 import com.colorlight.terminal.application.port.outbound.repository.TerminalReconnectRepository;
 import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
 import com.colorlight.terminal.application.port.outbound.status.AsyncTerminalLoginUpdatePort;
@@ -30,6 +32,7 @@ public class DeviceStatusEventHandler {
     
     private final TerminalAccountRepository terminalAccountRepository;
     private final TerminalOnlineTimeRepository terminalOnlineTimeRepository;
+    private final TerminalOnlineStatusRepository terminalOnlineStatusRepository;
     private final TerminalReconnectRepository  terminalReconnectRepository;
     private final AsyncTerminalLoginUpdatePort asyncTerminalLoginUpdatePort;
     private final MainServerRpcPort mainServerRpcPort;
@@ -38,12 +41,14 @@ public class DeviceStatusEventHandler {
     // 手动构造函数以支持@Qualifier注解
     public DeviceStatusEventHandler(TerminalAccountRepository terminalAccountRepository,
                                     TerminalOnlineTimeRepository terminalOnlineTimeRepository,
+                                    TerminalOnlineStatusRepository terminalOnlineStatusRepository,
                                     TerminalReconnectRepository terminalReconnectRepository,
                                     AsyncTerminalLoginUpdatePort asyncTerminalLoginUpdatePort,
                                     MainServerRpcPort mainServerRpcPort,
                                     @Qualifier("rpcNotificationExecutor") Executor rpcExecutor) {
         this.terminalAccountRepository = terminalAccountRepository;
         this.terminalOnlineTimeRepository = terminalOnlineTimeRepository;
+        this.terminalOnlineStatusRepository = terminalOnlineStatusRepository;
         this.terminalReconnectRepository = terminalReconnectRepository;
         this.asyncTerminalLoginUpdatePort = asyncTerminalLoginUpdatePort;
         this.mainServerRpcPort = mainServerRpcPort;
@@ -65,6 +70,12 @@ public class DeviceStatusEventHandler {
             updateLoginTimeImmediate(event);
             // 异步通知主服务（使用独立RPC线程池）
             rpcExecutor.execute(() -> notifyMainServerAsync(event));
+            // upsert 在线状态
+            terminalOnlineStatusRepository.upsertOnlineState(
+                    event.getDeviceId(),
+                    OnlineStatus.GO_LIVE,
+                    TimeUtils.convertTimestampToLocalDateTime(event.getEventTime())
+            );
         }
     }
 
@@ -79,12 +90,22 @@ public class DeviceStatusEventHandler {
             log.info("DeviceStatusEvent - 设备短时间重连事件: deviceId={}, source={}, clientIp={}",
                     event.getDeviceId(), event.getReportSource(), event.getClientIp());
             
+            LocalDateTime reconnectStartTime = event.getOnlineStartTime() != null
+                    ? TimeUtils.convertTimestampToLocalDateTime(event.getOnlineStartTime())
+                    : TimeUtils.convertTimestampToLocalDateTime(event.getEventTime());
+            
             // 重连时提交到缓冲池异步更新
             updateLoginTimeAsync(event);
             // 记录重连信息
             saveTerminalReconnect(event);
             // 异步通知主服务（使用独立RPC线程池）
             rpcExecutor.execute(() -> notifyMainServerAsync(event));
+            // upsert 在线状态
+            terminalOnlineStatusRepository.upsertOnlineState(
+                    event.getDeviceId(),
+                    OnlineStatus.RECONNECT,
+                    reconnectStartTime
+            );
         }
     }
     
@@ -219,8 +240,14 @@ public class DeviceStatusEventHandler {
                 .build();
 
         terminalOnlineTimeRepository.saveTerminalOnlineTime(onlineTimeRecord);
+        long durationSeconds = durationMs / 1000;
+        terminalOnlineStatusRepository.finalizeOnlineSession(
+                event.getDeviceId(),
+                TimeUtils.convertTimestampToLocalDateTime(event.getOnlineStartTime()),
+                durationSeconds
+        );
         log.debug("DeviceOnlineTime - 设备在线时长记录保存成功: deviceId={}, duration={}s",
-            event.getDeviceId(), durationMs / 1000);
+            event.getDeviceId(), durationSeconds);
     }
 
     // ==================== 终端异常重连记录辅助方法 ====================
