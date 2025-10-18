@@ -56,8 +56,6 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
                 return;
             }
             
-            log.debug("ApplicationService - 更新设备上报时间: deviceId={}, source={}, async={}", 
-                    deviceId, source, deviceConfigPort.isAsyncStatusUpdateEnabled());
             
             // 获取当前状态（在锁保护下）
             Optional<DeviceOnlineStatus> currentStatusOpt = deviceOnlineStatusPort.getDeviceStatus(deviceId);
@@ -119,8 +117,6 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
         // 对于首次上线，强制同步处理确保状态立即写入，避免竞态条件
         if (status.getStatus() == OnlineStatus.GO_LIVE || status.getStatus() == OnlineStatus.RECONNECT) {
             deviceOnlineStatusPort.smartDetermined(status);
-            log.debug("ApplicationService - 同步保存关键状态: deviceId={}, status={}", 
-                    status.getDeviceId(), status.getStatus());
             return;
         }
         
@@ -132,8 +128,6 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
             try {
                 // 异步模式：提交到缓冲池
                 asyncDeviceStatusUpdatePort.submitStatusUpdate(status);
-                log.debug("ApplicationService - 异步提交状态更新: deviceId={}", status.getDeviceId());
-                
             } catch (Exception e) {
                 log.warn("ApplicationService - 异步提交失败，降级到同步模式: deviceId={}", status.getDeviceId(), e);
                 // 降级到同步模式
@@ -142,7 +136,6 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
         } else {
             // 同步模式：直接保存
             deviceOnlineStatusPort.smartDetermined(status);
-            log.debug("ApplicationService - 同步保存状态更新: deviceId={}", status.getDeviceId());
         }
     }
 

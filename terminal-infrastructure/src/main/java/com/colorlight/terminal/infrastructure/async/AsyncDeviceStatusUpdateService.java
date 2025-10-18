@@ -94,10 +94,7 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
             // 添加到缓冲池
             bufferPool.offer(status);
             totalProcessed.incrementAndGet();
-            
-            log.debug("AsyncDeviceStatusUpdate - 提交状态更新: deviceId={}, bufferSize={}", 
-                    status.getDeviceId(), bufferPool.size());
-            
+
             // 检查是否需要紧急刷新（暂不需要）
             // checkEmergencyFlush();
             
@@ -121,9 +118,6 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
                     totalProcessed.incrementAndGet();
                 }
             }
-            
-            log.debug("AsyncDeviceStatusUpdate - 批量提交状态更新: count={}, bufferSize={}", 
-                    statusList.size(), bufferPool.size());
 
             // 检查是否需要紧急刷新（暂不需要）
             // checkEmergencyFlush();
@@ -136,23 +130,19 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
     @Override
     public void flushBuffer() {
         if (!flushLock.tryLock()) {
-            log.debug("AsyncDeviceStatusUpdate - 刷新操作进行中，跳过本次请求");
             return;
         }
-        
+
         try {
             int bufferSize = bufferPool.size();
             if (bufferSize == 0) {
                 return;
             }
-            
+
             long startTime = System.currentTimeMillis();
             int batchSize = deviceConfigPort.getBufferPoolBatchSize();
             int processedCount = 0;
-            
-            log.debug("AsyncDeviceStatusUpdate - 开始刷新缓冲池: bufferSize={}, batchSize={}", 
-                    bufferSize, batchSize);
-            
+
             // 分批处理缓冲池中的状态更新
             List<DeviceOnlineStatus> batch = new ArrayList<>(batchSize);
             
@@ -216,7 +206,6 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
 
         try {
             if (!bufferPool.isEmpty()) {
-                log.debug("AsyncDeviceStatusUpdate - 定时刷新缓冲池: bufferSize={}", bufferPool.size());
                 // 发布异步刷新事件
                 eventPublisher.publishEvent(AsyncBufferFlushEvent.createDeviceStatusFlushEvent(this, bufferPool.size()));
             }
@@ -261,9 +250,6 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
             try {
                 // 使用现有的Redis服务批量更新状态
                 deviceOnlineStatusPort.smartDetermined(status);
-
-                log.debug("AsyncDeviceStatusUpdate - 批处理完成: batchSize={}", batch.size());
-
             } catch (Exception e) {
                 log.error("AsyncDeviceStatusUpdate - 批处理失败: batchSize={}", batch.size(), e);
                 // 这里可以考虑重试机制或者降级处理

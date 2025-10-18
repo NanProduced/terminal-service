@@ -40,9 +40,6 @@ public class DeviceStatusEventPublisher implements DeviceStatusEventPort {
     @Override
     public void publishStatusEvent(DeviceStatusEvent event) {
         try {
-            log.debug("DeviceStatusEvent - 发布设备状态事件: deviceId={}, eventType={}, async={}",
-                    event.getDeviceId(), event.getEventType(), deviceConfigPort.isSpringEventAsync());
-            
             if (deviceConfigPort.isSpringEventAsync()) {
                 // 异步发布事件
                 publishEventAsync(event);
@@ -73,11 +70,8 @@ public class DeviceStatusEventPublisher implements DeviceStatusEventPort {
         if (events == null || events.isEmpty()) {
             return;
         }
-        
+
         try {
-            log.debug("DeviceStatusEvent - 批量发布设备状态事件: count={}, async={}",
-                    events.size(), deviceConfigPort.isSpringEventAsync());
-            
             if (deviceConfigPort.isSpringEventAsync()) {
                 // 异步批量发布
                 batchPublishEventsAsync(events);

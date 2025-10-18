@@ -91,16 +91,8 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
             LoginUpdateRecord loginUpdateRecord = LoginUpdateRecord.create(deviceId, clientIp, updateTime);
             
             // 添加到缓冲池（自动去重，相同deviceId会被覆盖）
-            LoginUpdateRecord previous = bufferPool.put(deviceId, loginUpdateRecord);
+            bufferPool.put(deviceId, loginUpdateRecord);
             totalProcessed.incrementAndGet();
-            
-            if (previous != null) {
-                log.debug("AsyncTerminalLoginUpdate - 更新记录覆盖: deviceId={}, 新时间={}, 旧时间={}", 
-                        deviceId, updateTime, previous.getUpdateTime());
-            }
-            
-            log.debug("AsyncTerminalLoginUpdate - 提交登录更新: deviceId={}, bufferSize={}", 
-                    deviceId, bufferPool.size());
             
             // 检查是否需要紧急刷新
             // checkEmergencyFlush(); // 暂时应该用不上
@@ -124,9 +116,6 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
                     totalProcessed.incrementAndGet();
                 }
             }
-            
-            log.debug("AsyncTerminalLoginUpdate - 批量提交登录更新: count={}, bufferSize={}", 
-                    records.size(), bufferPool.size());
 
             // 检查是否需要紧急刷新
             // checkEmergencyFlush(); // 暂时应该用不上
@@ -139,7 +128,6 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
     @Override
     public void flushBuffer() {
         if (!flushLock.tryLock()) {
-            log.debug("AsyncTerminalLoginUpdate - 刷新操作进行中，跳过本次请求");
             return;
         }
         
@@ -152,10 +140,7 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
             long startTime = System.currentTimeMillis();
             int batchSize = deviceConfigPort.getBufferPoolBatchSize();
             int processedCount = 0;
-            
-            log.debug("AsyncTerminalLoginUpdate - 开始刷新缓冲池: bufferSize={}, batchSize={}", 
-                    bufferSize, batchSize);
-            
+
             // 分批处理缓冲池中的登录更新
             List<LoginUpdateRecord> batch = new ArrayList<>(batchSize);
             
@@ -202,7 +187,6 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
 
         try {
             if (!bufferPool.isEmpty()) {
-                log.debug("AsyncTerminalLoginUpdate - 定时刷新缓冲池: bufferSize={}", bufferPool.size());
                 // 发布异步刷新事件
                 eventPublisher.publishEvent(AsyncBufferFlushEvent.createLoginUpdateFlushEvent(this, bufferPool.size()));
             }
@@ -260,13 +244,10 @@ public class AsyncTerminalLoginUpdateService implements AsyncTerminalLoginUpdate
                 successCount++;
             } catch (Exception e) {
                 failureCount++;
-                log.error("AsyncTerminalLoginUpdate - 单个记录处理失败: deviceId={}, clientIp={}", 
+                log.error("AsyncTerminalLoginUpdate - 单个记录处理失败: deviceId={}, clientIp={}",
                         loginUpdateRecord.getDeviceId(), loginUpdateRecord.getClientIp(), e);
             }
         }
-        
-        log.debug("AsyncTerminalLoginUpdate - 批处理完成: batchSize={}, 成功={}, 失败={}", 
-                batch.size(), successCount, failureCount);
     }
 
 }

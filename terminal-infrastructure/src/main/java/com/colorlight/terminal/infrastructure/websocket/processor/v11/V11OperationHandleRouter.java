@@ -20,6 +20,7 @@ import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebso
 import io.netty.channel.Channel;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -240,6 +241,11 @@ public class V11OperationHandleRouter {
      */
     private void handleGetProgram(MessageProcessingContext context, Integer messageId) {
         String programStr = terminalProgramUseCase.getProgram(context.getDeviceId());
+        if (StringUtils.isBlank(programStr)) {
+            // 节目为空，发送空列表
+            context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.PROGRAMS.getId(), messageId, List.of()));
+            return;
+        }
         List<RpcTerminalProgramVO> programs = JsonUtils.fromJson(programStr, new TypeReference<List<RpcTerminalProgramVO>>(){});
         // 下发节目
         context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.PROGRAMS.getId(), messageId, programs));

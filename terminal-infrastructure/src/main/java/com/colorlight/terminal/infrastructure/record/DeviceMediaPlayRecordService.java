@@ -99,14 +99,61 @@ public class DeviceMediaPlayRecordService implements DeviceMediaPlayRecordPort {
     }
 
     /**
-     * 根据素材MD5获取素材ID
+     * 从 resMd5Name 中提取 MD5 值
+     * <p>
+     *     格式规则：F_2EADDA07770BF31C7DE78642F4C3C8CC_11669035.mp4
+     *     - 固定 F 开头
+     *     - 下划线分隔
+     *     - MD5（32位十六进制字符）
+     *     - 下划线分隔
+     *     - 文件大小（数字）
+     *     - 文件扩展名
+     * </p>
+     * @param resMd5Name 素材 resMd5Name 格式字符串
+     * @return 提取出的 MD5 值，如果格式不正确则返回原始字符串
+     */
+    private String extractMd5FromResMd5Name(String resMd5Name) {
+        if (Objects.isNull(resMd5Name) || resMd5Name.isEmpty()) {
+            log.warn("MediaStats - resMd5Name 为空，无法提取 MD5");
+            return resMd5Name;
+        }
+
+        try {
+            // 使用下划线分割字符串
+            String[] parts = resMd5Name.split("_");
+
+            // 格式应该是: F_MD5_SIZE.ext，至少需要3个部分
+            if (parts.length < 3) {
+                log.warn("MediaStats - resMd5Name 格式不正确，无法提取 MD5: {}", resMd5Name);
+                return resMd5Name;
+            }
+
+            // 提取 MD5 值（索引为1的部分）
+            String md5 = parts[1];
+            log.debug("MediaStats - 成功从 {} 中提取 MD5: {}", resMd5Name, md5);
+            return md5;
+
+        } catch (Exception e) {
+            log.error("MediaStats - 提取 MD5 时发生异常: resMd5Name={}, error={}", resMd5Name, e.getMessage(), e);
+            return resMd5Name;
+        }
+    }
+
+    /**
+     * 根据素材 resMd5Name 获取素材ID
      * <p>
      *     使用Redis缓存，缓存时间为10分钟，每次成功获取素材ID后，缓存时间为10分钟，10分钟后失效，下次获取素材ID时，会重新获取素材ID并更新缓存
      * </p>
-     * @param md5 素材MD5
+     * <p>
+     *     resMd5Name 格式: F_2EADDA07770BF31C7DE78642F4C3C8CC_11669035.mp4，需要提取中间的 MD5 值
+     * </p>
+     * @param resMd5Name 素材 resMd5Name 格式字符串
      * @return 素材ID
      */
-    private Integer getMediaIdByMd5(String md5) {
+    private Integer getMediaIdByMd5(String resMd5Name) {
+        // 提取 MD5 值
+        String md5 = extractMd5FromResMd5Name(resMd5Name);
+
         String cacheKey = String.format(RedisKeyConstant.MEDIA_MD5_ID_MAP_KEY, md5);
         try {
             Integer mediaId = (Integer) redisTemplate.opsForValue().get(cacheKey);
