@@ -142,16 +142,13 @@ public class DeviceStatusEventHandler {
     @EventListener
     public void handleStatusUpdate(DeviceStatusEvent event) {
         if (event.getEventType() == DeviceStatusEvent.EventType.DEVICE_HEARTBEAT) {
-            log.debug("DeviceStatusEvent - 设备在线状态刷新事件: deviceId={}, source={}",
-                    event.getDeviceId(), event.getReportSource());
-            
             // 心跳事件提交到缓冲池异步更新
             updateLoginTimeAsync(event);
             // 异步通知主服务（使用独立RPC线程池）
             rpcExecutor.execute(() -> notifyMainServerAsync(event));
         }
     }
-    
+
     /**
      * 统一事件处理入口（可选）
      * 如果需要对所有事件进行统一处理
@@ -159,9 +156,7 @@ public class DeviceStatusEventHandler {
     @Async("deviceEventExecutor")
     @EventListener
     public void handleAllDeviceStatusEvents(DeviceStatusEvent event) {
-        // 统一的事件记录、指标更新等
-        log.debug("DeviceStatusEvent - 设备状态事件: deviceId={}, eventType={}, eventTime={}",
-                event.getDeviceId(), event.getEventType(), event.getEventTime());
+        // 统一的事件记录、指标更新等（仅用于监控和统计）
     }
     
     // ==================== 登录时间更新辅助方法 ====================
@@ -193,13 +188,9 @@ public class DeviceStatusEventHandler {
             Long deviceId = event.getDeviceId();
             String clientIp = event.getClientIp();
             LocalDateTime loginTime = TimeUtils.convertTimestampToLocalDateTime(event.getEventTime());
-            
+
             // 提交到异步缓冲池
             asyncTerminalLoginUpdatePort.submitLoginUpdate(deviceId, clientIp, loginTime);
-            
-            log.debug("DeviceLoginUpdate - 提交登录时间异步更新: deviceId={}, clientIp={}, loginTime={}",
-                    deviceId, clientIp, loginTime);
-            
         } catch (Exception e) {
             log.error("DeviceLoginUpdate - 提交登录时间异步更新失败: deviceId={}", event.getDeviceId(), e);
         }

@@ -102,9 +102,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                     return operations.exec();
                 }
             });
-            
-            log.debug("DeviceOnlineStatus - 保存设备状态成功: deviceId={}, status={}", status.getDeviceId(), status.getStatus());
-            
+
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 保存设备状态失败: deviceId={}", status.getDeviceId(), e);
             throw e;
@@ -141,9 +139,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 }
             });
 
-            log.debug("DeviceOnlineStatus - 设备状态部分更新成功: deviceId={}, 更新字段={}",
-                    status.getDeviceId(), updateFields.keySet());
-
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 更新设备状态失败: deviceId={}", status.getDeviceId(), e);
             throw e;
@@ -176,10 +171,8 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         if (deviceIds == null || deviceIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        
+
         try {
-            log.debug("DeviceOnlineStatus - 批量获取设备状态: count={}", deviceIds.size());
-            
             // 使用Pipeline优化批量查询
             List<Object> results = redisTemplate.executePipelined(
                 new SessionCallback<Object>() {
@@ -207,10 +200,9 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                     statusMap.put(deviceId, status);
                 }
             }
-            
-            log.debug("DeviceOnlineStatus - 批量获取设备状态完成: 请求={}, 成功={}", deviceIds.size(), statusMap.size());
+
             return statusMap;
-            
+
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 批量获取设备状态失败: deviceIds.size={}", deviceIds.size(), e);
             return Collections.emptyMap();
@@ -254,9 +246,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                     return operations.exec();
                 }
             });
-            
-            log.debug("DeviceOnlineStatus - 删除设备状态成功: deviceId={}", deviceId);
-            
+
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 删除设备状态失败: deviceId={}", deviceId, e);
         }
@@ -266,7 +256,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     public void removeDeviceIndex(Long deviceId) {
         try {
             redisTemplate.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
-            log.debug("DeviceOnlineStatus - 删除设备状态索引成功: deviceId={}", deviceId);
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 删除设备状态索引失败: deviceId={}", deviceId, e);
         }
@@ -310,12 +299,12 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
      */
     private Set<Long> getAllDeviceIdsWithStream() {
         Set<Long> deviceIds = new HashSet<>();
-        
+
+
         try {
             streamAllDeviceIds(deviceIds::add);
-            log.debug("DeviceOnlineStatus - 流式获取设备ID完成: count={}", deviceIds.size());
             return deviceIds;
-            
+
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 流式获取所有设备ID失败", e);
             // 降级到传统方式
@@ -366,11 +355,8 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                     
                     iterationCount++;
                 }
-                
-                log.debug("DeviceOnlineStatus - 流式查询完成: iterations={}, duration={}ms", 
-                        iterationCount, System.currentTimeMillis() - startTime);
             }
-            
+
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 流式迭代设备ID失败", e);
             throw e;
@@ -403,10 +389,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
      */
     public List<Long> findExpiredDevicesWithStream(long expireThreshold) {
         try {
-            long startTime = System.currentTimeMillis();
-            log.debug("DeviceOnlineStatus - 流式查找过期设备开始: expireThreshold={}, 当前时间={}", 
-                    expireThreshold, startTime);
-            
             List<Long> expiredDevices = new ArrayList<>();
             List<Long> batchDeviceIds = new ArrayList<>();
             
@@ -421,27 +403,16 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 if (batchDeviceIds.size() >= batchSize) {
                     List<Long> batchExpired = processBatchDevices(new ArrayList<>(batchDeviceIds), expireThreshold);
                     expiredDevices.addAll(batchExpired);
-                    
-                    log.debug("DeviceOnlineStatus - 处理批次: 设备数={}, 过期数={}, 累计过期={}", 
-                            batchDeviceIds.size(), batchExpired.size(), expiredDevices.size());
-                    
                     batchDeviceIds.clear();
                 }
             });
-            
+
             // 处理剩余的设备
             if (!batchDeviceIds.isEmpty()) {
                 List<Long> batchExpired = processBatchDevices(batchDeviceIds, expireThreshold);
                 expiredDevices.addAll(batchExpired);
-                
-                log.debug("DeviceOnlineStatus - 处理最后批次: 设备数={}, 过期数={}, 最终过期总数={}", 
-                        batchDeviceIds.size(), batchExpired.size(), expiredDevices.size());
             }
-            
-            long elapsed = System.currentTimeMillis() - startTime;
-            log.debug("DeviceOnlineStatus - 流式查找过期设备完成: 过期设备数={}, 耗时={}ms", 
-                    expiredDevices.size(), elapsed);
-            
+
             return expiredDevices;
             
         } catch (Exception e) {
@@ -469,25 +440,12 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 if (status == null) {
                     // 状态不存在，视为离线（索引存在但数据缺失）
                     expiredDevices.add(deviceId);
-                    log.debug("DeviceOnlineStatus - 设备状态缺失，标记离线: deviceId={}", deviceId);
-                    
                 } else if (status.getLastReportTime() == null) {
                     // lastReportTime为空，视为离线
                     expiredDevices.add(deviceId);
-                    log.debug("DeviceOnlineStatus - 设备lastReportTime为空，标记离线: deviceId={}", deviceId);
-                    
                 } else if (status.getLastReportTime() < expireThreshold) {
                     // 超过阈值，视为离线
                     expiredDevices.add(deviceId);
-                    log.debug("DeviceOnlineStatus - 设备超时离线: deviceId={}, lastReportTime={}, expireThreshold={}, 超时={}ms", 
-                            deviceId, status.getLastReportTime(), expireThreshold, 
-                            expireThreshold - status.getLastReportTime());
-                            
-                } else {
-                    // 设备在线
-                    log.debug("DeviceOnlineStatus - 设备在线: deviceId={}, lastReportTime={}, 距离超时还有={}ms", 
-                            deviceId, status.getLastReportTime(), 
-                            status.getLastReportTime() - expireThreshold);
                 }
             }
             
@@ -522,8 +480,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 }
             });
 
-            log.debug("DeviceOnlineStatus - 启动清理设备状态成功: deviceId={}", deviceId);
-
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 启动清理设备状态失败: deviceId={}", deviceId, e);
         }
@@ -538,7 +494,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             // 先获取当前状态信息
             Optional<DeviceOnlineStatus> currentStatusOpt = getDeviceStatus(deviceId);
             if (currentStatusOpt.isEmpty()) {
-                log.debug("DeviceOnlineStatus -single- 设备状态不存在，无法标记离线: deviceId={}", deviceId);
                 return null;
             }
 
@@ -547,7 +502,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
 
             // 检查是否为在线相关状态
             if (status != OnlineStatus.ONLINE && status != OnlineStatus.GO_LIVE && status != OnlineStatus.RECONNECT) {
-                log.debug("DeviceOnlineStatus -single- 设备非在线状态，跳过离线处理: deviceId={}, status={}", deviceId, status);
                 return null;
             }
 
@@ -621,7 +575,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             }
 
             if (validDeviceIds.isEmpty()) {
-                log.debug("DeviceOnlineStatus - 批量标记离线: 无有效设备需要处理");
                 return new ArrayList<>();
             }
 
@@ -679,7 +632,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
      */
     private boolean isValidForOfflineProcessing(Long deviceId, DeviceOnlineStatus status) {
         if (status == null) {
-            log.debug("DeviceOnlineStatus -batch- 设备状态不存在，跳过离线处理: deviceId={}", deviceId);
             return false;
         }
 
@@ -687,8 +639,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         if (currentStatus != OnlineStatus.ONLINE &&
             currentStatus != OnlineStatus.GO_LIVE &&
             currentStatus != OnlineStatus.RECONNECT) {
-            log.debug("DeviceOnlineStatus -batch- 设备非在线状态，跳过离线处理: deviceId={}, status={}",
-                     deviceId, currentStatus);
             return false;
         }
 
@@ -806,13 +756,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             // 使用SET NX PX命令实现分布式锁
             Duration timeout = Duration.ofMillis(timeoutMs);
             Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", timeout);
-            
-            if (Boolean.TRUE.equals(acquired)) {
-                log.debug("DeviceOnlineStatus - 获取分布式锁成功: deviceId={}, timeout={}ms", deviceId, timeoutMs);
-            } else {
-                log.debug("DeviceOnlineStatus - 获取分布式锁失败，锁已存在: deviceId={}", deviceId);
-            }
-            
             return acquired;
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 获取分布式锁异常: deviceId={}", deviceId, e);
@@ -824,12 +767,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     public void releaseDeviceUpdateLock(Long deviceId) {
         String lockKey = String.format(RedisKeyConstant.DEVICE_STATUS_UPDATE_LOCK_KEY, deviceId);
         try {
-            boolean deleted = redisTemplate.delete(lockKey);
-            if (deleted) {
-                log.debug("DeviceOnlineStatus - 释放分布式锁成功: deviceId={}", deviceId);
-            } else {
-                log.debug("DeviceOnlineStatus - 分布式锁不存在或已过期: deviceId={}", deviceId);
-            }
+            redisTemplate.delete(lockKey);
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 释放分布式锁异常: deviceId={}", deviceId, e);
         }
