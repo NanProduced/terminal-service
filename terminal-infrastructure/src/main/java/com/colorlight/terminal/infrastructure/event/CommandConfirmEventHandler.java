@@ -22,13 +22,12 @@ public class CommandConfirmEventHandler {
 
     /**
      * 处理指令确认事件
-     * @param event 事件
+     *
+     * @param event 指令确认事件
      */
     @Async("rpcNotificationExecutor")
     @EventListener
     public void handleCommandConfirmEvent(CommandConfirmEvent event) {
-        log.debug("CommandConfirmEvent - 处理指令确认事件: deviceId={}, commandId={}",
-                event.getDeviceId(), event.getCommandId());
         // 通知主服务（使用独立RPC线程池，避免阻塞设备事件处理）
         mainServerRpcPort.notifyCommandConfirm(event);
     }

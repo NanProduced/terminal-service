@@ -275,18 +275,10 @@ public class DeviceStatusEventHandler {
 
     /**
      * 异步通知主服务
-     * 使用独立RPC线程池，避免阻塞设备事件处理
+     *
      * @param event 设备状态事件
      */
     public void notifyMainServerAsync(DeviceStatusEvent event) {
-        try {
-            mainServerRpcPort.notifyDeviceLastReportTime(event);
-            log.debug("RpcNotify - 主服务通知成功: deviceId={}, eventType={}", 
-                    event.getDeviceId(), event.getEventType());
-        } catch (Exception e) {
-            log.warn("RpcNotify - 主服务通知失败，已记录: deviceId={}, eventType={}, error={}", 
-                    event.getDeviceId(), event.getEventType(), e.getMessage());
-            // RPC失败仅记录日志，不影响业务流程
-        }
+        mainServerRpcPort.notifyDeviceLastReportTime(event);
     }
 }
