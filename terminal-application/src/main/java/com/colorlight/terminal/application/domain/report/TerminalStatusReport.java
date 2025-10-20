@@ -728,6 +728,11 @@ public class TerminalStatusReport {
          * BER（误码率）上报间隔（秒）
          */
         private double ber_report_interval;
+
+        /**
+         * gps采样上报时间间隔信息 0是关闭，大于0是打开并配置时间间隔。
+         */
+        private Integer gps_sample_interval;
     }
 
     /**
