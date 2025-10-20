@@ -270,6 +270,11 @@ public class DeviceStatusEventHandler {
      * @param event 设备状态事件
      */
     public void notifyMainServerAsync(DeviceStatusEvent event) {
-        mainServerRpcPort.notifyDeviceLastReportTime(event);
+        try {
+            mainServerRpcPort.notifyDeviceLastReportTime(event);
+        } catch (Exception e) {
+            log.error("DeviceEventHandler - RPC调用失败: deviceId={}, eventType={}", 
+                event.getDeviceId(), event.getEventType(), e);
+        }
     }
 }

@@ -19,6 +19,8 @@ import com.colorlight.terminal.application.port.outbound.storage.ScreenshotStora
 import com.colorlight.terminal.commons.exception.business.BusinessException;
 import com.colorlight.terminal.commons.utils.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.*;
 import org.mockito.*;
 
@@ -91,7 +93,7 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
     // 静态工具类Mock
     private MockedStatic<JsonUtils> jsonUtilsMock;
     private MockedStatic<ReportTimePopulator> reportTimePopulatorMock;
-    
+
     // 测试常量
     private static final String TEST_REPORT_STR = "{\"terminal\":{\"name\":\"test\"}}";
     private static final String TEST_MEDIA_REPORT_STR = "[{\"mediaId\":1}]";
@@ -100,6 +102,9 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
     private static final String TEST_DOWNLOADING_REPORT_STR = "{\"what\":\"program\"}";
     private static final LocalDateTime TEST_REPORT_TIME = LocalDateTime.of(2023, 1, 1, 12, 0);
     private static final byte[] TEST_SCREENSHOT_DATA = "test-screenshot-data".getBytes();
+
+    // ObjectMapper用于创建JsonNode
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     
     @BeforeEach
     void setUp() {
@@ -443,15 +448,22 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
         void should_handle_gps_sensor_report_successfully() {
             // Given - GPS传感器报告
             List<SensorReport> gpsReports = TestDataBuilder.createGpsSensorReports();
+
+            // Mock JsonNode (第一次调用) - 返回空的ObjectNode（没有"gps"字段）
+            ObjectNode emptyNode = OBJECT_MAPPER.createObjectNode();
+            jsonUtilsMock.when(() -> JsonUtils.fromJson(TEST_SENSOR_REPORT_STR))
+                         .thenReturn(emptyNode);
+
+            // Mock List<SensorReport> (第二次调用)
             jsonUtilsMock.when(() -> JsonUtils.fromJson(eq(TEST_SENSOR_REPORT_STR), any(TypeReference.class)))
                          .thenReturn(gpsReports);
-            
+
             // When - 处理传感器报告
             service.asyncHandleSensorReport(TEST_DEVICE_ID, TEST_REPORT_TIME, TEST_SENSOR_REPORT_STR);
-            
+
             // Then - 验证GPS处理
             verify(deviceGpsHandlePort).receiveGpsRecord(gpsReportCaptor.capture());
-            
+
             GpsReport capturedGpsReport = gpsReportCaptor.getValue();
             assertThat(capturedGpsReport.getDeviceId()).isEqualTo(TEST_DEVICE_ID);
             assertThat(capturedGpsReport.getServerTime()).isEqualTo(TEST_REPORT_TIME);
@@ -463,12 +475,19 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
         void should_skip_invalid_gps_sensor_report() {
             // Given - 无效GPS报告
             List<SensorReport> invalidGpsReports = List.of(TestDataBuilder.createInvalidGpsReport());
+
+            // Mock JsonNode (第一次调用) - 返回空的ObjectNode（没有"gps"字段）
+            ObjectNode emptyNode = OBJECT_MAPPER.createObjectNode();
+            jsonUtilsMock.when(() -> JsonUtils.fromJson(TEST_SENSOR_REPORT_STR))
+                         .thenReturn(emptyNode);
+
+            // Mock List<SensorReport> (第二次调用)
             jsonUtilsMock.when(() -> JsonUtils.fromJson(eq(TEST_SENSOR_REPORT_STR), any(TypeReference.class)))
                          .thenReturn(invalidGpsReports);
-            
+
             // When - 处理传感器报告
             service.asyncHandleSensorReport(TEST_DEVICE_ID, TEST_REPORT_TIME, TEST_SENSOR_REPORT_STR);
-            
+
             // Then - 验证无效GPS报告被跳过
             verify(deviceGpsHandlePort, never()).receiveGpsRecord(any());
         }
@@ -478,12 +497,19 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
         void should_handle_other_sensor_reports() {
             // Given - 其他类型传感器报告
             List<SensorReport> otherReports = TestDataBuilder.createOtherSensorReports();
+
+            // Mock JsonNode (第一次调用) - 返回空的ObjectNode（没有"gps"字段）
+            ObjectNode emptyNode = OBJECT_MAPPER.createObjectNode();
+            jsonUtilsMock.when(() -> JsonUtils.fromJson(TEST_SENSOR_REPORT_STR))
+                         .thenReturn(emptyNode);
+
+            // Mock List<SensorReport> (第二次调用)
             jsonUtilsMock.when(() -> JsonUtils.fromJson(eq(TEST_SENSOR_REPORT_STR), any(TypeReference.class)))
                          .thenReturn(otherReports);
-            
+
             // When - 处理传感器报告
             service.asyncHandleSensorReport(TEST_DEVICE_ID, TEST_REPORT_TIME, TEST_SENSOR_REPORT_STR);
-            
+
             // Then - 验证其他类型传感器报告被处理（仅debug日志）
             verify(deviceGpsHandlePort, never()).receiveGpsRecord(any());
         }
@@ -492,12 +518,19 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
         @DisplayName("应该在传感器报告为空时返回")
         void should_return_early_when_sensor_reports_empty() {
             // Given - 空传感器报告列表
+
+            // Mock JsonNode (第一次调用) - 返回空的ObjectNode（没有"gps"字段）
+            ObjectNode emptyNode = OBJECT_MAPPER.createObjectNode();
+            jsonUtilsMock.when(() -> JsonUtils.fromJson(TEST_SENSOR_REPORT_STR))
+                         .thenReturn(emptyNode);
+
+            // Mock List<SensorReport> (第二次调用)
             jsonUtilsMock.when(() -> JsonUtils.fromJson(eq(TEST_SENSOR_REPORT_STR), any(TypeReference.class)))
                          .thenReturn(Collections.emptyList());
-            
+
             // When - 处理传感器报告
             service.asyncHandleSensorReport(TEST_DEVICE_ID, TEST_REPORT_TIME, TEST_SENSOR_REPORT_STR);
-            
+
             // Then - 验证提前返回，没有进一步处理
             verify(deviceGpsHandlePort, never()).receiveGpsRecord(any());
         }

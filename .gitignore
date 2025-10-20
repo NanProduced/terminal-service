@@ -11,6 +11,8 @@
 # Claude Code配置
 .claude/
 
+/todos
+
 CLAUDE.md
 
 # Kiro配置

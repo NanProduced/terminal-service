@@ -120,26 +120,36 @@ public class CommandWebSocketAdapter implements CommandWebSocketPort {
      * @param command 指令对象，包含要发送给终端的指令信息
      * @param protocolVersion 协议版本，决定消息的封装格式
      * @return 封装后的WebSocket消息字符串
+     * @throws IllegalArgumentException 如果deviceId为null
      */
     private String buildWebSocketMessage(TerminalCommand command, ProtocolVersion protocolVersion) {
+        // 添加null检查，防止NullPointerException
+        if (command.getDeviceId() == null) {
+            log.error("CommandWebSocket - deviceId为null, commandId: {}", command.getCommandId());
+            throw new IllegalArgumentException("deviceId不能为null");
+        }
+
+        // 提取deviceId的int值，避免多次调用intValue()
+        int deviceIdInt = command.getDeviceId().intValue();
+
         // 创建WebSocket内容对象
         WebsocketTerminalCommand.WebsocketContent content = new WebsocketTerminalCommand.WebsocketContent(command.getContentRaw());
         // 构造WebSocket指令数据
         WebsocketTerminalCommand.WebsocketCommand data = new WebsocketTerminalCommand.WebsocketCommand(command.getCommandId(),
-                command.getDeviceId().intValue(),
+                deviceIdInt,
                 command.getAuthorUrl(),
                 command.getKarma(),
                 content);
         // 根据协议版本选择不同的消息封装格式
         if (protocolVersion == null || protocolVersion == ProtocolVersion.V1_0) {
-            return JsonUtils.toJson(new WebsocketTerminalCommand(List.of(data), command.getDeviceId().intValue()));
+            return JsonUtils.toJson(new WebsocketTerminalCommand(List.of(data), deviceIdInt));
         }
         else if (protocolVersion == ProtocolVersion.V1_1) {
             // 适配V11协议data为数组
             return JsonUtils.toJson(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.COMMAND.getId(), Collections.singletonList(data)));
         }
         else {
-            return JsonUtils.toJson(new WebsocketTerminalCommand(List.of(data), command.getDeviceId().intValue()));
+            return JsonUtils.toJson(new WebsocketTerminalCommand(List.of(data), deviceIdInt));
         }
     }
 }

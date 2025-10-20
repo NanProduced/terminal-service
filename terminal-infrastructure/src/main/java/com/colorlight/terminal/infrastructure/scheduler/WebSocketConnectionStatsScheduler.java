@@ -57,11 +57,17 @@ public class WebSocketConnectionStatsScheduler {
             if (webSocketConfig.getStats().isLoadBalanceAnalysisEnabled()) {
                 logLoadBalanceAnalysis(stats);
             }
-            
+
+            // 定期清理无效连接
+            int cleanedCount = shardedConnectionManager.cleanupInvalidConnections();
+            if (cleanedCount > 0) {
+                log.info("WebSocketStats - 清理无效连接数: {}", cleanedCount);
+            }
+
             long elapsed = System.currentTimeMillis() - startTime;
-            
-            log.debug("WebSocketStatsScheduler -websocket- WebSocket连接统计信息收集完成，耗时: {}ms", elapsed);
-            
+
+            log.debug("WebSocketStatsScheduler -websocket- WebSocket连接统计信息收集完成，耗时: {}ms, 清理: {}", elapsed, cleanedCount);
+
             // 记录性能指标
             if (elapsed > 1000) { // 超过1秒
                 log.warn("WebSocketStatsScheduler -websocket- 统计信息收集耗时过长: {}ms, 可能需要优化", elapsed);

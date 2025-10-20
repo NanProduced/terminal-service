@@ -48,7 +48,9 @@ public enum TechErrorCode implements ErrorCode {
 
     METRICS_ERROR("TM0114", "Metrics错误", ErrorLevel.ERROR, HttpStatusCode.INTERNAL_SERVER_ERROR),
 
-    ALGORITHM_ERROR("TM0115", "算法错误", ErrorLevel.CRITICAL, HttpStatusCode.INTERNAL_SERVER_ERROR);
+    ALGORITHM_ERROR("TM0115", "算法错误", ErrorLevel.CRITICAL, HttpStatusCode.INTERNAL_SERVER_ERROR),
+
+    REDIS_TRANSACTION_FAILED("TM0116", "Redis事务执行失败", ErrorLevel.CRITICAL, HttpStatusCode.INTERNAL_SERVER_ERROR);
 
     ;
     /**

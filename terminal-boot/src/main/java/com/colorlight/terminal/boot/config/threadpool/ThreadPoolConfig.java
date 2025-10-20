@@ -87,9 +87,14 @@ public class ThreadPoolConfig {
         // 设置等待时间
         scheduler.setAwaitTerminationSeconds(30);
         
-        // 拒绝策略：由调用者线程执行
+        // 拒绝策略：由调用者线程执行（定时任务是关键任务，保证执行）
+        // 增强监控：记录详细的拒绝信息
         scheduler.setRejectedExecutionHandler((r, executor) -> {
-            log.warn("ThreadPool - 定时任务线程池满，使用调用者线程执行: {}", r.toString());
+            log.warn("ThreadPool - 定时任务被拒绝，使用调用者线程执行: pool=device-scheduler, " +
+                    "activeCount={}, poolSize={}, taskClass={}",
+                    executor.getActiveCount(), executor.getPoolSize(),
+                    r.getClass().getSimpleName());
+            // 使用调用者线程执行，确保定时任务不丢失
             r.run();
         });
         
@@ -148,18 +153,26 @@ public class ThreadPoolConfig {
         // 线程池关闭时等待任务完成
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
-        
-        // 拒绝策略：由调用者线程执行
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        
+
+        // 拒绝策略：由调用者线程执行（关键任务，保证执行）
+        // 增加监控：记录拒绝事件，便于后续分析和告警
+        executor.setRejectedExecutionHandler((task, executor1) -> {
+            log.warn("ThreadPool - 设备事件任务被拒绝，使用调用者线程执行: pool=device-event, " +
+                    "activeCount={}, queueSize={}, taskClass={}",
+                    executor1.getActiveCount(), executor1.getQueue().size(),
+                    task.getClass().getSimpleName());
+            // 使用调用者线程执行，确保任务不丢失
+            task.run();
+        });
+
         executor.initialize();
-        
+
         log.info("ThreadPool - 异步事件处理器初始化完成: corePoolSize={}, maxPoolSize={}, queueCapacity={} (CPU核心数: {})",
                 executor.getCorePoolSize(), executor.getMaxPoolSize(), executor.getQueueCapacity(), CPU_COUNT);
-        
+
         return executor;
     }
-    
+
     /**
      * 异步状态更新器
      * 专用于设备状态的异步更新（高频操作）
@@ -198,11 +211,19 @@ public class ThreadPoolConfig {
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
         
-        // 拒绝策略：由调用者线程执行
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        
+        // 拒绝策略：由调用者线程执行（关键任务，保证执行）
+        // 增加监控：记录拒绝事件
+        executor.setRejectedExecutionHandler((task, executor1) -> {
+            log.warn("ThreadPool - 状态更新任务被拒绝，使用调用者线程执行: pool=device-status, " +
+                    "activeCount={}, queueSize={}, taskClass={}",
+                    executor1.getActiveCount(), executor1.getQueue().size(),
+                    task.getClass().getSimpleName());
+            // 使用调用者线程执行，确保任务不丢失
+            task.run();
+        });
+
         executor.initialize();
-        
+
         log.info("ThreadPool - 异步状态更新器初始化完成: corePoolSize={}, maxPoolSize={}, queueCapacity={} (CPU核心数: {})",
                 executor.getCorePoolSize(), executor.getMaxPoolSize(), executor.getQueueCapacity(), CPU_COUNT);
         
@@ -246,11 +267,14 @@ public class ThreadPoolConfig {
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
         
-        // 拒绝策略：丢弃任务记录日志（RPC通知非关键）
+        // 拒绝策略：丢弃任务记录日志（RPC通知非关键，可以丢失）
+        // 增强监控：记录详细的拒绝信息
         executor.setRejectedExecutionHandler((task, ext) -> {
-            log.warn("ThreadPool - RPC通知任务被拒绝，已丢弃: queue={}, active={}", 
-                    ext.getQueue().size(), ext.getActiveCount());
-            // RPC通知失败不影响核心业务
+            log.warn("ThreadPool - RPC通知任务被拒绝，已丢弃（非关键任务）: pool=rpc-notify, " +
+                    "activeCount={}, queueSize={}, maxPoolSize={}, taskClass={}",
+                    ext.getActiveCount(), ext.getQueue().size(), ext.getMaximumPoolSize(),
+                    task.getClass().getSimpleName());
+            // RPC通知失败不影响核心业务，允许丢弃
         });
         
         executor.initialize();
@@ -299,14 +323,15 @@ public class ThreadPoolConfig {
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(120);
 
-        // 拒绝策略：由调用线程执行
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy() {
-            @Override
-            public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
-                log.warn("ThreadPool - 统计任务队列已满，由调用线程执行: queue={}, active={}",
-                        executor.getQueue().size(), executor.getActiveCount());
-                super.rejectedExecution(r, executor);
-            }
+        // 拒绝策略：由调用线程执行（统计数据重要，需要保证执行）
+        // 增强监控：记录详细的拒绝信息
+        executor.setRejectedExecutionHandler((task, executor1) -> {
+            log.warn("ThreadPool - 统计任务队列已满，由调用线程执行: pool=stats-report, " +
+                    "activeCount={}, queueSize={}, maxPoolSize={}, taskClass={}",
+                    executor1.getActiveCount(), executor1.getQueue().size(), executor1.getMaximumPoolSize(),
+                    task.getClass().getSimpleName());
+            // 使用调用者线程执行，确保统计数据不丢失
+            task.run();
         });
 
         executor.initialize();
@@ -346,10 +371,14 @@ public class ThreadPoolConfig {
         executor.setThreadNamePrefix("minio-upload-");
         executor.setKeepAliveSeconds(300); // 5分钟空闲超时
 
-        // 拒绝策略：记录并丢弃（非关键上传）
+        // 拒绝策略：记录并丢弃（文件上传非关键，可以稍后重试）
+        // 增强监控：记录详细的拒绝信息
         executor.setRejectedExecutionHandler((task, ext) -> {
-            log.warn("MinIO - 上传任务被拒绝: queue={}, active={}",
-                    ext.getQueue().size(), ext.getActiveCount());
+            log.warn("ThreadPool - MinIO上传任务被拒绝，已丢弃（非关键任务）: pool=minio-upload, " +
+                    "activeCount={}, queueSize={}, maxPoolSize={}, taskClass={}",
+                    ext.getActiveCount(), ext.getQueue().size(), ext.getMaximumPoolSize(),
+                    task.getClass().getSimpleName());
+            // 文件上传失败可接受，客户端可以重试
         });
 
         executor.setWaitForTasksToCompleteOnShutdown(true);
@@ -395,10 +424,13 @@ public class ThreadPoolConfig {
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
 
-        // 拒绝策略：记录警告并由调用者线程执行（避免连接建立失败）
+        // 拒绝策略：由调用者线程执行（连接建立是关键任务，避免连接失败）
+        // 增强监控：记录详细的拒绝信息
         executor.setRejectedExecutionHandler((task, ext) -> {
-            log.warn("ThreadPool - WebSocket连接任务被拒绝，使用调用者线程执行: queue={}, active={}",
-                    ext.getQueue().size(), ext.getActiveCount());
+            log.warn("ThreadPool - WebSocket连接任务被拒绝，使用调用者线程执行: pool=ws-connection, " +
+                    "activeCount={}, queueSize={}, maxPoolSize={}, taskClass={}",
+                    ext.getActiveCount(), ext.getQueue().size(), ext.getMaximumPoolSize(),
+                    task.getClass().getSimpleName());
             // 使用调用者线程执行，确保连接建立不会失败
             task.run();
         });
@@ -448,11 +480,14 @@ public class ThreadPoolConfig {
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(120);
 
-        // 拒绝策略：丢弃任务并记录（消息处理失败可以容忍）
+        // 拒绝策略：丢弃任务并记录（消息处理失败可以容忍，客户端可重试）
+        // 增强监控：记录详细的拒绝信息
         executor.setRejectedExecutionHandler((task, ext) -> {
-            log.error("ThreadPool - WebSocket业务任务被拒绝，任务已丢弃: queue={}, active={}",
-                    ext.getQueue().size(), ext.getActiveCount());
-            // 可以考虑发送错误响应给客户端
+            log.error("ThreadPool - WebSocket业务任务被拒绝，任务已丢弃（可容忍）: pool=ws-business, " +
+                    "activeCount={}, queueSize={}, maxPoolSize={}, taskClass={}",
+                    ext.getActiveCount(), ext.getQueue().size(), ext.getMaximumPoolSize(),
+                    task.getClass().getSimpleName());
+            // 可以考虑发送错误响应给客户端，或者客户端重试
         });
 
         executor.initialize();
@@ -499,8 +534,15 @@ public class ThreadPoolConfig {
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
 
-        // 拒绝策略：Redis过期键监听不重要 直接丢弃
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy());
+        // 拒绝策略：Redis过期键监听不重要，直接丢弃（非关键任务）
+        // 增强监控：记录拒绝事件
+        executor.setRejectedExecutionHandler((task, ext) -> {
+            log.warn("ThreadPool - Redis监听任务被拒绝，已丢弃（非关键任务）: pool=redis-listener, " +
+                    "activeCount={}, queueSize={}, maxPoolSize={}, taskClass={}",
+                    ext.getActiveCount(), ext.getQueue().size(), ext.getMaximumPoolSize(),
+                    task.getClass().getSimpleName());
+            // Redis过期键监听失败可接受，不影响核心业务
+        });
 
         executor.initialize();
 
@@ -547,11 +589,19 @@ public class ThreadPoolConfig {
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
         
-        // 拒绝策略：由调用者线程执行
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        
+        // 拒绝策略：由调用者线程执行（默认策略，保证任务执行）
+        // 增强监控：记录拒绝事件
+        executor.setRejectedExecutionHandler((task, executor1) -> {
+            log.warn("ThreadPool - 默认异步任务被拒绝，使用调用者线程执行: pool=default-async, " +
+                    "activeCount={}, queueSize={}, maxPoolSize={}, taskClass={}",
+                    executor1.getActiveCount(), executor1.getQueue().size(), executor1.getMaximumPoolSize(),
+                    task.getClass().getSimpleName());
+            // 使用调用者线程执行，确保任务不丢失
+            task.run();
+        });
+
         executor.initialize();
-        
+
         log.info("ThreadPool - 默认异步执行器初始化完成: corePoolSize={}, maxPoolSize={}, queueCapacity={} (CPU核心数: {})",
                 executor.getCorePoolSize(), executor.getMaxPoolSize(), executor.getQueueCapacity(), CPU_COUNT);
         

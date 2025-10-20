@@ -210,6 +210,9 @@ public class DeviceOfflineCheckScheduler {
         String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
 
         try {
+            // TOCTOU监控: 记录检查开始时间
+            long checkTime = System.currentTimeMillis();
+
             // 获取当前状态进行验证
             Map<Object, Object> statusMap = redisTemplate.opsForHash().entries(statusKey);
             if (statusMap.isEmpty()) {
@@ -221,6 +224,16 @@ public class DeviceOfflineCheckScheduler {
             if (OnlineStatus.OFFLINE.name().equals(currentStatus)) {
                 log.debug("DeviceStatusScheduler - 设备已为离线状态，跳过处理: deviceId={}", deviceId);
                 return false;
+            }
+
+            // TOCTOU监控: 记录事务执行前的时间
+            long beforeExecute = System.currentTimeMillis();
+            long checkToExecuteGap = beforeExecute - checkTime;
+
+            // TOCTOU监控: 如果检查到执行间隔超过100ms，记录警告
+            if (checkToExecuteGap > 100) {
+                log.warn("DeviceStatusScheduler - TOCTOU竞态窗口过大: deviceId={}, gap={}ms",
+                        deviceId, checkToExecuteGap);
             }
 
             // 原子化操作：设置离线状态 + 重置TTL
@@ -252,6 +265,7 @@ public class DeviceOfflineCheckScheduler {
     
     /**
      * 扫描所有设备状态并分类为在线/离线设备（Pair优化版）
+     * 添加迭代次数限制和超时保护，防止内存溢出风险
      * @return Pair.of(在线设备集合, 离线设备集合)
      */
     private Pair<Set<Long>, Set<Long>> scanAndClassifyDeviceStatus() {
@@ -263,6 +277,12 @@ public class DeviceOfflineCheckScheduler {
         long currentTime = System.currentTimeMillis();
         long offlineThreshold = deviceConfigPort.getOfflineTimeoutThreshold();
 
+        // 迭代限制和超时保护
+        int maxIterations = 50000;  // 最大扫描设备数
+        int iterationCount = 0;
+        long startTime = System.currentTimeMillis();
+        long timeoutMs = 30000;  // 30秒超时
+
         try {
             // 使用SCAN扫描device:status:*模式
             String pattern = "device:status:*";
@@ -273,8 +293,16 @@ public class DeviceOfflineCheckScheduler {
                     .build();
 
             try (Cursor<String> cursor = redisTemplate.scan(scanOptions)) {
-                while (cursor.hasNext()) {
+                while (cursor.hasNext() && iterationCount < maxIterations) {
+                    // 超时检查
+                    if (System.currentTimeMillis() - startTime > timeoutMs) {
+                        log.warn("DeviceStatusScheduler - 扫描超时, 已处理设备数: {}, 在线: {}, 离线: {}, 耗时: {}ms",
+                                iterationCount, onlineDevices.size(), offlineDevices.size(), timeoutMs);
+                        break;
+                    }
+
                     String statusKey = cursor.next();
+                    iterationCount++;
 
                     // 提取deviceId
                     Long deviceId = extractDeviceIdFromStatusKey(statusKey);
@@ -314,10 +342,17 @@ public class DeviceOfflineCheckScheduler {
                         offlineDevices.add(deviceId);
                     }
                 }
+
+                // 迭代限制警告
+                if (iterationCount >= maxIterations) {
+                    log.warn("DeviceStatusScheduler - 达到最大迭代次数限制: {}, 在线: {}, 离线: {}, 可能有未处理设备",
+                            maxIterations, onlineDevices.size(), offlineDevices.size());
+                }
             }
 
-            log.info("DeviceStatusScheduler - 设备状态分类完成: 在线={}, 离线={}",
-                    onlineDevices.size(), offlineDevices.size());
+            long elapsed = System.currentTimeMillis() - startTime;
+            log.info("DeviceStatusScheduler - 设备状态分类完成: 处理设备数={}, 在线={}, 离线={}, 耗时={}ms",
+                    iterationCount, onlineDevices.size(), offlineDevices.size(), elapsed);
 
             return Pair.of(onlineDevices, offlineDevices);
 
@@ -407,6 +442,10 @@ public class DeviceOfflineCheckScheduler {
             if (Boolean.TRUE.equals(acquired)) {
                 log.debug("DeviceStatusScheduler - 获取维护锁成功");
                 return true;
+            } else if (acquired == null) {
+                log.warn("DeviceStatusScheduler - Redis setIfAbsent返回null, lockKey={}",
+                    RedisKeyConstant.DEVICE_CACHE_MAINTENANCE_LOCK_KEY);
+                return false;
             } else {
                 log.debug("DeviceStatusScheduler - 获取维护锁失败，锁已存在");
                 return false;
