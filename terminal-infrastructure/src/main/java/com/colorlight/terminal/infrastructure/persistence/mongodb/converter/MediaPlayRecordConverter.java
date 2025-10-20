@@ -38,7 +38,7 @@ public interface MediaPlayRecordConverter {
                 .map(report -> {
                     MediaPlayRecordDocument document = convertToMediaPlayRecordDocument(deviceId, report);
                     // 根据素材名称设置素材ID
-                    document.setMediaId(mediaIdMap.get(document.getMediaName()));
+                    document.setMediaId(mediaIdMap.get(document.getMediaMd5()));
                     return document;
                 })
                 .toList();
