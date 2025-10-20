@@ -57,7 +57,8 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
         this.deviceOnlineStatusPort = deviceOnlineStatusPort;
         this.deviceConfigPort = deviceConfigPort;
         this.eventPublisher = eventPublisher;
-        this.bufferPool = new BoundedDropOldestQueue<>(deviceConfigPort.getBufferPoolMaxSize());
+        // 初始化有界队列（带名称，便于日志追踪）
+        this.bufferPool = new BoundedDropOldestQueue<>(deviceConfigPort.getBufferPoolMaxSize(), "DeviceStatusBuffer");
     }
 
     @PostConstruct
@@ -267,21 +268,31 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
         if (!isRunning.get()) {
             return;
         }
-        
+
         BufferPoolStatus status = getBufferPoolStatus();
-        
+
         log.info("AsyncDeviceStatusUpdate - 统计信息:\n{}", JsonUtils.toJsonPretty(status));
-        
-        // 如果缓冲池长期保持高使用率，记录警告
-        if (status.utilizationRate() > 0.7) {
-            log.warn("AsyncDeviceStatusUpdate - 缓冲池使用率较高，建议检查处理能力: utilizationRate={}%",
-                    (int) (status.utilizationRate() * 100));
+
+        // 缓冲池使用率告警：超过80%触发警告
+        if (status.utilizationRate() > 0.8) {
+            log.warn("AsyncDeviceStatusUpdate - 缓冲池使用率告警（>80%）: utilizationRate={}%, " +
+                    "currentSize={}/{}, 建议检查处理能力或增加缓冲池大小",
+                    (int) (status.utilizationRate() * 100),
+                    status.currentSize(), status.maxSize());
+        } else if (status.utilizationRate() > 0.7) {
+            // 70-80%之间记录信息级日志，提前预警
+            log.info("AsyncDeviceStatusUpdate - 缓冲池使用率较高: utilizationRate={}%, currentSize={}/{}",
+                    (int) (status.utilizationRate() * 100),
+                    status.currentSize(), status.maxSize());
         }
 
-        // 如果有元素被丢弃，记录警告
+        // 如果有元素被丢弃，记录警告（数据丢失需要关注）
         if (status.totalDropped() > 0) {
-            log.warn("AsyncDeviceStatusUpdate - 检测到元素丢弃，可能需要调整缓冲池大小或处理速度: totalDropped={}",
-                    status.totalDropped());
+            log.warn("AsyncDeviceStatusUpdate - 检测到数据丢弃: totalDropped={}, " +
+                    "totalProcessed={}, dropRate={}%, 建议调整缓冲池大小或优化处理速度",
+                    status.totalDropped(),
+                    status.totalProcessed(),
+                    String.format("%.2f", (double) status.totalDropped() / status.totalProcessed() * 100));
         }
     }
 }

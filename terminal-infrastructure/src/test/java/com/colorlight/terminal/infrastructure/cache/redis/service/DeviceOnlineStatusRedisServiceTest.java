@@ -463,9 +463,26 @@ class DeviceOnlineStatusRedisServiceTest {
             // Given - 准备设备ID和模拟异常
             Long deviceId = 1003L;
             Long timeoutMs = 5000L;
-            
+
             when(mockRedisTemplate.opsForValue().setIfAbsent(anyString(), eq("locked"), any(Duration.class)))
                 .thenThrow(new RuntimeException("Redis lock error"));
+
+            // When - 尝试获取锁
+            Boolean result = redisService.tryAcquireDeviceUpdateLock(deviceId, timeoutMs);
+
+            // Then - 验证返回false
+            assertThat(result).isFalse();
+        }
+
+        @Test
+        @DisplayName("应该在setIfAbsent返回null时返回false")
+        void should_return_false_when_setIfAbsent_returns_null() {
+            // Given - 准备设备ID，setIfAbsent返回null
+            Long deviceId = 1004L;
+            Long timeoutMs = 5000L;
+
+            when(mockRedisTemplate.opsForValue().setIfAbsent(anyString(), eq("locked"), any(Duration.class)))
+                .thenReturn(null);
 
             // When - 尝试获取锁
             Boolean result = redisService.tryAcquireDeviceUpdateLock(deviceId, timeoutMs);

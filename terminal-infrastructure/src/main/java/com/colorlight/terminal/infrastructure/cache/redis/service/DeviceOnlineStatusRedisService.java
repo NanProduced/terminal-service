@@ -5,6 +5,7 @@ import com.colorlight.terminal.application.domain.status.OnlineStatus;
 import com.colorlight.terminal.application.domain.status.ReportSource;
 import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineStatusPort;
+import com.colorlight.terminal.commons.exception.technical.RedisTransactionFailedException;
 import com.colorlight.terminal.infrastructure.cache.redis.constant.RedisKeyConstant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -79,15 +80,15 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     @SuppressWarnings("unchecked")
     public void saveDeviceStatus(DeviceOnlineStatus status) {
         String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, status.getDeviceId());
-        
+
         try {
             // 在应用层分布式锁保护下，直接执行保存操作
             // 使用Redis事务保证原子性
-            redisTemplate.execute(new SessionCallback<Object>() {
+            List<Object> results = (List<Object>) redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
                 public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                     operations.multi();
-                    
+
                     // 保存设备状态详情
                     Map<String, Object> statusMap = convertToRedisMap(status);
                     operations.opsForHash().putAll(statusKey, statusMap);
@@ -103,6 +104,30 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 }
             });
 
+            // 验证事务结果
+            if (results == null || results.isEmpty()) {
+                log.error("DeviceOnlineStatus - 设备上线事务失败(exec返回null): deviceId={}, statusKey={}",
+                    status.getDeviceId(), statusKey);
+                throw new RedisTransactionFailedException(
+                    String.format("设备上线事务失败: deviceId=%d", status.getDeviceId()));
+            }
+
+            // 验证结果集大小（应该有4个操作的结果）
+            if (results.size() != 4) {
+                log.error("DeviceOnlineStatus - 设备上线事务结果不完整: deviceId={}, expected=4, actual={}",
+                    status.getDeviceId(), results.size());
+                throw new RedisTransactionFailedException(
+                    String.format("设备上线事务结果不完整: deviceId=%d, expected=4, actual=%d",
+                        status.getDeviceId(), results.size()));
+            }
+
+            // 验证计数器increment操作成功（第4个操作）
+            if (results.get(3) == null) {
+                log.error("DeviceOnlineStatus - 在线计数器更新失败: deviceId={}", status.getDeviceId());
+            }
+
+        } catch (RedisTransactionFailedException e) {
+            throw e;
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 保存设备状态失败: deviceId={}", status.getDeviceId(), e);
             throw e;
@@ -123,8 +148,8 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             // 1. 构建更新字段映射
             Map<String, Object> updateFields = convertToRedisMap(status);
 
-            // 4. 执行原子更新
-            redisTemplate.execute(new SessionCallback<Object>() {
+            // 2. 执行原子更新
+            List<Object> results = (List<Object>) redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
                 public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                     operations.multi();
@@ -139,9 +164,23 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 }
             });
 
+            // 验证事务结果
+            if (results == null || results.isEmpty()) {
+                log.error("DeviceOnlineStatus - 心跳更新事务失败(exec返回null): deviceId={}, statusKey={}",
+                    status.getDeviceId(), statusKey);
+                // 心跳更新失败不抛异常，避免阻塞心跳处理，但记录错误
+                return;
+            }
+
+            // 验证结果集大小（应该有2个操作的结果）
+            if (results.size() != 2) {
+                log.error("DeviceOnlineStatus - 心跳更新事务结果不完整: deviceId={}, expected=2, actual={}",
+                    status.getDeviceId(), results.size());
+            }
+
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 更新设备状态失败: deviceId={}", status.getDeviceId(), e);
-            throw e;
+            // 心跳更新异常不抛出，避免影响正常业务流程
         }
     }
 
@@ -513,7 +552,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             }
 
             // 使用Redis事务原子化执行离线操作
-            redisTemplate.execute(new SessionCallback<Object>() {
+            List<Object> results = (List<Object>) redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
                 public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                     operations.multi();
@@ -534,6 +573,28 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                     return operations.exec();
                 }
             });
+
+            // 验证事务结果
+            if (results == null || results.isEmpty()) {
+                log.error("DeviceOnlineStatus - 离线标记事务失败(exec返回null): deviceId={}, statusKey={}",
+                    deviceId, statusKey);
+                // 事务失败时返回null，防止发布离线事件导致数据不一致
+                return null;
+            }
+
+            // 验证结果集大小（应该有5个操作的结果: 2个HSET + 1个EXPIRE + 1个SREM + 1个DECR）
+            if (results.size() != 5) {
+                log.error("DeviceOnlineStatus - 离线标记事务结果不完整: deviceId={}, expected=5, actual={}",
+                    deviceId, results.size());
+                // 结果不完整，返回null防止数据不一致
+                return null;
+            }
+
+            // 验证索引移除结果（第4个操作，SREM应该返回1表示成功移除）
+            if (results.get(3) == null || !results.get(3).equals(1L)) {
+                log.warn("DeviceOnlineStatus - 设备索引移除失败或设备不在索引中: deviceId={}, sremResult={}",
+                    deviceId, results.get(3));
+            }
 
             // 标记当前状态对象为离线（返回给调用方用于保存在线时长记录）
             currentStatus.markOffline();
@@ -582,7 +643,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             long currentTime = System.currentTimeMillis();
             Duration reconnectTtl = getReconnectTtl();
 
-            redisTemplate.executePipelined(new SessionCallback<Object>() {
+            List<Object> pipelineResults = redisTemplate.executePipelined(new SessionCallback<Object>() {
                 @Override
                 public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                     for (Long deviceId : validDeviceIds) {
@@ -610,16 +671,51 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 }
             });
 
-            // 第三步：标记返回的状态对象为离线
-            for (DeviceOnlineStatus status : validStatuses) {
-                status.markOffline();
+            // 验证Pipeline结果完整性
+            // 期望结果数 = validDeviceIds.size() * 4 (每个设备4个操作) + 1 (计数器操作)
+            int expectedResultCount = validDeviceIds.size() * 4 + 1;
+            if (pipelineResults == null || pipelineResults.size() != expectedResultCount) {
+                log.error("DeviceOnlineStatus - Pipeline批量离线操作结果不完整: expected={}, actual={}, deviceCount={}",
+                    expectedResultCount, pipelineResults != null ? pipelineResults.size() : 0, validDeviceIds.size());
+
+                // 降级到逐个设备标记离线
+                log.warn("DeviceOnlineStatus - 降级到单个设备逐个标记离线: deviceCount={}", validDeviceIds.size());
+                return fallbackToIndividualMarkOffline(validDeviceIds, currentStatuses);
+            }
+
+            // 验证每个设备的操作结果，过滤出实际成功的设备
+            List<DeviceOnlineStatus> successfulStatuses = new ArrayList<>();
+            for (int i = 0; i < validDeviceIds.size(); i++) {
+                Long deviceId = validDeviceIds.get(i);
+                // 每个设备有4个操作结果，索引为 i*4 到 i*4+3
+                int baseIndex = i * 4;
+
+                // 检查该设备的所有操作是否成功
+                boolean allOpsSuccessful = true;
+                for (int j = 0; j < 4; j++) {
+                    if (pipelineResults.get(baseIndex + j) == null) {
+                        allOpsSuccessful = false;
+                        break;
+                    }
+                }
+
+                if (allOpsSuccessful) {
+                    DeviceOnlineStatus status = validStatuses.get(i);
+                    status.markOffline();
+                    successfulStatuses.add(status);
+                } else {
+                    log.error("DeviceOnlineStatus - 设备离线标记Pipeline操作部分失败: deviceId={}", deviceId);
+                }
             }
 
             long duration = System.currentTimeMillis() - startTime;
-            log.info("DeviceOnlineStatus - 批量标记设备离线完成: total={}, valid={}, duration={}ms, reconnectTtl={}s",
-                    deviceIds.size(), validDeviceIds.size(), duration, reconnectTtl.getSeconds());
+            double successRate = validDeviceIds.isEmpty() ? 0.0 :
+                (double) successfulStatuses.size() / validDeviceIds.size() * 100;
 
-            return validStatuses;
+            log.info("DeviceOnlineStatus - 批量标记设备离线完成: total={}, valid={}, successful={}, successRate={:.2f}%, duration={}ms, reconnectTtl={}s",
+                    deviceIds.size(), validDeviceIds.size(), successfulStatuses.size(), successRate, duration, reconnectTtl.getSeconds());
+
+            return successfulStatuses;
 
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 批量标记设备离线失败: deviceCount={}", deviceIds.size(), e);
@@ -756,6 +852,13 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             // 使用SET NX PX命令实现分布式锁
             Duration timeout = Duration.ofMillis(timeoutMs);
             Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", timeout);
+
+            // 处理setIfAbsent可能返回null的情况
+            if (acquired == null) {
+                log.warn("DeviceOnlineStatus - Redis setIfAbsent返回null: deviceId={}, lockKey={}", deviceId, lockKey);
+                return false;
+            }
+
             return acquired;
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 获取分布式锁异常: deviceId={}", deviceId, e);
@@ -767,10 +870,52 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     public void releaseDeviceUpdateLock(Long deviceId) {
         String lockKey = String.format(RedisKeyConstant.DEVICE_STATUS_UPDATE_LOCK_KEY, deviceId);
         try {
-            redisTemplate.delete(lockKey);
+            Boolean deleted = redisTemplate.delete(lockKey);
+            if (Boolean.FALSE.equals(deleted)) {
+                log.error("DeviceOnlineStatus - 分布式锁释放失败: deviceId={}, lockKey={}, 锁可能不存在或已过期",
+                    deviceId, lockKey);
+            } else if (deleted == null) {
+                log.warn("DeviceOnlineStatus - 分布式锁释放返回null: deviceId={}, lockKey={}, Redis连接可能异常",
+                    deviceId, lockKey);
+            } else {
+                log.debug("DeviceOnlineStatus - 分布式锁释放成功: deviceId={}", deviceId);
+            }
         } catch (Exception e) {
-            log.error("DeviceOnlineStatus - 释放分布式锁异常: deviceId={}", deviceId, e);
+            log.error("DeviceOnlineStatus - 释放分布式锁异常: deviceId={}, lockKey={}, 锁将在TTL过期后自动释放",
+                deviceId, lockKey, e);
         }
+    }
+
+    /**
+     * 降级方法：单个设备逐个标记离线
+     * <p>当Pipeline批量操作失败时使用此方法</p>
+     *
+     * @param deviceIds 设备ID列表
+     * @param currentStatuses 当前设备状态映射
+     * @return 成功标记离线的设备状态列表
+     */
+    private List<DeviceOnlineStatus> fallbackToIndividualMarkOffline(List<Long> deviceIds,
+                                                                      Map<Long, DeviceOnlineStatus> currentStatuses) {
+        List<DeviceOnlineStatus> successfulStatuses = new ArrayList<>();
+
+        for (Long deviceId : deviceIds) {
+            try {
+                // 调用单个设备标记离线方法
+                DeviceOnlineStatus result = markOfflineAndResetTtl(deviceId);
+                if (result != null) {
+                    successfulStatuses.add(result);
+                } else {
+                    log.warn("DeviceOnlineStatus - 降级操作：设备标记离线失败(返回null): deviceId={}", deviceId);
+                }
+            } catch (Exception e) {
+                log.error("DeviceOnlineStatus - 降级操作：设备标记离线异常: deviceId={}", deviceId, e);
+            }
+        }
+
+        log.info("DeviceOnlineStatus - 降级操作完成: total={}, successful={}",
+            deviceIds.size(), successfulStatuses.size());
+
+        return successfulStatuses;
     }
 
 

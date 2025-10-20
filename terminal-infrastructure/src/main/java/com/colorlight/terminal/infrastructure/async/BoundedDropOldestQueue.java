@@ -1,6 +1,7 @@
 package com.colorlight.terminal.infrastructure.async;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collection;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -11,10 +12,12 @@ import java.util.concurrent.locks.ReentrantLock;
  * 有界队列 - 满时丢弃最旧元素
  * <p>当队列达到最大容量时，自动移除最旧的元素来为新元素腾出空间</p>
  * <p>适用于状态更新等时效性场景，新数据比旧数据更重要</p>
+ * <p>增强功能：数据丢弃监控，当队列满时记录警告日志</p>
  *
  * @param <E> 队列元素类型
  * @author Nan
  */
+@Slf4j
 public class BoundedDropOldestQueue<E> {
 
     private final LinkedBlockingQueue<E> queue;
@@ -31,18 +34,34 @@ public class BoundedDropOldestQueue<E> {
     // 统计指标
     private final AtomicLong droppedCount = new AtomicLong(0);
 
+    // 队列名称（用于日志标识）
+    private final String queueName;
+
     /**
      * 创建有界队列
      *
      * @param maxCapacity 最大容量
      */
     public BoundedDropOldestQueue(int maxCapacity) {
+        this(maxCapacity, "UnnamedQueue");
+    }
+
+    /**
+     * 创建有界队列（带名称）
+     *
+     * @param maxCapacity 最大容量
+     * @param queueName 队列名称（用于日志标识）
+     */
+    public BoundedDropOldestQueue(int maxCapacity, String queueName) {
         if (maxCapacity <= 0) {
             throw new IllegalArgumentException("最大容量必须大于0: " + maxCapacity);
         }
 
         this.maxCapacity = maxCapacity;
+        this.queueName = queueName;
         this.queue = new LinkedBlockingQueue<>(maxCapacity);
+
+        log.info("BoundedQueue - 有界队列初始化完成: name={}, maxCapacity={}", queueName, maxCapacity);
     }
 
     /**
@@ -59,11 +78,28 @@ public class BoundedDropOldestQueue<E> {
         offerLock.lock();
         try {
             // 如果队列已满，先移除最旧的元素
+            boolean hasDropped = false;
             while (queue.size() >= maxCapacity) {
                 E droppedElement = queue.poll();
                 if (droppedElement != null) {
-                    droppedCount.incrementAndGet();
+                    long currentDropCount = droppedCount.incrementAndGet();
+                    hasDropped = true;
+
+                    // 记录丢弃警告（包含丢弃的数据信息）
+                    if (log.isWarnEnabled()) {
+                        log.warn("BoundedQueue - 队列满，丢弃最旧数据: queue={}, currentSize={}, maxCapacity={}, " +
+                                "droppedElement={}, totalDropped={}",
+                                queueName, queue.size(), maxCapacity,
+                                formatElement(droppedElement), currentDropCount);
+                    }
                 }
+            }
+
+            // 如果发生了丢弃，记录当前队列使用率（用于诊断）
+            if (hasDropped && log.isWarnEnabled()) {
+                double utilizationRate = getUtilizationRate();
+                log.warn("BoundedQueue - 队列使用率: queue={}, utilizationRate={}%, currentSize={}/{}",
+                        queueName, String.format("%.1f", utilizationRate * 100), queue.size(), maxCapacity);
             }
 
             // 添加新元素
@@ -72,6 +108,26 @@ public class BoundedDropOldestQueue<E> {
         } finally {
             offerLock.unlock();
         }
+    }
+
+    /**
+     * 格式化元素用于日志输出（避免敏感信息泄露）
+     */
+    private String formatElement(E element) {
+        if (element == null) {
+            return "null";
+        }
+
+        // 只输出类型和部分标识信息，不输出完整对象
+        String className = element.getClass().getSimpleName();
+        String elementInfo = element.toString();
+
+        // 限制日志长度，避免超长日志
+        if (elementInfo.length() > 100) {
+            elementInfo = elementInfo.substring(0, 100) + "...";
+        }
+
+        return className + "[" + elementInfo + "]";
     }
 
     /**
