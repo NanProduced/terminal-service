@@ -3,6 +3,7 @@ package com.colorlight.terminal.infrastructure.websocket.processor.v10;
 import com.colorlight.terminal.application.domain.connection.MessageProcessingContext;
 import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
+import com.colorlight.terminal.application.domain.sensor.GpsReport;
 import com.colorlight.terminal.application.dto.websocket.v10.V10WebsocketMessage;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.application.port.outbound.websocket.ProtocolMessageProcessor.TextMessageProcessResult;
@@ -19,6 +20,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -64,34 +68,61 @@ class V10ProtocolMessageProcessorTest {
      * 测试数据构建器
      */
     private static class TestDataBuilder {
-        
+
         public static V10WebsocketMessage buildHeartbeatMessage() {
             V10WebsocketMessage message = new V10WebsocketMessage();
             message.setContent("heartbeat");
             return message;
         }
-        
+
         public static V10WebsocketMessage buildGpsMessage() {
             V10WebsocketMessage message = new V10WebsocketMessage();
             message.setName("testDevice");
-            message.setGps("[{\"sensorType\":\"gps\",\"latitude\":39.9042,\"longitude\":116.4074,\"timestamp\":\"2024-12-15T10:30:00\"}]");
+
+            // 构建单个GPS数据
+            GpsReport gpsReport = new GpsReport();
+            gpsReport.setSensorType("gps");
+            gpsReport.setLatitude(39.9042);
+            gpsReport.setLongitude(116.4074);
+            gpsReport.setDeviceTime(LocalDateTime.of(2024, 12, 15, 10, 30, 0));
+
+            List<GpsReport> gpsList = new ArrayList<>();
+            gpsList.add(gpsReport);
+            message.setGps(gpsList);
+
             return message;
         }
-        
+
         public static V10WebsocketMessage buildGpsMessageWithMultiplePoints() {
             V10WebsocketMessage message = new V10WebsocketMessage();
             message.setName("testDevice");
-            message.setGps("[{\"sensorType\":\"gps\",\"latitude\":39.9042,\"longitude\":116.4074},{\"sensorType\":\"gps\",\"latitude\":40.0000,\"longitude\":116.5000}]");
+
+            // 构建多个GPS数据点
+            GpsReport gpsReport1 = new GpsReport();
+            gpsReport1.setSensorType("gps");
+            gpsReport1.setLatitude(39.9042);
+            gpsReport1.setLongitude(116.4074);
+
+            GpsReport gpsReport2 = new GpsReport();
+            gpsReport2.setSensorType("gps");
+            gpsReport2.setLatitude(40.0000);
+            gpsReport2.setLongitude(116.5000);
+
+            List<GpsReport> gpsList = new ArrayList<>();
+            gpsList.add(gpsReport1);
+            gpsList.add(gpsReport2);
+            message.setGps(gpsList);
+
             return message;
         }
-        
+
         public static V10WebsocketMessage buildUnknownMessage() {
             V10WebsocketMessage message = new V10WebsocketMessage();
             message.setContent("unknown_operation");
             message.setName("testDevice");
             return message;
         }
-        
+
         public static String buildInvalidJsonMessage() {
             return "{\"content\":\"test\",\"invalid_json\":}";
         }
@@ -224,10 +255,12 @@ class V10ProtocolMessageProcessorTest {
                 dateTimeCaptor.capture(),
                 gpsDataCaptor.capture()
             );
-            
+
             assertThat(deviceIdCaptor.getValue()).isEqualTo(12345L);
             assertThat(dateTimeCaptor.getValue()).isNotNull();
-            assertThat(gpsDataCaptor.getValue()).isEqualTo(gpsMessage.getGps());
+            // 验证GPS数据被序列化为JSON字符串
+            String expectedGpsJson = JsonUtils.toJson(gpsMessage.getGps());
+            assertThat(gpsDataCaptor.getValue()).isEqualTo(expectedGpsJson);
         }
         
         @Test
@@ -244,32 +277,54 @@ class V10ProtocolMessageProcessorTest {
             // Then - 验证处理结果
             assertThat(result.success()).isTrue();
             assertThat(result.heartbeat()).isFalse();
-            
-            // 验证GPS数据被正确传递
+
+            // 验证GPS数据被正确传递（序列化后的JSON字符串）
+            String expectedGpsJson = JsonUtils.toJson(multiGpsMessage.getGps());
             verify(terminalReportUseCase).asyncHandleSensorReport(
                 eq(12345L),
                 any(LocalDateTime.class),
-                eq(multiGpsMessage.getGps())
+                eq(expectedGpsJson)
             );
         }
         
         @Test
-        @DisplayName("应该成功处理空GPS数据")
-        void should_handle_empty_gps_data_as_unknown_message() {
-            // Given - 准备GPS字段为空的消息
+        @DisplayName("应该成功处理空GPS数据列表")
+        void should_handle_empty_gps_list_as_unknown_message() {
+            // Given - 准备GPS列表为空的消息
             V10WebsocketMessage message = new V10WebsocketMessage();
             message.setContent("some_content");
-            message.setGps(""); // 空GPS数据
+            message.setGps(Collections.emptyList()); // 空GPS列表
             String jsonMessage = JsonUtils.toJson(message);
             when(messageProcessingContext.getRawMessage()).thenReturn(jsonMessage);
-            
+
             // When - 处理消息
             TextMessageProcessResult result = processor.processTextMessage(messageProcessingContext);
-            
+
             // Then - 验证作为未知消息处理
             assertThat(result.success()).isTrue();
             assertThat(result.heartbeat()).isFalse();
-            
+
+            // 验证不调用GPS处理
+            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), anyString());
+        }
+
+        @Test
+        @DisplayName("应该成功处理null GPS数据")
+        void should_handle_null_gps_data_as_unknown_message() {
+            // Given - 准备GPS字段为null的消息
+            V10WebsocketMessage message = new V10WebsocketMessage();
+            message.setContent("some_content");
+            message.setGps(null); // null GPS数据
+            String jsonMessage = JsonUtils.toJson(message);
+            when(messageProcessingContext.getRawMessage()).thenReturn(jsonMessage);
+
+            // When - 处理消息
+            TextMessageProcessResult result = processor.processTextMessage(messageProcessingContext);
+
+            // Then - 验证作为未知消息处理
+            assertThat(result.success()).isTrue();
+            assertThat(result.heartbeat()).isFalse();
+
             // 验证不调用GPS处理
             verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), anyString());
         }
@@ -444,17 +499,26 @@ class V10ProtocolMessageProcessorTest {
             // Given - 准备同时包含heartbeat content和GPS数据的消息
             V10WebsocketMessage message = new V10WebsocketMessage();
             message.setContent("heartbeat");
-            message.setGps("[{\"latitude\":39.9042,\"longitude\":116.4074}]");
+
+            // 构建GPS数据列表
+            GpsReport gpsReport = new GpsReport();
+            gpsReport.setSensorType("gps"); // 必须设置sensorType用于JSON序列化
+            gpsReport.setLatitude(39.9042);
+            gpsReport.setLongitude(116.4074);
+            List<GpsReport> gpsList = new ArrayList<>();
+            gpsList.add(gpsReport);
+            message.setGps(gpsList);
+
             String jsonMessage = JsonUtils.toJson(message);
             when(messageProcessingContext.getRawMessage()).thenReturn(jsonMessage);
-            
+
             // When - 处理消息
             TextMessageProcessResult result = processor.processTextMessage(messageProcessingContext);
-            
+
             // Then - 验证优先处理心跳
             assertThat(result.success()).isTrue();
             assertThat(result.heartbeat()).isTrue();
-            
+
             verify(messageProcessingContext).sendMessage("heartbeat");
             verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), anyString());
         }

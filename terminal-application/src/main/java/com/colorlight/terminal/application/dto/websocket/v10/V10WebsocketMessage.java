@@ -1,6 +1,9 @@
 package com.colorlight.terminal.application.dto.websocket.v10;
 
+import com.colorlight.terminal.application.domain.sensor.GpsReport;
 import lombok.Data;
+
+import java.util.List;
 
 /**
  * v1.0版本-WebSocket消息封装类
@@ -9,7 +12,10 @@ import lombok.Data;
  * <p>消息格式示例:</p>
  * <pre>
  * {
- *   "gps": "[{\"sensorType\":\"gps\",\"latitude\":39.9042,\"longitude\":116.4074}]"
+ *   "gps": [
+ *     {"sensorType":"gps","latitude":39.9042,"longitude":116.4074},
+ *     {"sensorType":"gps","latitude":39.9043,"longitude":116.4075}
+ *   ]
  * }
  * </pre>
  *
@@ -31,7 +37,8 @@ public class V10WebsocketMessage {
     private String content;
 
     /**
-     * 使用String适配后续处理
+     * GPS数据列表
+     * V1.0协议支持多条GPS数据上报
      */
-    private String gps;
+    private List<GpsReport> gps;
 }

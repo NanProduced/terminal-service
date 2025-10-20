@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
+import org.springframework.util.CollectionUtils;
 
 import java.time.LocalDateTime;
 
@@ -60,7 +61,7 @@ public class V10ProtocolMessageProcessor implements ProtocolMessageProcessor {
             }
 
             // 处理GPS传感器数据（V1.0协议的主要业务逻辑）
-            if (StringUtils.isNotBlank(message.getGps())) {
+            if (!CollectionUtils.isEmpty(message.getGps())) {
                 return handleGpsMessage(context, message);
             }
 
@@ -96,14 +97,17 @@ public class V10ProtocolMessageProcessor implements ProtocolMessageProcessor {
      */
     private TextMessageProcessResult handleGpsMessage(MessageProcessingContext context, V10WebsocketMessage message) {
 
-        log.debug("V10ProtocolMessageProcessor - 处理GPS数据: deviceId={}, gps={}",
-                context.getDeviceId(), message.getGps());
+        log.debug("V10ProtocolMessageProcessor - 处理GPS数据: deviceId={}, count={}",
+                context.getDeviceId(), message.getGps().size());
+
+        // 将List<GpsReport>序列化为JSON字符串传递给应用服务
+        String gpsJson = JsonUtils.toJson(message.getGps());
 
         // 异步处理传感器数据上报
         terminalReportUseCase.asyncHandleSensorReport(
                 context.getDeviceId(),
                 LocalDateTime.now(),
-                message.getGps()
+                gpsJson
         );
 
         log.debug("V10ProtocolMessageProcessor - GPS数据处理提交成功: deviceId={}",
