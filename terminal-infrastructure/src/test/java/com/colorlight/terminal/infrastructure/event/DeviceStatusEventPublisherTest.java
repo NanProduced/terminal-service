@@ -79,7 +79,7 @@ class DeviceStatusEventPublisherTest {
 
         // Then: 验证同步发布
         then(applicationEventPublisher).should().publishEvent(sampleEvent);
-        then(deviceConfigPort).should(times(2)).isSpringEventAsync(); // 调用2次：一次日志，一次条件判断
+        then(deviceConfigPort).should(times(1)).isSpringEventAsync(); // 调用1次：条件判断
     }
 
     @Test
@@ -92,7 +92,7 @@ class DeviceStatusEventPublisherTest {
         assertDoesNotThrow(() -> deviceStatusEventPublisher.publishStatusEvent(sampleEvent));
 
         // Then: 验证异步发布（通过spy验证异步方法被调用）
-        then(deviceConfigPort).should(times(2)).isSpringEventAsync(); // 调用2次：一次日志，一次条件判断
+        then(deviceConfigPort).should(times(1)).isSpringEventAsync(); // 调用1次：条件判断
         // 注意：由于异步方法是protected的，我们主要验证配置被正确读取
     }
 
@@ -109,24 +109,15 @@ class DeviceStatusEventPublisherTest {
 
         // Then: 验证尝试发布事件
         then(applicationEventPublisher).should().publishEvent(sampleEvent);
-        then(deviceConfigPort).should(times(2)).isSpringEventAsync(); // 调用2次：一次日志，一次条件判断
+        then(deviceConfigPort).should(times(1)).isSpringEventAsync(); // 调用1次：条件判断
     }
 
     @Test
     @DisplayName("批量发布设备状态事件 - 同步模式")
     void batchPublishStatusEvents_SyncMode() {
         // Given: 批量事件和同步模式配置
-        DeviceStatusEvent event1 = DeviceStatusEvent.builder()
-                .deviceId(11111L)
-                .eventType(DeviceStatusEvent.EventType.DEVICE_HEARTBEAT)
-                .eventTime(currentTime)
-                .build();
-        DeviceStatusEvent event2 = DeviceStatusEvent.builder()
-                .deviceId(22222L)
-                .eventType(DeviceStatusEvent.EventType.DEVICE_RECONNECT)
-                .eventTime(currentTime)
-                .build();
-        
+        DeviceStatusEvent event1 = DeviceStatusEvent.createGoLiveEvent(1001L, ReportSource.HTTP, "192.168.1.100");
+        DeviceStatusEvent event2 = DeviceStatusEvent.createHeartbeatEvent(1002L, ReportSource.WEBSOCKET, "192.168.1.101");
         List<DeviceStatusEvent> events = Arrays.asList(event1, event2);
         given(deviceConfigPort.isSpringEventAsync()).willReturn(false);
 
@@ -136,7 +127,7 @@ class DeviceStatusEventPublisherTest {
         // Then: 验证每个事件都被同步发布
         then(applicationEventPublisher).should().publishEvent(event1);
         then(applicationEventPublisher).should().publishEvent(event2);
-        then(deviceConfigPort).should(times(2)).isSpringEventAsync();
+        then(deviceConfigPort).should(times(1)).isSpringEventAsync();
     }
 
     @Test
@@ -150,7 +141,7 @@ class DeviceStatusEventPublisherTest {
         deviceStatusEventPublisher.batchPublishStatusEvents(events);
 
         // Then: 验证异步配置被读取
-        then(deviceConfigPort).should(times(2)).isSpringEventAsync();
+        then(deviceConfigPort).should(times(1)).isSpringEventAsync();
     }
 
     @Test
@@ -239,14 +230,14 @@ class DeviceStatusEventPublisherTest {
         for (DeviceStatusEvent event : largeEventList) {
             then(applicationEventPublisher).should().publishEvent(event);
         }
-        then(deviceConfigPort).should(times(2)).isSpringEventAsync();
+        then(deviceConfigPort).should(times(1)).isSpringEventAsync();
     }
 
     @Test
     @DisplayName("配置读取验证")
     void configurationReading() {
         // Given: 不同的配置值
-        given(deviceConfigPort.isSpringEventAsync()).willReturn(true, false, true);
+        given(deviceConfigPort.isSpringEventAsync()).willReturn(true).willReturn(false).willReturn(true);
 
         // When: 多次发布事件，每次检查配置
         deviceStatusEventPublisher.publishStatusEvent(sampleEvent);
@@ -254,7 +245,7 @@ class DeviceStatusEventPublisherTest {
         deviceStatusEventPublisher.publishStatusEvent(sampleEvent);
 
         // Then: 验证配置被正确读取
-        then(deviceConfigPort).should(times(6)).isSpringEventAsync();
+        then(deviceConfigPort).should(times(3)).isSpringEventAsync();
     }
 
     @Test
@@ -262,7 +253,7 @@ class DeviceStatusEventPublisherTest {
     void mixedPublishMode() {
         // Given: 单个事件和批量事件
         List<DeviceStatusEvent> eventList = Collections.singletonList(sampleEvent);
-        given(deviceConfigPort.isSpringEventAsync()).willReturn(false);
+        given(deviceConfigPort.isSpringEventAsync()).willReturn(false).willReturn(false);
 
         // When: 同时进行单个发布和批量发布
         deviceStatusEventPublisher.publishStatusEvent(sampleEvent);
@@ -270,6 +261,6 @@ class DeviceStatusEventPublisherTest {
 
         // Then: 验证事件被正确发布
         then(applicationEventPublisher).should(times(2)).publishEvent(sampleEvent);
-        then(deviceConfigPort).should(times(4)).isSpringEventAsync();
+        then(deviceConfigPort).should(times(2)).isSpringEventAsync();
     }
 }

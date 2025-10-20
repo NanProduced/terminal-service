@@ -404,9 +404,9 @@ class DeviceOnlineStatusApplicationServiceTest {
         @DisplayName("应该在GO_LIVE和RECONNECT状态时强制同步更新")
         void should_force_sync_update_for_critical_status() {
             // Given - 配置异步模式，但设备首次上线
-            when(deviceConfigPort.isAsyncStatusUpdateEnabled()).thenReturn(true);
-            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
-            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.empty());
+            lenient().when(deviceConfigPort.isAsyncStatusUpdateEnabled()).thenReturn(true);
+            lenient().when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
+            lenient().when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.empty());
             
             // When - 设备首次上线
             service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
