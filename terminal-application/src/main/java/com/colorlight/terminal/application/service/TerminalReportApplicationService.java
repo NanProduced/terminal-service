@@ -150,43 +150,33 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
      * 异步处理传感器上报数据
      * @param deviceId 设备Id
      * @param reportTime 上报时间
-     * @param reportStr 上报Json
+     * @param reports 传感器上报数据列表
      */
     @Override
     @Async("statisticsReportExecutor")
-    public void asyncHandleSensorReport(Long deviceId, LocalDateTime reportTime, String reportStr) {
+    public void asyncHandleSensorReport(Long deviceId, LocalDateTime reportTime, List<SensorReport> reports) {
         try {
-
-            // 适配HTTP上报封装
-            final JsonNode jsonNode = JsonUtils.fromJson(reportStr);
-            if (jsonNode.has("gps")) {
-                reportStr = jsonNode.get("gps").toString();
-            }
-
-            // JSON反序列化
-            List<SensorReport> reports = JsonUtils.fromJson(reportStr, new TypeReference<List<SensorReport>>() {});
             if (CollectionUtils.isEmpty(reports)) {
                 log.debug("ApplicationService -SensorReport- 空的传感器数据: deviceId={}", deviceId);
                 return;
             }
-            
+
             // 按类型处理
             for (SensorReport report : reports) {
                 if (report == null || report.getSensorType() == null) {
                     log.warn("ApplicationService -SensorReport- 传感器数据格式无效: deviceId={}, report={}", deviceId, report);
                     continue;
                 }
-                
+
                 if ("gps".equals(report.getSensorType()) && report instanceof GpsReport gpsReport) {
                     processGpsReport(deviceId, reportTime, gpsReport);
                 } else {
                     processOtherReport(deviceId, report);
                 }
             }
-            
+
         } catch (Exception e) {
-            log.error("ApplicationService -SensorReport- 处理传感器数据异常: deviceId={}, reportStr={}", 
-                    deviceId, reportStr != null ? reportStr.substring(0, Math.min(100, reportStr.length())) : "null", e);
+            log.error("ApplicationService -SensorReport- 处理传感器数据异常: deviceId={}", deviceId, e);
             throw new BusinessException(CommonErrorCode.OPERATION_FAILED, "传感器数据处理失败", e);
         }
     }

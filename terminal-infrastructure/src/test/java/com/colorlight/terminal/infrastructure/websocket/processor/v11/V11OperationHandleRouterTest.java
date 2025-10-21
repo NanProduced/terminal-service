@@ -239,7 +239,7 @@ class V11OperationHandleRouterTest {
         // 使用doNothing()来配置void方法，避免方法签名问题
         lenient().doNothing().when(terminalReportUseCase).asyncHandleMediaPlayRecordReport(any(Long.class), anyString());
         lenient().doNothing().when(terminalReportUseCase).asyncHandleProgramPlayRecordReport(any(Long.class), anyString());
-        lenient().doNothing().when(terminalReportUseCase).asyncHandleSensorReport(any(Long.class), any(LocalDateTime.class), anyString());
+        lenient().doNothing().when(terminalReportUseCase).asyncHandleSensorReport(any(Long.class), any(LocalDateTime.class), any(List.class));
         lenient().doNothing().when(terminalReportUseCase).asyncSaveTerminalLog(any(Long.class), any());
     }
     
@@ -583,7 +583,7 @@ class V11OperationHandleRouterTest {
             router.handleMessageByType(messageProcessingContext, sensorMessage);
             
             // Then - 验证传感器数据处理
-            verify(terminalReportUseCase).asyncHandleSensorReport(eq(12345L), any(LocalDateTime.class), anyString());
+            verify(terminalReportUseCase).asyncHandleSensorReport(eq(12345L), any(LocalDateTime.class), any(List.class));
             verify(messageProcessingContext).sendMessage(messageCaptor.capture());
             
             V11WebsocketMessage response = messageCaptor.getValue();

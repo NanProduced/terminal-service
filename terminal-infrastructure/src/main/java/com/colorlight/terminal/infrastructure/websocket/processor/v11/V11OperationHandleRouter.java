@@ -4,6 +4,7 @@ import com.colorlight.ccloud.program.vo.RpcTerminalProgramVO;
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
 import com.colorlight.terminal.application.domain.connection.MessageProcessingContext;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
+import com.colorlight.terminal.application.domain.sensor.SensorReport;
 import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketErrorEnum;
 import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketMessage;
 import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketMessageTypeEnum;
@@ -380,11 +381,35 @@ public class V11OperationHandleRouter {
      */
     private void handleSensorDataReport(MessageProcessingContext context, V11WebsocketMessage message) {
         LocalDateTime now = LocalDateTime.now();
-        String dataStr = Objects.isNull(message.getData()) ? EMPTY_JSON : JsonUtils.toJson(message.getData());
-        terminalReportUseCase.asyncHandleSensorReport(context.getDeviceId(), now, dataStr);
+
+        // 处理数据：可能是List<SensorReport>或JSON字符串
+        List<SensorReport> reports;
+        if (Objects.isNull(message.getData())) {
+            reports = List.of();
+        } else if (message.getData() instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<SensorReport> list = (List<SensorReport>) message.getData();
+            reports = list;
+        } else if (message.getData() instanceof String jsonStr) {
+            // 处理JSON字符串反序列化
+            try {
+                reports = JsonUtils.fromJson(jsonStr, new TypeReference<List<SensorReport>>() {});
+                if (reports == null) {
+                    reports = List.of();
+                }
+            } catch (Exception e) {
+                log.warn("V11Router -ws- 反序列化传感器数据失败: deviceId={}", context.getDeviceId(), e);
+                reports = List.of();
+            }
+        } else {
+            reports = List.of();
+        }
+
+        terminalReportUseCase.asyncHandleSensorReport(context.getDeviceId(), now, reports);
         log.info("V11Router -ws- #MONITOR_REPORT#【上报监控数据】 deviceId:{}", context.getDeviceId());
         context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.MONITOR_REPORT.getId(), message.getMessageId()));
     }
+
 
     /**
      * 处理终端日志报告的命令。
