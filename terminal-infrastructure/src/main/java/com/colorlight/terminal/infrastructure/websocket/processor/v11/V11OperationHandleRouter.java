@@ -375,6 +375,7 @@ public class V11OperationHandleRouter {
 
     /**
      * 处理传感器数据报告的命令。
+     * V11协议：data字段为List<SensorReport>格式
      *
      * @param context 消息处理上下文，包含设备ID等信息
      * @param message 接收到的WebSocket消息对象
@@ -382,28 +383,11 @@ public class V11OperationHandleRouter {
     private void handleSensorDataReport(MessageProcessingContext context, V11WebsocketMessage message) {
         LocalDateTime now = LocalDateTime.now();
 
-        // 处理数据：可能是List<SensorReport>或JSON字符串
-        List<SensorReport> reports;
-        if (Objects.isNull(message.getData())) {
-            reports = List.of();
-        } else if (message.getData() instanceof List) {
-            @SuppressWarnings("unchecked")
-            List<SensorReport> list = (List<SensorReport>) message.getData();
-            reports = list;
-        } else if (message.getData() instanceof String jsonStr) {
-            // 处理JSON字符串反序列化
-            try {
-                reports = JsonUtils.fromJson(jsonStr, new TypeReference<List<SensorReport>>() {});
-                if (reports == null) {
-                    reports = List.of();
-                }
-            } catch (Exception e) {
-                log.warn("V11Router -ws- 反序列化传感器数据失败: deviceId={}", context.getDeviceId(), e);
-                reports = List.of();
-            }
-        } else {
-            reports = List.of();
-        }
+        // V11协议: data字段直接为List<SensorReport>格式
+        @SuppressWarnings("unchecked")
+        List<SensorReport> reports = Objects.isNull(message.getData())
+                ? List.of()
+                : (List<SensorReport>) message.getData();
 
         terminalReportUseCase.asyncHandleSensorReport(context.getDeviceId(), now, reports);
         log.info("V11Router -ws- #MONITOR_REPORT#【上报监控数据】 deviceId:{}", context.getDeviceId());

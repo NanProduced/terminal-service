@@ -264,13 +264,9 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         }
 
         try {
-            // 协议适配：处理 {"gps": [...]} 包裹格式
-            JsonNode jsonNode = JsonUtils.fromJson(report);
-            String unwrappedJson = jsonNode.has("gps") ? jsonNode.get("gps").toString() : report;
-
             // 反序列化为领域对象
             List<SensorReport> reports = JsonUtils.fromJson(
-                    unwrappedJson,
+                    report,
                     new TypeReference<List<SensorReport>>() {}
             );
 

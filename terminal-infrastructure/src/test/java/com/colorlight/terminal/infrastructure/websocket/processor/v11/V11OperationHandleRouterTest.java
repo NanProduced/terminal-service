@@ -3,6 +3,8 @@ package com.colorlight.terminal.infrastructure.websocket.processor.v11;
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
 import com.colorlight.terminal.application.domain.connection.MessageProcessingContext;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
+import com.colorlight.terminal.application.domain.sensor.GpsReport;
+import com.colorlight.terminal.application.domain.sensor.SensorReport;
 import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketMessage;
 import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketMessageTypeEnum;
 import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
@@ -166,13 +168,43 @@ class V11OperationHandleRouterTest {
             log1.setDeviceId(12345);
             log1.setLogType("INFO");
             log1.setDescription("系统启动");
-            
+
             TerminalLogDTO log2 = new TerminalLogDTO();
             log2.setDeviceId(12345);
             log2.setLogType("ERROR");
             log2.setDescription("连接失败");
-            
+
             return Arrays.asList(log1, log2);
+        }
+
+        public static List<SensorReport> buildSensorReports() {
+            // 构建GPS报告1
+            GpsReport gpsReport1 = new GpsReport();
+            gpsReport1.setDeviceId(12345L);
+            gpsReport1.setSensorId(1);
+            gpsReport1.setSensorType("gps");
+            gpsReport1.setLatitude(39.9042);
+            gpsReport1.setLongitude(116.4074);
+            gpsReport1.setAccuracy(10.0);
+            gpsReport1.setAltitude(100.0);
+            gpsReport1.setSpeed(0.0);
+            gpsReport1.setDirect(0.0);
+            gpsReport1.setSatellites(10);
+
+            // 构建GPS报告2
+            GpsReport gpsReport2 = new GpsReport();
+            gpsReport2.setDeviceId(12345L);
+            gpsReport2.setSensorId(2);
+            gpsReport2.setSensorType("gps");
+            gpsReport2.setLatitude(39.9050);
+            gpsReport2.setLongitude(116.4080);
+            gpsReport2.setAccuracy(12.0);
+            gpsReport2.setAltitude(101.0);
+            gpsReport2.setSpeed(1.5);
+            gpsReport2.setDirect(45.0);
+            gpsReport2.setSatellites(12);
+
+            return Arrays.asList(gpsReport1, gpsReport2);
         }
         
         public static List<TerminalLog> buildTerminalLogs() {
@@ -573,21 +605,79 @@ class V11OperationHandleRouterTest {
         }
         
         @Test
-        @DisplayName("应该处理传感器数据上报")
-        void should_handle_sensor_data_report() {
-            // Given - 准备传感器数据上报消息
+        @DisplayName("应该处理非空的传感器数据上报")
+        @SuppressWarnings("unchecked")
+        void should_handle_sensor_data_report_with_data() {
+            // Given - 准备传感器数据上报消息，data为List<SensorReport>格式
+            List<SensorReport> sensorReports = TestDataBuilder.buildSensorReports();
             V11WebsocketMessage sensorMessage = TestDataBuilder.buildMessageWithData(
-                V11WebsocketMessageTypeEnum.MONITOR_REPORT, 5001, "{\"temperature\":25.6,\"humidity\":60}");
-            
+                V11WebsocketMessageTypeEnum.MONITOR_REPORT, 5001, sensorReports);
+
             // When - 处理消息
             router.handleMessageByType(messageProcessingContext, sensorMessage);
-            
+
             // Then - 验证传感器数据处理
-            verify(terminalReportUseCase).asyncHandleSensorReport(eq(12345L), any(LocalDateTime.class), any(List.class));
+            @SuppressWarnings("rawtypes")
+            ArgumentCaptor<List> sensorReportsCaptor = ArgumentCaptor.forClass(List.class);
+            verify(terminalReportUseCase).asyncHandleSensorReport(eq(12345L), any(LocalDateTime.class), sensorReportsCaptor.capture());
+
+            List<?> capturedReports = sensorReportsCaptor.getValue();
+            assertThat(capturedReports).hasSize(2).isEqualTo(sensorReports);
+
             verify(messageProcessingContext).sendMessage(messageCaptor.capture());
-            
             V11WebsocketMessage response = messageCaptor.getValue();
             assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.MONITOR_REPORT.getId());
+            assertThat(response.getReceiptId()).isEqualTo(5001);
+        }
+
+        @Test
+        @DisplayName("应该处理空数据的传感器数据上报")
+        @SuppressWarnings("unchecked")
+        void should_handle_sensor_data_report_with_null_data() {
+            // Given - 准备数据为null的传感器数据上报消息
+            V11WebsocketMessage sensorMessage = TestDataBuilder.buildMessage(V11WebsocketMessageTypeEnum.MONITOR_REPORT, 5002);
+            // data为null
+
+            // When - 处理消息
+            router.handleMessageByType(messageProcessingContext, sensorMessage);
+
+            // Then - 验证使用空列表处理
+            @SuppressWarnings("rawtypes")
+            ArgumentCaptor<List> sensorReportsCaptor = ArgumentCaptor.forClass(List.class);
+            verify(terminalReportUseCase).asyncHandleSensorReport(eq(12345L), any(LocalDateTime.class), sensorReportsCaptor.capture());
+
+            List<?> capturedReports = sensorReportsCaptor.getValue();
+            assertThat(capturedReports).isEmpty();
+
+            verify(messageProcessingContext).sendMessage(messageCaptor.capture());
+            V11WebsocketMessage response = messageCaptor.getValue();
+            assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.MONITOR_REPORT.getId());
+            assertThat(response.getReceiptId()).isEqualTo(5002);
+        }
+
+        @Test
+        @DisplayName("应该处理空列表的传感器数据上报")
+        @SuppressWarnings("unchecked")
+        void should_handle_sensor_data_report_with_empty_list() {
+            // Given - 准备空列表的传感器数据上报消息
+            V11WebsocketMessage sensorMessage = TestDataBuilder.buildMessageWithData(
+                V11WebsocketMessageTypeEnum.MONITOR_REPORT, 5003, Collections.emptyList());
+
+            // When - 处理消息
+            router.handleMessageByType(messageProcessingContext, sensorMessage);
+
+            // Then - 验证处理空列表
+            @SuppressWarnings("rawtypes")
+            ArgumentCaptor<List> sensorReportsCaptor = ArgumentCaptor.forClass(List.class);
+            verify(terminalReportUseCase).asyncHandleSensorReport(eq(12345L), any(LocalDateTime.class), sensorReportsCaptor.capture());
+
+            List<?> capturedReports = sensorReportsCaptor.getValue();
+            assertThat(capturedReports).isEmpty();
+
+            verify(messageProcessingContext).sendMessage(messageCaptor.capture());
+            V11WebsocketMessage response = messageCaptor.getValue();
+            assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.MONITOR_REPORT.getId());
+            assertThat(response.getReceiptId()).isEqualTo(5003);
         }
         
         @Test
