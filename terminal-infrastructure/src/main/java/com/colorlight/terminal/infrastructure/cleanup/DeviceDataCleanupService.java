@@ -17,6 +17,10 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import com.colorlight.terminal.infrastructure.persistence.mysql.entity.TerminalAccountDO;
+import com.colorlight.terminal.infrastructure.persistence.mysql.mapper.TerminalAccountMapper;
+import com.colorlight.terminal.application.port.outbound.cache.TerminalAuthCachePort;
+
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -37,6 +41,8 @@ public class DeviceDataCleanupService {
     private final List<DataStoreCleaner> cleaners;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final TerminalAuthCachePort terminalAuthCachePort;
+    private final TerminalAccountMapper terminalAccountMapper;
     
     /**
      * 异步清理单个设备数据
@@ -47,27 +53,38 @@ public class DeviceDataCleanupService {
     @Async("defaultAsyncExecutor")
     public void cleanupDeviceDataAsync(Long deviceId, DataCleanupConfigDTO customConfig) {
         log.info("开始清理设备数据: deviceId={}", deviceId);
-        
+
         // 创建删除记录
         DeviceDeletionRecordDO deletionRecord = createDeletionRecord(deviceId, customConfig);
         deletionRecordMapper.insert(deletionRecord);
-        
+
+        // 查询设备账户信息（用于后续缓存清理）
+        TerminalAccountDO account = null;
+        try {
+            account = terminalAccountMapper.selectById(deviceId);
+        } catch (Exception e) {
+            log.warn("设备数据清理 - 查询设备账户信息失败: deviceId={}", deviceId, e);
+        }
+
         try {
             // 更新状态为运行中
             updateRecordStatus(deletionRecord.getId(), "RUNNING", null, null, LocalDateTime.now());
-            
+
             // 解析需要清理的数据类型
             Set<DataType> dataTypesToCleanup = resolveDataTypesToCleanup(customConfig);
             log.info("设备 {} 需要清理的数据类型: {}", deviceId, dataTypesToCleanup);
-            
+
             // 执行清理操作
             Map<String, Integer> deletedCounts = performCleanup(deviceId, dataTypesToCleanup);
-            
+
+            // 清理Caffeine缓存中的设备账户信息
+            cleanupTerminalAuthCache(account);
+
             // 更新为成功状态
             updateRecordStatus(deletionRecord.getId(), "SUCCESS", deletedCounts, null, LocalDateTime.now());
-            
+
             log.info("设备数据清理完成: deviceId={}, 清理统计={}", deviceId, deletedCounts);
-            
+
         } catch (Exception e) {
             log.error("设备数据清理失败: deviceId={}", deviceId, e);
             updateRecordStatus(deletionRecord.getId(), "FAILED", null, e.getMessage(), LocalDateTime.now());
@@ -207,6 +224,23 @@ public class DeviceDataCleanupService {
         deletionRecordMapper.updateById(deletionRecordDO);
     }
     
+    /**
+     * 清理终端认证缓存
+     *
+     * @param account  终端账户信息
+     */
+    private void cleanupTerminalAuthCache(TerminalAccountDO account) {
+        if (account != null && account.getAccount() != null) {
+            try {
+                terminalAuthCachePort.remove(account.getAccount());
+                log.info("设备数据清理 - Caffeine缓存已清理: deviceId={}, account={}", account.getDeviceId(), account.getAccount());
+            } catch (Exception e) {
+                log.error("设备数据清理 - Caffeine缓存清理失败: deviceId={}, account={}", account.getDeviceId(), account.getAccount(), e);
+                // 缓存清理失败不中断主流程
+            }
+        }
+    }
+
     /**
      * 转换数据类型为JSON
      */
