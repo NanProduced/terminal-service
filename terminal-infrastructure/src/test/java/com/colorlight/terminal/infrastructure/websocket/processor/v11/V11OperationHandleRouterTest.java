@@ -27,7 +27,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
@@ -205,6 +208,40 @@ class V11OperationHandleRouterTest {
             gpsReport2.setSatellites(12);
 
             return Arrays.asList(gpsReport1, gpsReport2);
+        }
+
+        /**
+         * 构建模拟JSON反序列化后的传感器数据（LinkedHashMap格式）
+         * V11WebsocketMessage.data是Object类型，JSON反序列化后得到ArrayList<LinkedHashMap>
+         */
+        public static List<Map<String, Object>> buildSensorReportsAsLinkedHashMaps() {
+            // 模拟GPS报告1的LinkedHashMap表示
+            Map<String, Object> gpsData1 = new LinkedHashMap<>();
+            gpsData1.put("sensorId", 1);
+            gpsData1.put("sensorType", "gps");
+            gpsData1.put("date", "2024-10-21 11:00:00");
+            gpsData1.put("latitude", 39.9042);
+            gpsData1.put("longitude", 116.4074);
+            gpsData1.put("accuracy", 10.0);
+            gpsData1.put("altitude", 100.0);
+            gpsData1.put("speed", 0.0);
+            gpsData1.put("direct", 0.0);
+            gpsData1.put("satellites", 10);
+
+            // 模拟GPS报告2的LinkedHashMap表示
+            Map<String, Object> gpsData2 = new LinkedHashMap<>();
+            gpsData2.put("sensorId", 2);
+            gpsData2.put("sensorType", "gps");
+            gpsData2.put("date", "2024-10-21 11:01:00");
+            gpsData2.put("latitude", 39.9050);
+            gpsData2.put("longitude", 116.4080);
+            gpsData2.put("accuracy", 12.0);
+            gpsData2.put("altitude", 101.0);
+            gpsData2.put("speed", 1.5);
+            gpsData2.put("direct", 45.0);
+            gpsData2.put("satellites", 12);
+
+            return Arrays.asList(gpsData1, gpsData2);
         }
         
         public static List<TerminalLog> buildTerminalLogs() {
@@ -605,24 +642,27 @@ class V11OperationHandleRouterTest {
         }
         
         @Test
-        @DisplayName("应该处理非空的传感器数据上报")
+        @DisplayName("应该处理非空的传感器数据上报（LinkedHashMap反序列化格式）")
         @SuppressWarnings("unchecked")
         void should_handle_sensor_data_report_with_data() {
-            // Given - 准备传感器数据上报消息，data为List<SensorReport>格式
-            List<SensorReport> sensorReports = TestDataBuilder.buildSensorReports();
+            // Given - 准备传感器数据上报消息
+            // 重要：模拟JSON反序列化后的真实格式：ArrayList<LinkedHashMap>而不是SensorReport
+            List<Map<String, Object>> sensorDataMaps = TestDataBuilder.buildSensorReportsAsLinkedHashMaps();
             V11WebsocketMessage sensorMessage = TestDataBuilder.buildMessageWithData(
-                V11WebsocketMessageTypeEnum.MONITOR_REPORT, 5001, sensorReports);
+                V11WebsocketMessageTypeEnum.MONITOR_REPORT, 5001, sensorDataMaps);
 
-            // When - 处理消息
+            // When - 处理消息，handleSensorDataReport会使用JsonUtils.convertValue进行转换
             router.handleMessageByType(messageProcessingContext, sensorMessage);
 
-            // Then - 验证传感器数据处理
+            // Then - 验证传感器数据被正确转换并处理
             @SuppressWarnings("rawtypes")
             ArgumentCaptor<List> sensorReportsCaptor = ArgumentCaptor.forClass(List.class);
             verify(terminalReportUseCase).asyncHandleSensorReport(eq(12345L), any(LocalDateTime.class), sensorReportsCaptor.capture());
 
             List<?> capturedReports = sensorReportsCaptor.getValue();
-            assertThat(capturedReports).hasSize(2).isEqualTo(sensorReports);
+            assertThat(capturedReports).hasSize(2);
+            // 验证是否成功转换为SensorReport对象
+            assertThat(capturedReports.get(0)).isInstanceOf(SensorReport.class);
 
             verify(messageProcessingContext).sendMessage(messageCaptor.capture());
             V11WebsocketMessage response = messageCaptor.getValue();
@@ -678,6 +718,32 @@ class V11OperationHandleRouterTest {
             V11WebsocketMessage response = messageCaptor.getValue();
             assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.MONITOR_REPORT.getId());
             assertThat(response.getReceiptId()).isEqualTo(5003);
+        }
+
+        @Test
+        @DisplayName("应该处理传感器数据转换失败时的情况")
+        @SuppressWarnings("unchecked")
+        void should_handle_sensor_data_conversion_failure() {
+            // Given - 准备无效的传感器数据（无法转换为SensorReport）
+            Map<String, Object> invalidData = new HashMap<>();
+            invalidData.put("invalid", "data");
+            V11WebsocketMessage sensorMessage = TestDataBuilder.buildMessageWithData(
+                V11WebsocketMessageTypeEnum.MONITOR_REPORT, 5004, invalidData);
+
+            // When - 处理消息，转换失败时应该使用空列表
+            router.handleMessageByType(messageProcessingContext, sensorMessage);
+
+            // Then - 验证当转换失败时使用空列表
+            @SuppressWarnings("rawtypes")
+            ArgumentCaptor<List> sensorReportsCaptor = ArgumentCaptor.forClass(List.class);
+            verify(terminalReportUseCase).asyncHandleSensorReport(eq(12345L), any(LocalDateTime.class), sensorReportsCaptor.capture());
+
+            List<?> capturedReports = sensorReportsCaptor.getValue();
+            assertThat(capturedReports).isEmpty();
+
+            verify(messageProcessingContext).sendMessage(messageCaptor.capture());
+            V11WebsocketMessage response = messageCaptor.getValue();
+            assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.MONITOR_REPORT.getId());
         }
         
         @Test
