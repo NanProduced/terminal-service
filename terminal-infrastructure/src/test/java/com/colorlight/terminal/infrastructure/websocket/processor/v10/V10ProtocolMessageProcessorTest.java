@@ -4,6 +4,7 @@ import com.colorlight.terminal.application.domain.connection.MessageProcessingCo
 import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
 import com.colorlight.terminal.application.domain.connection.TerminalConnection;
 import com.colorlight.terminal.application.domain.sensor.GpsReport;
+import com.colorlight.terminal.application.domain.sensor.SensorReport;
 import com.colorlight.terminal.application.dto.websocket.v10.V10WebsocketMessage;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.application.port.outbound.websocket.ProtocolMessageProcessor.TextMessageProcessResult;
@@ -59,7 +60,7 @@ class V10ProtocolMessageProcessorTest {
     private ArgumentCaptor<LocalDateTime> dateTimeCaptor;
     
     @Captor
-    private ArgumentCaptor<String> gpsDataCaptor;
+    private ArgumentCaptor<List> gpsDataCaptor;
     
     @InjectMocks
     private V10ProtocolMessageProcessor processor;
@@ -138,7 +139,7 @@ class V10ProtocolMessageProcessorTest {
         lenient().when(messageProcessingContext.sendMessage(anyString())).thenReturn(true);
         
         // 默认异步处理成功
-        lenient().doNothing().when(terminalReportUseCase).asyncHandleSensorReport(anyLong(), any(LocalDateTime.class), anyString());
+        lenient().doNothing().when(terminalReportUseCase).asyncHandleSensorReport(anyLong(), any(LocalDateTime.class), any(List.class));
     }
     
     @Nested
@@ -258,9 +259,10 @@ class V10ProtocolMessageProcessorTest {
 
             assertThat(deviceIdCaptor.getValue()).isEqualTo(12345L);
             assertThat(dateTimeCaptor.getValue()).isNotNull();
-            // 验证GPS数据被序列化为JSON字符串
-            String expectedGpsJson = JsonUtils.toJson(gpsMessage.getGps());
-            assertThat(gpsDataCaptor.getValue()).isEqualTo(expectedGpsJson);
+            // 验证GPS数据List被正确传递
+            List<SensorReport> capturedGpsData = gpsDataCaptor.getValue();
+            assertThat(capturedGpsData).isNotEmpty();
+            assertThat(capturedGpsData).isEqualTo(new ArrayList<>(gpsMessage.getGps()));
         }
         
         @Test
@@ -278,12 +280,11 @@ class V10ProtocolMessageProcessorTest {
             assertThat(result.success()).isTrue();
             assertThat(result.heartbeat()).isFalse();
 
-            // 验证GPS数据被正确传递（序列化后的JSON字符串）
-            String expectedGpsJson = JsonUtils.toJson(multiGpsMessage.getGps());
+            // 验证GPS数据被正确传递
             verify(terminalReportUseCase).asyncHandleSensorReport(
                 eq(12345L),
                 any(LocalDateTime.class),
-                eq(expectedGpsJson)
+                any(List.class)
             );
         }
         
@@ -305,7 +306,7 @@ class V10ProtocolMessageProcessorTest {
             assertThat(result.heartbeat()).isFalse();
 
             // 验证不调用GPS处理
-            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), anyString());
+            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), any(List.class));
         }
 
         @Test
@@ -326,7 +327,7 @@ class V10ProtocolMessageProcessorTest {
             assertThat(result.heartbeat()).isFalse();
 
             // 验证不调用GPS处理
-            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), anyString());
+            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), any(List.class));
         }
         
         @Test
@@ -338,7 +339,7 @@ class V10ProtocolMessageProcessorTest {
             when(messageProcessingContext.getRawMessage()).thenReturn(jsonMessage);
             
             doThrow(new RuntimeException("GPS处理服务异常"))
-                .when(terminalReportUseCase).asyncHandleSensorReport(anyLong(), any(LocalDateTime.class), anyString());
+                .when(terminalReportUseCase).asyncHandleSensorReport(anyLong(), any(LocalDateTime.class), any(List.class));
             
             // When - 处理GPS消息
             TextMessageProcessResult result = processor.processTextMessage(messageProcessingContext);
@@ -371,7 +372,7 @@ class V10ProtocolMessageProcessorTest {
             assertThat(result.errorMessage()).isNull();
             
             // 验证不调用任何业务处理
-            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), anyString());
+            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), any(List.class));
             verify(messageProcessingContext, never()).sendMessage(anyString());
         }
         
@@ -391,7 +392,7 @@ class V10ProtocolMessageProcessorTest {
             assertThat(result.success()).isTrue();
             assertThat(result.heartbeat()).isFalse();
             
-            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), anyString());
+            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), any(List.class));
         }
     }
     
@@ -415,7 +416,7 @@ class V10ProtocolMessageProcessorTest {
             assertThat(result.errorMessage()).contains("V1.0消息处理异常");
             
             // 验证不调用任何业务处理
-            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), anyString());
+            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), any(List.class));
         }
         
         @Test
@@ -520,7 +521,7 @@ class V10ProtocolMessageProcessorTest {
             assertThat(result.heartbeat()).isTrue();
 
             verify(messageProcessingContext).sendMessage("heartbeat");
-            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), anyString());
+            verify(terminalReportUseCase, never()).asyncHandleSensorReport(anyLong(), any(), any(List.class));
         }
     }
 }

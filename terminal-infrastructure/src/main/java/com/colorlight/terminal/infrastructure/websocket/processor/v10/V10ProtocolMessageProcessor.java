@@ -2,6 +2,7 @@ package com.colorlight.terminal.infrastructure.websocket.processor.v10;
 
 import com.colorlight.terminal.application.domain.connection.MessageProcessingContext;
 import com.colorlight.terminal.application.domain.connection.ProtocolVersion;
+import com.colorlight.terminal.application.domain.sensor.SensorReport;
 import com.colorlight.terminal.application.dto.websocket.v10.V10WebsocketMessage;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.application.port.outbound.websocket.ProtocolMessageProcessor;
@@ -13,6 +14,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * V1.0协议消息处理器 - Infrastructure层实现
@@ -89,25 +92,17 @@ public class V10ProtocolMessageProcessor implements ProtocolMessageProcessor {
         return TextMessageProcessResult.ofFailure("PONG消息发送失败");
     }
 
-    /**
-     * 处理GPS上报
-     * @param context 上下文
-     * @param message 封装消息体
-     * @return 处理结果
-     */
     private TextMessageProcessResult handleGpsMessage(MessageProcessingContext context, V10WebsocketMessage message) {
 
         log.debug("V10ProtocolMessageProcessor - 处理GPS数据: deviceId={}, count={}",
                 context.getDeviceId(), message.getGps().size());
 
-        // 将List<GpsReport>序列化为JSON字符串传递给应用服务
-        String gpsJson = JsonUtils.toJson(message.getGps());
-
-        // 异步处理传感器数据上报
+        // 直接传递List对象给应用服务
+        List<SensorReport> sensorReports = new ArrayList<>(message.getGps());
         terminalReportUseCase.asyncHandleSensorReport(
                 context.getDeviceId(),
                 LocalDateTime.now(),
-                gpsJson
+                sensorReports
         );
 
         log.debug("V10ProtocolMessageProcessor - GPS数据处理提交成功: deviceId={}",
@@ -115,4 +110,5 @@ public class V10ProtocolMessageProcessor implements ProtocolMessageProcessor {
 
         return TextMessageProcessResult.ofSuccess(false);
     }
+
 }

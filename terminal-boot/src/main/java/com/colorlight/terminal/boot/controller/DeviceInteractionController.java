@@ -35,6 +35,9 @@ import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.colorlight.terminal.application.domain.sensor.SensorReport;
+import com.fasterxml.jackson.databind.JsonNode;
+
 /**
  * 设备交互控制器 - 实现设备二次开发文档中的必须接口
  * <p>由于老版本遗留问题使用Integer做设备Id，这里进行适配使用Auth认证中的Long Id</p>
@@ -255,10 +258,28 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         LocalDateTime now = LocalDateTime.now();
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceSensorData - 终端 {} 上报传感器数据: {}", principal.getDeviceId(), report);
-        if (StringUtils.isBlank(report)) return ResponseEntity.status(HttpStatus.CREATED).build();
-        terminalReportUseCase.asyncHandleSensorReport(principal.getDeviceId(), now, report);
+
+        if (StringUtils.isBlank(report)) {
+            return ResponseEntity.status(HttpStatus.CREATED).build();
+        }
+
+        try {
+            // 反序列化为领域对象
+            List<SensorReport> reports = JsonUtils.fromJson(
+                    report,
+                    new TypeReference<List<SensorReport>>() {}
+            );
+
+            terminalReportUseCase.asyncHandleSensorReport(principal.getDeviceId(), now, reports);
+
+        } catch (Exception e) {
+            log.error("DeviceSensorData - 终端 {} 反序列化传感器数据失败", principal.getDeviceId(), e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
+
 
     /**
      * 该方法用于处理终端通过HTTP接口上报的日志信息。
