@@ -122,7 +122,7 @@ class DeviceProgramPlayRecordServiceTest {
         }
 
         @Test
-        @DisplayName("应该正确处理空记录列表")
+        @DisplayName("应当正常处理空列表")
         @SuppressWarnings("unchecked")
         void should_handle_empty_records_list_correctly() {
             // Given - 准备空记录列表
@@ -132,38 +132,33 @@ class DeviceProgramPlayRecordServiceTest {
             // When - 执行业务方法
             deviceProgramPlayRecordService.handleProgramPlayRecordReport(deviceId, emptyReports);
 
-            // Then - 验证正常处理空列表
-            ArgumentCaptor<List<ProgramPlayRecordReport>> captor = ArgumentCaptor.forClass(List.class);
-            verify(programPlayRecordRepository).saveProgramPlayRecords(captor.capture());
-            
-            List<ProgramPlayRecordReport> savedReports = captor.getValue();
-            assertThat(savedReports).isEmpty();
-            
+            // Then - 验证没有触发保存行为
+            verify(programPlayRecordRepository, never()).saveProgramPlayRecords(any());
+
             // 验证没有查询programId
             verify(programRepositoryAdapter, never()).findProgramIdByNameAndAuthor(anyString(), anyInt(), anyString());
         }
+
+
 
         @Test
         @DisplayName("应该正确处理全部为LAN节目的记录列表")
         @SuppressWarnings("unchecked")
         void should_handle_all_lan_program_records_correctly() {
-            // Given - 准备全部为LAN节目的记录列表
+            // Given - 准备仅包含LAN节目的记录列表
             Long deviceId = 12345L;
             List<ProgramPlayRecordReport> lanReports = createLanProgramReports();
 
             // When - 执行业务方法
             deviceProgramPlayRecordService.handleProgramPlayRecordReport(deviceId, lanReports);
 
-            // Then - 验证所有LAN节目被过滤，保存空列表
-            ArgumentCaptor<List<ProgramPlayRecordReport>> captor = ArgumentCaptor.forClass(List.class);
-            verify(programPlayRecordRepository).saveProgramPlayRecords(captor.capture());
-            
-            List<ProgramPlayRecordReport> savedReports = captor.getValue();
-            assertThat(savedReports).isEmpty();
-            
+            // Then - 验证过滤后不会触发保存
+            verify(programPlayRecordRepository, never()).saveProgramPlayRecords(any());
+
             // 验证没有查询programId
             verify(programRepositoryAdapter, never()).findProgramIdByNameAndAuthor(anyString(), anyInt(), anyString());
         }
+
     }
 
     @Nested
@@ -196,7 +191,7 @@ class DeviceProgramPlayRecordServiceTest {
         @DisplayName("应该过滤掉非数字格式的LAN节目programIdStr")
         @SuppressWarnings("unchecked")
         void should_filter_out_non_numeric_lan_program_id_str() {
-            // Given - 准备非数字格式的programIdStr
+            // Given - 准备全部为非数字programIdStr的LAN节目列表
             Long deviceId = 12345L;
             List<ProgramPlayRecordReport> reports = Arrays.asList(
                 createLanProgramReport("lan_program_123"),
@@ -208,13 +203,13 @@ class DeviceProgramPlayRecordServiceTest {
             // When - 执行业务方法
             deviceProgramPlayRecordService.handleProgramPlayRecordReport(deviceId, reports);
 
-            // Then - 验证所有非数字格式都被过滤
-            ArgumentCaptor<List<ProgramPlayRecordReport>> captor = ArgumentCaptor.forClass(List.class);
-            verify(programPlayRecordRepository).saveProgramPlayRecords(captor.capture());
-            
-            List<ProgramPlayRecordReport> savedReports = captor.getValue();
-            assertThat(savedReports).isEmpty();
+            // Then - 验证全部过滤后不会触发保存
+            verify(programPlayRecordRepository, never()).saveProgramPlayRecords(any());
+
+            // 验证没有查询programId
+            verify(programRepositoryAdapter, never()).findProgramIdByNameAndAuthor(anyString(), anyInt(), anyString());
         }
+
 
         @Test
         @DisplayName("应该处理边界数字值的programIdStr")
