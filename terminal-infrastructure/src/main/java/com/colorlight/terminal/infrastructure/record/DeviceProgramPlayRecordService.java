@@ -55,8 +55,12 @@ public class DeviceProgramPlayRecordService implements DeviceProgramPlayRecordPo
                     reportToSave.add(report);
                 });
 
+        if (reportToSave.isEmpty()) {
+            log.info("ProgramStats - 无需保存节目播放记录,deviceId={}", deviceId);
+            return;
+        }
         programPlayRecordRepository.saveProgramPlayRecords(reportToSave);
-        log.info("ProgramStats - 存储{}条节目播放记录,deviceId={}", reports.size(), deviceId);
+        log.info("ProgramStats - 存储{}条节目播放记录,deviceId={}", reportToSave.size(), deviceId);
     }
 
     /**
