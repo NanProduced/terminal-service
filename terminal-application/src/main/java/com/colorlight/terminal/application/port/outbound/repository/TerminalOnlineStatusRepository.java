@@ -18,13 +18,6 @@ public interface TerminalOnlineStatusRepository {
      */
     void upsertOnlineState(Long deviceId, OnlineStatus status, LocalDateTime onlineStartTime);
 
-    /**
-     * 仅更新设备的在线状态，不改变在线开始时间。
-     *
-     * @param deviceId 设备 ID
-     * @param status   在线状态
-     */
-    void updateStatus(Long deviceId, OnlineStatus status);
 
     /**
      * 结束一次在线会话，累加总在线时长并标记为离线。

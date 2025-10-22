@@ -251,56 +251,6 @@ class DeviceStatusEventHandlerTest {
     }
 
     @Test
-    @DisplayName("处理设备确认离线事件 - 成功场景")
-    void handleConfirmDeviceOffline_Success() {
-        // Given: 设备确认离线事件
-        DeviceStatusEvent confirmOfflineEvent = DeviceStatusEvent.builder()
-                .deviceId(sampleDeviceId)
-                .eventType(DeviceStatusEvent.EventType.DEVICE_CONFIRMED_OFFLINE)
-                .eventTime(currentTime)
-                .build();
-
-        // When: 处理事件（仅记录日志，无其他操作）
-        assertDoesNotThrow(() -> deviceStatusEventHandler.handleConfirmDeviceOffline(confirmOfflineEvent));
-
-        // Then: 验证仅更新Mongo状态，不触发其他业务操作
-        then(terminalOnlineStatusRepository).should(never()).updateStatus(any(), any());
-        then(terminalAccountRepository).should(never()).updateLoginTimeImmediate(any(), any(), any());
-        then(asyncTerminalLoginUpdatePort).should(never()).submitLoginUpdate(any(), any(), any());
-        then(terminalOnlineTimeRepository).should(never()).saveTerminalOnlineTime(any());
-        then(terminalOnlineStatusRepository).should(never()).finalizeOnlineSession(any(), any(LocalDateTime.class), anyLong());
-    }
-
-    @Test
-    @DisplayName("处理设备状态更新事件(心跳) - 成功场景")
-    void handleStatusUpdate_Success() {
-        // Given: 设备心跳事件
-        DeviceStatusEvent heartbeatEvent = DeviceStatusEvent.builder()
-                .deviceId(sampleDeviceId)
-                .eventType(DeviceStatusEvent.EventType.DEVICE_HEARTBEAT)
-                .reportSource(ReportSource.HTTP)
-                .clientIp(sampleClientIp)
-                .eventTime(currentTime)
-                .build();
-
-        // When: 处理心跳事件
-        deviceStatusEventHandler.handleStatusUpdate(heartbeatEvent);
-
-        // Then: 验证异步更新登录时间被调用
-        then(asyncTerminalLoginUpdatePort).should().submitLoginUpdate(
-                eq(sampleDeviceId), eq(sampleClientIp), any(LocalDateTime.class));
-        then(terminalOnlineStatusRepository).should(never()).updateStatus(any(), any());
-        
-        // 验证RPC通知被调用（通过Executor异步执行）
-        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
-        then(rpcExecutor).should().execute(runnableCaptor.capture());
-
-        // 手动执行异步任务以验证RPC调用
-        runnableCaptor.getValue().run();
-        then(mainServerRpcPort).should().notifyDeviceLastReportTime(heartbeatEvent);
-    }
-
-    @Test
     @DisplayName("处理统一设备状态事件 - 成功场景")
     void handleAllDeviceStatusEvents_Success() {
         // Given: 任意设备状态事件

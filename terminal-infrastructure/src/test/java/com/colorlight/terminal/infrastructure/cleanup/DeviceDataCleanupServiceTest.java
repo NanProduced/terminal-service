@@ -1,11 +1,13 @@
 package com.colorlight.terminal.infrastructure.cleanup;
 
+import com.colorlight.terminal.application.port.outbound.cache.TerminalAuthCachePort;
 import com.colorlight.terminal.commons.exception.business.BusinessException;
 import com.colorlight.terminal.infrastructure.cleanup.cleaner.DataStoreCleaner;
 import com.colorlight.terminal.infrastructure.config.properties.DeviceConfigProperties;
 import com.colorlight.terminal.infrastructure.event.AsyncBufferFlushEvent;
 import com.colorlight.terminal.infrastructure.persistence.mysql.entity.DeviceDeletionRecordDO;
 import com.colorlight.terminal.infrastructure.persistence.mysql.mapper.DeviceDeletionRecordMapper;
+import com.colorlight.terminal.infrastructure.persistence.mysql.mapper.TerminalAccountMapper;
 import com.colorlight.terminal.rpc.dto.config.DataCleanupConfigDTO;
 import com.colorlight.terminal.rpc.dto.enums.CleanupMode;
 import com.colorlight.terminal.rpc.dto.enums.DataType;
@@ -61,6 +63,12 @@ class DeviceDataCleanupServiceTest {
     private ObjectMapper objectMapper;
     
     @Mock
+    private TerminalAuthCachePort terminalAuthCachePort;
+    
+    @Mock
+    private TerminalAccountMapper terminalAccountMapper;
+    
+    @Mock
     private ApplicationEventPublisher eventPublisher;
     
     private DeviceDataCleanupService cleanupService;
@@ -82,7 +90,8 @@ class DeviceDataCleanupServiceTest {
         lenient().when(redisCleaner.getStorageType()).thenReturn("Redis");
         
         cleanupService = new DeviceDataCleanupService(
-            deviceConfig, deletionRecordMapper, cleanersList, objectMapper, eventPublisher);
+            deviceConfig, deletionRecordMapper, cleanersList, objectMapper, eventPublisher, 
+            terminalAuthCachePort, terminalAccountMapper);
     }
     
     @Nested

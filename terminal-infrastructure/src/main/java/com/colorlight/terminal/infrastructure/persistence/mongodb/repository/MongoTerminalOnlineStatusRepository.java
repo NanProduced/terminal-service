@@ -38,43 +38,17 @@ public class MongoTerminalOnlineStatusRepository implements TerminalOnlineStatus
         Query query = Query.query(Criteria.where(DEVICE_ID).is(deviceId));
         Update update = new Update()
                 .set(STATUS, normalizeStatus(status))
+                .set(ONLINE_START_TIME, onlineStartTime)
                 .set(UPDATED_AT, now)
                 .setOnInsert(DEVICE_ID, deviceId)
                 .setOnInsert(TOTAL_ONLINE_TIME, 0L)
                 .setOnInsert(CREATED_AT, now);
-
-        if (onlineStartTime != null) {
-            update.set(ONLINE_START_TIME, onlineStartTime);
-        }
 
         try {
             mongoTemplate.upsert(query, update, TerminalOnlineStatusDocument.class);
             log.debug("TerminalOnlineStatus - upsert状态成功: deviceId={}, status={}", deviceId, normalizeStatus(status));
         } catch (Exception e) {
             log.error("TerminalOnlineStatus - upsert状态失败: deviceId={}, status={}", deviceId, normalizeStatus(status), e);
-        }
-    }
-
-    @Override
-    public void updateStatus(Long deviceId, OnlineStatus status) {
-        if (deviceId == null || status == null) {
-            log.warn("TerminalOnlineStatus - 跳过状态更新, 无效的参数: deviceId={}, status={}", deviceId, status);
-            return;
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        Query query = Query.query(Criteria.where(DEVICE_ID).is(deviceId));
-        Update update = new Update()
-                .set(STATUS, normalizeStatus(status))
-                .set(UPDATED_AT, now)
-                .setOnInsert(DEVICE_ID, deviceId)
-                .setOnInsert(TOTAL_ONLINE_TIME, 0L)
-                .setOnInsert(CREATED_AT, now);
-        try {
-            mongoTemplate.upsert(query, update, TerminalOnlineStatusDocument.class);
-            log.debug("TerminalOnlineStatus - 更新状态成功: deviceId={}, status={}", deviceId, normalizeStatus(status));
-        } catch (Exception e) {
-            log.error("TerminalOnlineStatus - 状态更新失败: deviceId={}, status={}", deviceId, normalizeStatus(status), e);
         }
     }
 
