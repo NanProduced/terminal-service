@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
@@ -26,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
+
 
 /**
  * 终端认证应用服务单元测试
@@ -111,6 +113,38 @@ class TerminalAuthApplicationServiceTest extends BaseApplicationServiceTest {
             verify(terminalAuthCachePort).get(TEST_ACCOUNT_NAME);
             verifyNoInteractions(encoderPort); // 快速路径不再使用BCrypt
             verifyNoMoreInteractions(terminalAccountRepository);
+        }
+
+        @Test
+        @DisplayName("caffeine缓存命中但凭据不一致时清理缓存并回退到数据库认证")
+        void should_fallback_to_database_when_cache_credentials_hash_mismatch() {
+            // Given
+            TerminalAuthCache staleCache = TerminalAuthCache.builder()
+                    .deviceId(TEST_DEVICE_ID)
+                    .accountName(TEST_ACCOUNT_NAME)
+                    .credentialsHash("stale_hash")
+                    .accountStatus(TerminalAccountStatus.ENABLE)
+                    .build();
+            when(terminalAuthCachePort.get(TEST_ACCOUNT_NAME)).thenReturn(Optional.of(staleCache));
+            when(terminalAccountRepository.findTerminalAccountByName(TEST_ACCOUNT_NAME)).thenReturn(terminalAccount);
+            when(encoderPort.matchesByPasswordEncoder(TEST_PASSWORD, "encoded_password")).thenReturn(true);
+
+            // When
+            AuthResult result = service.authenticate(authRequest);
+
+            // Then
+            assertThat(result).isNotNull();
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getDeviceId()).isEqualTo(TEST_DEVICE_ID);
+
+            verify(terminalAuthCachePort).remove(TEST_ACCOUNT_NAME);
+            verify(terminalAccountRepository).findTerminalAccountByName(TEST_ACCOUNT_NAME);
+            verify(encoderPort).matchesByPasswordEncoder(TEST_PASSWORD, "encoded_password");
+
+            ArgumentCaptor<TerminalAuthCache> cacheCaptor = ArgumentCaptor.forClass(TerminalAuthCache.class);
+            verify(terminalAuthCachePort).cache(eq(TEST_ACCOUNT_NAME), cacheCaptor.capture());
+            String expectedHash = calculateCredentialsHash(TEST_ACCOUNT_NAME, TEST_PASSWORD);
+            assertThat(cacheCaptor.getValue().getCredentialsHash()).isEqualTo(expectedHash);
         }
 
     }

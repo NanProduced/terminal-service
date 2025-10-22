@@ -474,6 +474,25 @@ class DeviceOnlineStatusApplicationServiceTest {
             assertThat(statusCaptor.getValue().getVersion()).isEqualTo(PROTOCOL_VERSION);
         }
 
+        @Test
+        @DisplayName("Ӧ���ڻ��߷�HTTP����ʱ����ԭ�а汾")
+        void should_preserve_version_for_http_reconnect_from_offline() {
+            // Given - �豸����״̬Ϊ OFFLINE �����а汾
+            DeviceOnlineStatus offlineStatus = TestDataBuilder.createOfflineStatus(DEVICE_ID);
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
+            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.of(offlineStatus));
+
+            // When - HTTP �豸�ϱ��л�
+            service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
+
+            // Then - ��֤תΪ RECONNECT ʱ�汾ֵ����
+            verify(deviceOnlineStatusPort).smartDetermined(statusCaptor.capture());
+            DeviceOnlineStatus reconnectStatus = statusCaptor.getValue();
+            assertThat(reconnectStatus.getStatus()).isEqualTo(OnlineStatus.RECONNECT);
+            assertThat(reconnectStatus.getVersion()).isEqualTo(offlineStatus.getVersion());
+            verify(connectionManagerPort, never()).getConnection(anyLong());
+        }
+
     }
     
     @Nested
@@ -547,6 +566,20 @@ class DeviceOnlineStatusApplicationServiceTest {
             
             // Then - 验证返回状态
             assertThat(result).contains(status);
+        }
+
+        @Test
+        @DisplayName("Ӧ���ڲ�ѯ�쳣ʱ����һ�յ�Optional")
+        void should_return_empty_optional_when_get_status_exception() {
+            // Given - ģ����Ҳԭ�쳣
+            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID))
+                    .thenThrow(new RuntimeException("��ȡ״̬�쳣"));
+
+            // When - ��ȡ״̬����
+            Optional<DeviceOnlineStatus> result = service.getDeviceStatus(DEVICE_ID);
+
+            // Then - ��֤����Ϊ Optional.empty
+            assertThat(result).isEmpty();
         }
     }
     
@@ -623,6 +656,21 @@ class DeviceOnlineStatusApplicationServiceTest {
             assertThat(result.get(10001L).getStatus()).isEqualTo(OnlineStatus.ONLINE);
             assertThat(result.get(10002L).getStatus()).isEqualTo(OnlineStatus.ONLINE);
         }
+
+        @Test
+        @DisplayName("Ӧ��������ȡ�쳣ʱ����һ�յ�Map")
+        void should_return_empty_map_when_batch_get_exception() {
+            // Given - ������ȡ�쳣
+            List<Long> deviceIds = Arrays.asList(10001L, 10002L);
+            when(deviceOnlineStatusPort.batchGetDeviceStatus(deviceIds))
+                    .thenThrow(new RuntimeException("������ȡ�쳣"));
+
+            // When - ִ��������ȡ
+            Map<Long, DeviceOnlineStatus> result = service.batchGetDeviceStatus(deviceIds);
+
+            // Then - ��֤���ؿ�Map
+            assertThat(result).isEmpty();
+        }
     }
     
     @Nested
@@ -651,6 +699,19 @@ class DeviceOnlineStatusApplicationServiceTest {
             
             // Then - 验证只返回在线设备
             assertThat(onlineIds).containsExactlyInAnyOrder(10001L, 10002L);
+        }
+
+        @Test
+        @DisplayName("Ӧ���ڼ�ȡ���豸ID�б��쳣ʱ����һ�յ��ϼ�")
+        void should_return_empty_set_when_fetch_online_ids_exception() {
+            // Given - ģ���豸ID�б��쳣
+            when(deviceOnlineStatusPort.getAllDeviceIds()).thenThrow(new RuntimeException("��ȡ���豸ID�쳣"));
+
+            // When - ��ȡ�����豸ID�б�
+            Set<Long> onlineIds = service.getOnlineDeviceIds();
+
+            // Then - ��֤���ؿ�Set
+            assertThat(onlineIds).isEmpty();
         }
         
         @Test
