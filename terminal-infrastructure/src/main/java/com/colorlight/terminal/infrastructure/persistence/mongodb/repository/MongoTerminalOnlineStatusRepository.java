@@ -64,13 +64,11 @@ public class MongoTerminalOnlineStatusRepository implements TerminalOnlineStatus
         Update update = new Update()
                 .inc(TOTAL_ONLINE_TIME, sessionDurationSecs)
                 .set(STATUS, OnlineStatus.OFFLINE.name())
+                .set(ONLINE_START_TIME, onlineStartTime)
                 .set(UPDATED_AT, now)
                 .setOnInsert(DEVICE_ID, deviceId)
                 .setOnInsert(CREATED_AT, now);
 
-        if (onlineStartTime != null) {
-            update.set(ONLINE_START_TIME, onlineStartTime);
-        }
         try {
             mongoTemplate.upsert(query, update, TerminalOnlineStatusDocument.class);
             log.debug("TerminalOnlineStatus - 在线时长累计成功: deviceId={}, addedDuration={}s", deviceId, sessionDurationSecs);

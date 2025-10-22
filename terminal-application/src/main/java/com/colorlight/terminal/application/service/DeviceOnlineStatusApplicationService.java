@@ -76,7 +76,7 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
                 // 如果从离线变为在线，发布上线事件（这里应该是短暂的掉线后重连）
                 if (updateStatus.getStatus() == OnlineStatus.RECONNECT) {
                     // 创建“重连”事件
-                    DeviceStatusEvent event = DeviceStatusEvent.createReconnectEvent(deviceId, source, clientIp, currentStatus.getOnlineStartTime(), currentStatus.getLastReportTime());
+                    DeviceStatusEvent event = DeviceStatusEvent.createReconnectEvent(deviceId, source, clientIp, updateStatus.getOnlineStartTime(), updateStatus.getLastReportTime());
                     deviceStatusEventPort.publishStatusEvent(event);
                     log.info("ApplicationService - 设备上线（网络波动、超时重连）: deviceId={}, source={}", deviceId, source);
                 } else {
