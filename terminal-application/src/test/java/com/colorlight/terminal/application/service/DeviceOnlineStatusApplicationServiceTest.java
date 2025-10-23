@@ -829,6 +829,27 @@ class DeviceOnlineStatusApplicationServiceTest {
     }
     
     @Nested
+    @DisplayName("缓冲池状态工具")
+    class BufferPoolStatusTests {
+
+        @Test
+        @DisplayName("BufferPoolStatus 应输出百分比格式")
+        void should_format_buffer_pool_status_text() {
+            AsyncDeviceStatusUpdatePort.BufferPoolStatus status =
+                    new AsyncDeviceStatusUpdatePort.BufferPoolStatus(8, 16, 0.5,
+                            170L, 120L, 100L, 4L);
+
+            assertThat(status.currentSize()).isEqualTo(8);
+            assertThat(status.maxSize()).isEqualTo(16);
+            assertThat(status.utilizationRate()).isEqualTo(0.5);
+            assertThat(status.toString())
+                    .contains("50.00%")
+                    .contains("totalProcessed=120")
+                    .contains("totalDropped=4");
+        }
+    }
+
+    @Nested
     @DisplayName("边界条件和异常场景测试")
     class EdgeCaseAndExceptionTests {
         

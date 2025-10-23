@@ -29,6 +29,8 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
+
 /**
  * WebsocketMessageApplicationService 单元测试
  * 
@@ -792,6 +794,46 @@ class WebsocketMessageApplicationServiceTest extends BaseApplicationServiceTest 
             // Then - 返回空列表并确认调用 sendMessage
             assertThat(result).isEmpty();
             verify(spyService).sendMessage(deviceId, TEST_MESSAGE);
+        }
+    }
+
+    @Nested
+    @DisplayName("协议消息处理工具")
+    class ProtocolUtilitiesTests {
+
+        @Test
+        @DisplayName("TextMessageProcessResult 工厂方法应返回预期标志位")
+        void should_build_text_message_process_results() {
+            ProtocolMessageProcessor.TextMessageProcessResult success =
+                    ProtocolMessageProcessor.TextMessageProcessResult.ofSuccess(true);
+            ProtocolMessageProcessor.TextMessageProcessResult failure =
+                    ProtocolMessageProcessor.TextMessageProcessResult.ofFailure("error");
+
+            assertThat(success.success()).isTrue();
+            assertThat(success.heartbeat()).isTrue();
+            assertThat(success.errorMessage()).isNull();
+            assertThat(failure.success()).isFalse();
+            assertThat(failure.heartbeat()).isFalse();
+            assertThat(failure.errorMessage()).isEqualTo("error");
+        }
+
+        @Test
+        @DisplayName("协议处理器默认回调应为安全空实现")
+        void should_allow_default_on_connection_established() {
+            ProtocolMessageProcessor processor = new ProtocolMessageProcessor() {
+                @Override
+                public ProtocolVersion getSupportedVersion() {
+                    return ProtocolVersion.V1_0;
+                }
+
+                @Override
+                public ProtocolMessageProcessor.TextMessageProcessResult processTextMessage(MessageProcessingContext context) {
+                    return ProtocolMessageProcessor.TextMessageProcessResult.ofSuccess(false);
+                }
+            };
+
+            MessageProcessingContext context = mock(MessageProcessingContext.class);
+            assertThatCode(() -> processor.onConnectionEstablished(context)).doesNotThrowAnyException();
         }
     }
 }

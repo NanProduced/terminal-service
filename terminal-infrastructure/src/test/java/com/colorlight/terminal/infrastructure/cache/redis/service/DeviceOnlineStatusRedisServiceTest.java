@@ -179,6 +179,34 @@ class DeviceOnlineStatusRedisServiceTest {
         }
     }
 
+        @Test
+        @DisplayName("保存状态时 SessionCallback 应执行 Redis 多指令")
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        void should_execute_session_callback_when_saving_status() {
+            DeviceOnlineStatus status = InfrastructureTestDataFactory.createDeviceOnlineStatus(1006L, OnlineStatus.GO_LIVE);
+
+            when(mockRedisTemplate.execute(any(SessionCallback.class))).thenAnswer(invocation -> {
+                SessionCallback callback = invocation.getArgument(0);
+                RedisOperations<String, Object> operations = mock(RedisOperations.class);
+                HashOperations<String, Object, Object> hashOps = mock(HashOperations.class);
+                SetOperations<String, Object> setOps = mock(SetOperations.class);
+                ValueOperations<String, Object> valueOps = mock(ValueOperations.class);
+                when(operations.opsForHash()).thenReturn(hashOps);
+                when(operations.opsForSet()).thenReturn(setOps);
+                when(operations.opsForValue()).thenReturn(valueOps);
+                when(operations.exec()).thenReturn(List.of("OK", true, 1L, 1L));
+                callback.execute(operations);
+                verify(operations).multi();
+                verify(hashOps).putAll(argThat(key -> key.startsWith("device:status:")), anyMap());
+                verify(operations).expire(argThat(key -> key.startsWith("device:status:")), any());
+                verify(setOps).add(eq(RedisKeyConstant.DEVICE_STATUS_INDEX_KEY), eq(status.getDeviceId()));
+                verify(valueOps).increment(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
+                return List.of("OK", true, 1L, 1L);
+            });
+
+            redisService.saveDeviceStatus(status);
+        }
+
     @Nested
     @DisplayName("设备状态更新测试")
     class UpdateDeviceStatusTests {
@@ -211,6 +239,28 @@ class DeviceOnlineStatusRedisServiceTest {
                 .doesNotThrowAnyException();
         }
     }
+
+        @Test
+        @DisplayName("更新状态时 SessionCallback 应刷新 TTL")
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        void should_execute_session_callback_when_updating_status() {
+            DeviceOnlineStatus status = InfrastructureTestDataFactory.createDeviceOnlineStatus(1007L, OnlineStatus.ONLINE);
+
+            when(mockRedisTemplate.execute(any(SessionCallback.class))).thenAnswer(invocation -> {
+                SessionCallback callback = invocation.getArgument(0);
+                RedisOperations<String, Object> operations = mock(RedisOperations.class);
+                HashOperations<String, Object, Object> hashOps = mock(HashOperations.class);
+                when(operations.opsForHash()).thenReturn(hashOps);
+                when(operations.exec()).thenReturn(List.of("OK"));
+                callback.execute(operations);
+                verify(operations).multi();
+                verify(hashOps).putAll(argThat(key -> key.startsWith("device:status:")), anyMap());
+                verify(operations).expire(argThat(key -> key.startsWith("device:status:")), any());
+                return List.of("OK");
+            });
+
+            redisService.updateDeviceStatus(status);
+        }
 
     @Nested
     @DisplayName("设备状态获取测试")
