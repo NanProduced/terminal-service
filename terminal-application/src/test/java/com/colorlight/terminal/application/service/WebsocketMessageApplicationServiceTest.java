@@ -760,5 +760,39 @@ class WebsocketMessageApplicationServiceTest extends BaseApplicationServiceTest 
             verify(connection2).sendMessage(TEST_MESSAGE);
             verify(connection2).incrementSentMessageCount();
         }
+
+        @Test
+        @DisplayName("当消息为 null 时应直接返回空列表")
+        void should_return_empty_list_when_message_is_null() {
+            // Given - 消息为 null，模拟广播入口
+            WebsocketMessageApplicationService spyService = spy(service);
+            List<Long> deviceIds = Collections.singletonList(createTestDeviceId(1));
+
+            // When - 执行广播
+            List<Long> result = spyService.broadcastMessage(deviceIds, null);
+
+            // Then - 返回空列表且未触发下游发送逻辑
+            assertThat(result).isEmpty();
+            verify(spyService, never()).sendMessage(anyLong(), anyString());
+        }
+
+        @Test
+        @DisplayName("当单个设备发送异常时应标记失败并继续流程")
+        void should_mark_failure_when_single_send_throw_exception() {
+            // Given - 模拟 sendMessage 抛出异常
+            WebsocketMessageApplicationService spyService = spy(service);
+            Long deviceId = createTestDeviceId(1);
+            List<Long> deviceIds = Collections.singletonList(deviceId);
+            doThrow(new RuntimeException("发送异常"))
+                    .when(spyService).sendMessage(deviceId, TEST_MESSAGE);
+
+            // When - 执行广播
+            List<Long> result = spyService.broadcastMessage(deviceIds, TEST_MESSAGE);
+
+            // Then - 返回空列表并确认调用 sendMessage
+            assertThat(result).isEmpty();
+            verify(spyService).sendMessage(deviceId, TEST_MESSAGE);
+        }
     }
 }
+
