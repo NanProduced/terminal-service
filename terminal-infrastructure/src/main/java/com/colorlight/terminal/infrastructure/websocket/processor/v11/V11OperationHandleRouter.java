@@ -20,6 +20,7 @@ import com.colorlight.terminal.infrastructure.websocket.processor.v11.dto.Termin
 import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebsocketSession;
 import io.netty.channel.Channel;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -229,11 +230,13 @@ public class V11OperationHandleRouter {
      */
     private void handleGetSchedule(MessageProcessingContext context, Integer messageId) {
         String schedule = terminalProgramUseCase.getSchedule(context.getDeviceId());
+        JsonNode schedulePayload = StringUtils.isBlank(schedule)
+                ? JsonUtils.fromJson(EMPTY_JSON)
+                : JsonUtils.fromJson(schedule);
         // 下发排程
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.SCHEDULE.getId(), messageId, schedule));
+        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.SCHEDULE.getId(), messageId, schedulePayload));
         log.info("V11Router -ws- #GET_SCHEDULE#【获取排程】deviceId:{}", context.getDeviceId());
     }
-
     /**
      * 处理获取节目的命令。
      *
@@ -449,3 +452,7 @@ public class V11OperationHandleRouter {
     }
 
 }
+
+
+
+
