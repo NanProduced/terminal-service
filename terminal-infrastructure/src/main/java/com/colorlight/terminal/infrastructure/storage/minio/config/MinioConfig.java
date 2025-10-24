@@ -42,6 +42,8 @@ public class MinioConfig {
                     .build());
         }
 
+        setBucketPublicReadPolicy(client);
+
         return client;
     }
 
@@ -79,3 +81,4 @@ public class MinioConfig {
     }
 
 }
+
