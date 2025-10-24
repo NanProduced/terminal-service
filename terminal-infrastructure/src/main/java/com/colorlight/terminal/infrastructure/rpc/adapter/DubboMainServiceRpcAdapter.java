@@ -213,15 +213,10 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
     public String getScheduleByDeviceId(Long deviceId) {
         long startTime = System.currentTimeMillis();
         try {
-            final Schedule schedule = terminalScheduleRpcService.getScheduleByLedId(deviceId);
+            final String schedule = terminalScheduleRpcService.getScheduleByLedId(deviceId);
             long duration = System.currentTimeMillis() - startTime;
             log.debug("RpcAdapter - 获取设备排程成功: 耗时={} ms, {}", duration, schedule);
-            if (Objects.isNull(schedule)) {
-                return null;
-            }
-            else {
-                return JsonUtils.toJson(schedule);
-            }
+            return schedule;
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - startTime;
             log.warn("RpcAdapter - 获取设备排程失败，已记录: error={}, duration={}ms",
