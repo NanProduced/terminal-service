@@ -1,0 +1,350 @@
+# Colorlight Terminal K6 性能测试工具
+
+傻瓜式一键性能测试工具，支持本地化结果分析，无需依赖 Prometheus/Grafana。
+
+## 🚀 快速开始
+
+### 前置要求
+
+- **K6**：https://k6.io/docs/get-started/installation/
+- **Node.js**：https://nodejs.org/ (v14 及以上)
+- 网络连接到测试服务器
+
+### 首次使用（必须）
+
+```bash
+# 第一步：创建测试设备账号（一次性，耗时 30-60 分钟）
+双击 CREATE-DEVICES.bat
+
+# 按照提示：
+# 1. 查看创建参数
+# 2. 输入 y 确认开始
+# 3. 等待完成
+```
+
+### 运行测试
+
+```bash
+# 第二步：启动性能测试
+双击 TEST.bat
+
+# 在菜单中选择：
+# [1] HTTP状态上报        (28分钟)
+# [2] WebSocket V10连接   (18分钟)
+# [3] WebSocket V11连接   (20分钟)
+# [4] 混合负载            (20分钟)
+# [5] 完整测试套件        (120分钟+)
+```
+
+### 查看结果
+
+```bash
+# 第三步：分析测试结果
+双击 ANALYZE.bat
+
+# 自动显示：
+# - 性能指标摘要
+# - 性能等级评估 (优秀/良好/一般/差)
+# - 性能改进建议
+```
+
+## ⚙️ 参数调整
+
+所有测试参数都在配置文件中，**不要修改脚本**！
+
+### 配置文件位置
+
+| 配置文件 | 说明 |
+|---------|------|
+| `config/test-params.json` | ⭐ **测试参数**（VU、时长、压力等） |
+| `config/server-config.json` | 服务器地址和API端点 |
+| `config/device-config.json` | 设备创建认证和参数 |
+
+### 修改测试参数
+
+编辑 `config/test-params.json`，修改 VU 和时长：
+
+```json
+{
+  "scenarios": {
+    "status-report": {
+      "basicLoad": {
+        "vus": 167,              // ← 修改虚拟用户数
+        "duration": "15m"        // ← 修改运行时长
+      }
+    }
+  }
+}
+```
+
+### 修改服务器地址
+
+编辑 `config/server-config.json`：
+
+```json
+{
+  "environments": {
+    "test": {
+      "baseUrl": "http://192.168.51.114:8088",
+      "websocketUrl": "ws://192.168.51.114:8443/websocket"
+    }
+  }
+}
+```
+
+### 更新设备创建 Token
+
+编辑 `config/device-config.json`，更新 `token` 字段：
+
+```json
+{
+  "authentication": {
+    "token": "your-new-token-here"
+  }
+}
+```
+
+## 📁 文件说明
+
+### 核心脚本
+
+| 文件 | 说明 |
+|------|------|
+| `CREATE-DEVICES.bat` | 创建测试设备账号（首次必须执行） |
+| `TEST.bat` | 性能测试主脚本，菜单驱动 |
+| `ANALYZE.bat` | 分析测试结果，生成报告 |
+| `README.md` | 此文件，使用说明 |
+
+### 配置目录
+
+| 文件 | 说明 |
+|------|------|
+| `config/test-params.json` | ⭐ 测试参数配置 |
+| `config/server-config.json` | 服务器配置 |
+| `config/device-config.json` | 设备创建配置 |
+
+### 测试脚本
+
+| 文件 | 说明 |
+|------|------|
+| `tests/01-status-report.js` | HTTP状态上报测试 |
+| `tests/02-websocket-v10.js` | WebSocket V10连接测试 |
+| `tests/03-websocket-v11.js` | WebSocket V11协议测试 |
+| `tests/04-mixed-load.js` | 混合负载测试 |
+
+### 工具脚本
+
+| 文件 | 说明 |
+|------|------|
+| `tools/create-devices.js` | 设备创建核心逻辑 |
+| `tools/analyze-results.js` | 结果分析核心逻辑 |
+
+### 结果目录
+
+| 目录 | 说明 |
+|------|------|
+| `results/` | 自动保存的测试结果 JSON 文件 |
+| `reports/` | 自动生成的分析报告 |
+| `logs/` | 执行日志（execution.log） |
+| `devices/` | 创建的设备账号列表 |
+
+## 📊 性能指标说明
+
+| 指标 | 说明 | 参考值 |
+|------|------|--------|
+| **平均响应时间** | HTTP 请求平均耗时 | < 200ms |
+| **P50 响应时间** | 50% 的请求在此时间内完成 | < 100ms |
+| **P95 响应时间** | 95% 的请求在此时间内完成 | < 100-200ms |
+| **P99 响应时间** | 99% 的请求在此时间内完成 | < 500ms |
+| **错误率** | 失败请求占比 | < 1-2% |
+| **成功率** | 成功请求占比 | > 98% |
+| **吞吐量(RPS)** | 每秒请求数 | ≥目标值 |
+
+### 性能等级评定
+
+| 指标 | 优秀 ✅ | 良好 ✓ | 一般 ⚠️ | 差 ❌ |
+|------|---------|---------|---------|-------|
+| **P95响应时间** | < 100ms | < 200ms | < 500ms | > 500ms |
+| **错误率** | < 0.5% | < 1% | < 5% | > 5% |
+| **成功率** | > 99% | > 98% | > 95% | < 95% |
+
+## ❓ 常见问题
+
+### Q: 能修改脚本吗？
+A: **不能！** 所有参数都在 `config/test-params.json` 中，只修改配置文件，不要改脚本。
+
+### Q: 没有 Prometheus 怎么办？
+A: 正常！本工具完全本地化分析，无需 Prometheus。测试结果保存为 JSON，自动分析生成报告。
+
+### Q: 设备账号创建失败怎么办？
+A: 检查以下几点：
+- `config/device-config.json` 中的 Token 是否有效
+- `config/server-config.json` 中的服务器地址是否正确
+- 网络连接是否正常
+- 查看错误信息，根据 API 返回的错误码排查
+
+### Q: 如何中止测试？
+A: 按 `Ctrl+C` 中止，已收集的数据会保存到 JSON 文件。
+
+### Q: 结果文件在哪里？
+A: 在 `results/` 目录，自动以时间戳命名。
+
+### Q: 如何查看执行日志？
+A: 查看 `logs/execution.log` 文件，记录了所有操作的时间和结果。
+
+### Q: 能同时运行多个测试吗？
+A: 可以，每个测试窗口独立运行。但建议在一个窗口中顺序执行，以避免资源竞争。
+
+### Q: 测试参数太复杂？
+A: 关键参数就这几个：
+- `vus`：虚拟用户数
+- `duration`：运行时长
+- `rate`：吞吐量目标
+- 其他参数使用默认值即可
+
+### Q: 如何自定义测试？
+A: 编辑 `config/test-params.json`，调整相应的参数，然后运行 TEST.bat 即可。
+
+## 🔧 配置示例
+
+### 示例 1：增加并发负载
+
+修改 `config/test-params.json`，增加 VU 数量：
+
+```json
+{
+  "status-report": {
+    "basicLoad": {
+      "vus": 333,              // 从 167 增加到 333
+      "duration": "20m"        // 从 15m 增加到 20m
+    }
+  }
+}
+```
+
+### 示例 2：快速压测（5 分钟）
+
+```json
+{
+  "status-report": {
+    "basicLoad": {
+      "vus": 50,
+      "duration": "5m"
+    }
+  }
+}
+```
+
+### 示例 3：极限压力测试
+
+```json
+{
+  "status-report": {
+    "peakLoad": {
+      "peakVUs": 500,          // 峰值 VU 增加到 500
+      "stages": [
+        {"duration": "1m", "target": 500},
+        {"duration": "5m", "target": 500},
+        {"duration": "1m", "target": 0}
+      ]
+    }
+  }
+}
+```
+
+## 📈 工作流程
+
+```
+┌─────────────────────────────────────────────────┐
+│ 第一次使用                                      │
+└─────────────────────────────────────────────────┘
+  1. 创建设备账号
+     └─> 双击 CREATE-DEVICES.bat (30-60分钟)
+     └─> 等待完成，看到 ✅ 设备创建完成
+
+  2. 准备配置
+     └─> 修改 config/server-config.json (如需)
+     └─> 修改 config/device-config.json (如需)
+
+  3. 启动测试
+     └─> 双击 TEST.bat
+     └─> 选择测试场景 [1-5]
+     └─> 等待测试完成
+
+  4. 分析结果
+     └─> 双击 ANALYZE.bat
+     └─> 查看性能报告
+
+┌─────────────────────────────────────────────────┐
+│ 后续使用                                        │
+└─────────────────────────────────────────────────┘
+  1. 修改测试参数 (可选)
+     └─> 编辑 config/test-params.json
+
+  2. 启动测试
+     └─> 双击 TEST.bat
+     └─> 选择测试场景
+
+  3. 分析结果
+     └─> 双击 ANALYZE.bat
+```
+
+## 📞 技术支持
+
+### 排查步骤
+
+1. **检查日志**
+   - 查看 `logs/execution.log` 找出错误
+
+2. **验证环境**
+   ```bash
+   k6 version       # 检查 K6 是否安装
+   node --version   # 检查 Node.js 是否安装
+   ```
+
+3. **测试连接**
+   ```bash
+   curl http://192.168.51.114:8088/actuator/health
+   ```
+
+4. **验证设备**
+   - 检查设备账号是否创建成功
+   - 查看 `devices/device-list.txt`
+
+### 常见错误
+
+| 错误信息 | 原因 | 解决方案 |
+|---------|------|--------|
+| `K6 未安装` | K6 没有安装 | 访问 https://k6.io 安装 |
+| `Node.js 未安装` | Node.js 没有安装 | 访问 https://nodejs.org 安装 |
+| `文件不存在` | 配置文件缺失 | 重新下载完整的工具包 |
+| `Token 无效` | 认证 Token 过期 | 获取新的 Token，更新配置文件 |
+| `无法连接服务器` | 网络问题或地址错误 | 检查网络和服务器地址配置 |
+| `设备创建失败` | API 错误 | 检查 Token 和服务器地址 |
+
+## 🎓 学习资源
+
+- **K6 官方文档**：https://k6.io/docs/
+- **K6 脚本示例**：https://k6.io/docs/examples/
+- **性能测试基础**：https://en.wikipedia.org/wiki/Software_performance_testing
+
+## 📝 版本历史
+
+### v1.0 (2024-01-15)
+- ✅ 支持 HTTP 状态上报测试
+- ✅ 支持 WebSocket V10 频繁连接测试
+- ✅ 支持 WebSocket V11 协议测试
+- ✅ 支持混合负载测试
+- ✅ 本地化结果分析
+- ✅ 参数配置集中管理
+- ✅ 一键启动和菜单驱动
+
+## 📄 许可证
+
+仅供内部使用。
+
+---
+
+**最后更新**：2024-01-15
+**维护者**：Colorlight Terminal 团队
+**技术支持**：请查看此文档或联系技术团队

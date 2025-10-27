@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "description": "服务器地址和API端点配置 - 控制连接到哪个服务器及其基本参数",
+
+  "_instructions": "修改此文件会影响K6脚本连接到的服务器和所有API调用。确保IP地址和端口正确，否则所有测试都会失败。",
+
+  "environments": {
+    "_comment": "环境配置 - 定义要连接的目标服务器",
+    "test": {
+      "name": "测试环境",
+      "baseUrl": "http://3.101.190.151",
+      "baseUrl_description": "HTTP基础地址 - 所有HTTP请求都会使用此地址 (示例：GET /wp-json/screen/v1/status)",
+
+      "websocketUrl": "ws://3.101.190.151:8443/websocket",
+      "websocketUrl_description": "WebSocket基础地址 - 所有WS连接都会使用此地址 ",
+
+      "createDeviceApiPath": "/api-ccloud/terminal-service/v1/create",
+      "createDeviceApiPath_description": "设备创建API路径 - CREATE-DEVICES.bat会调用: baseUrl + createDeviceApiPath",
+
+      "healthCheckPath": "/actuator/health",
+      "healthCheckPath_description": "健康检查路径 - 测试开始前会检查此路径验证服务器是否在线"
+    }
+  },
+
+  "timeouts": {
+    "_comment": "超时配置 - K6脚本等待响应的最长时间，超时会导致请求失败",
+
+    "httpRequest": "15s",
+    "httpRequest_description": "HTTP请求超时 - 单个HTTP请求的最长等待时间（影响：状态上报测试等HTTP操作）",
+
+    "websocketConnect": "30s",
+    "websocketConnect_description": "WebSocket连接超时 - WebSocket握手和连接建立的最长等待时间（影响：WS测试连接成功率）",
+
+    "readOperation": "10s",
+    "readOperation_description": "读操作超时 - 等待数据读取的最长时间（影响：WS消息接收）",
+
+    "deviceCreation": "30s",
+    "deviceCreation_description": "设备创建超时 - 单个设备创建API调用的最长等待时间（影响：CREATE-DEVICES.bat创建速度）"
+  },
+
+  "retryPolicy": {
+    "_comment": "重试策略 - 网络请求失败时的重试机制",
+
+    "maxRetries": 3,
+    "maxRetries_description": "最大重试次数 - 失败后最多重试多少次（设备创建时会用到，增加此值会提高成功率但耗时更长）",
+
+    "initialDelayMs": 100,
+    "initialDelayMs_description": "初始延迟（毫秒） - 第一次重试前等待的时间",
+
+    "maxDelayMs": 5000,
+    "maxDelayMs_description": "最大延迟（毫秒） - 重试间隔的上限（即使指数退避算出更大值也不会超过此值）",
+
+    "backoffMultiplier": 2.0,
+    "backoffMultiplier_description": "退避倍数 - 每次重试间隔会乘以此值（例如：100ms → 200ms → 400ms → 800ms...）"
+  }
+}

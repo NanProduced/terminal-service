@@ -1,0 +1,49 @@
+{
+  "version": "1.0",
+  "description": "设备创建配置 - 包含认证Token和批量创建参数",
+
+  "_instructions": "此文件配置设备账号创建的所有参数。修改此文件会直接影响CREATE-DEVICES.bat的执行行为。",
+
+  "authentication": {
+    "_comment": "API认证信息 - 用于与Colorlight Terminal服务器通信",
+    "token": "eyJhbGciOiJSUzI1NiJ9.eyJqdGkiOiIxIiwic3ViIjoic3Jvb3QiLCJpYXQiOjE3NjE1NDQ3NDgsImlzcyI6ImNvbG9ybGlnaHQiLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJleHAiOjE3NjE2MzExNDh9.EA_8rjWffCJoHyBUSYAKEsBfm7f_aKBZTHmjCEqPNBqh3luKD-YSeZlEkt71X1At56ieKxxsQjo5GozE9WpXtCnMo64wH-ajvLkqdOEANpUsPtpHmJ8nwjUgHObCNMeYY3alfib6MzJqkbwXLEg_mRd89zZCYnk8SP7t4JpsUZ8FwNw6nTELJkiZ2TwXyuts_AnlvJvnt2f_M7Rx2V4iBBBpBgtdyP2nKCiyk9rbWoEnrrSVDIrqAxP55Mfi-fbvkn6rQR0jYGcFdFJHXDsoWV1PtKxad-fXMLdyl9K16OLlVzOAvpwwc6GvBzOrvfZuBRPLIgmFCTQ0zLdtfkxd6A",
+    "token_description": "从Colorlight管理平台获取的JWT Token - 过期后需要更新此值，否则设备创建会失败"
+  },
+
+  "deviceCreation": {
+    "_comment": "设备账号创建参数 - 决定创建哪些设备账号及其属性",
+    "accountPrefix": "test",
+    "accountPrefix_description": "设备账号前缀 - 最终账号格式为: test3000, test3001, ..., test13000",
+
+    "startNumber": 1,
+    "startNumber_description": "账号起始号码 - 设备创建从此号码开始",
+
+    "endNumber": 10,
+    "endNumber_description": "账号结束号码 - 设备创建到此号码（包括此号码）",
+
+    "totalDevices": 10,
+    "totalDevices_description": "总设备数 - 应等于 endNumber - startNumber + 1，影响预计耗时",
+
+    "password": "colorlightcloud",
+    "password_description": "所有设备的统一密码 - 设备登录和API认证会使用此密码",
+
+    "terminalGroup": 27,
+    "terminalGroup_description": "终端分组ID - 创建的设备会归属到此分组，用于后续管理"
+  },
+
+  "batchSettings": {
+    "_comment": "批量创建优化参数 - 控制创建速度、并发度和系统负载",
+
+    "concurrencyLimit": 10,
+    "concurrencyLimit_description": "并发请求数 - 同时发送多少个API请求，增加此值会加快创建速度但增加服务器负载",
+
+    "batchSize": 100,
+    "batchSize_description": "单批设备数 - 每批创建多少个设备后，需要等待delayBetweenBatchMs毫秒再创建下一批（防止服务器过载）",
+
+    "delayBetweenBatchMs": 500,
+    "delayBetweenBatchMs_description": "批次间隔（毫秒） - 每批创建完成后，等待多长时间才创建下一批（增加此值会减慢速度但降低服务器压力）",
+
+    "logProgress": true,
+    "logProgress_description": "是否显示进度 - true显示实时进度百分比和计数，false则静默执行"
+  }
+}
