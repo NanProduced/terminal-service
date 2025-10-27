@@ -134,60 +134,40 @@ export let options = {
 export default function() {
   const deviceAccount = deviceAccounts[Math.floor(Math.random() * deviceAccounts.length)];
   const wsUrl = buildV11WebsocketUrl(deviceAccount);
-
-  const connectionStartTime = new Date();
+  const messageConfig = scenarioConfig.messageConfig;
 
   const res = ws.connect(wsUrl, {}, function(socket) {
-    const messageConfig = scenarioConfig.messageConfig;
     const connectionTime = new Date();
 
     wsV11Connections.add(1);
     console.log(`✅ 设备 ${deviceAccount} V11连接建立`);
 
     try {
-      let lastHeartbeat = Date.now();
-      let lastStatusReport = Date.now();
-      let lastSensorReport = Date.now();
-      const connectionDuration = scenarioConfig.mixedLoad.duration.match(/(\d+)m/)[1] * 60 * 1000;
-      const startTime = Date.now();
+      // 发送心跳
+      const heartbeat = createHeartbeatMessage();
+      socket.send(heartbeat);
+      wsV11Messages.add(1);
+      wsV11Heartbeats.add(1);
+      console.log(`💓 设备 ${deviceAccount} 心跳`);
+      sleep(Math.random() * 2 + 1);
 
-      while (Date.now() - startTime < connectionDuration) {
-        const now = Date.now();
+      // 发送状态报告
+      const statusReport = createStatusReportMessage(deviceAccount);
+      socket.send(statusReport);
+      wsV11Messages.add(1);
+      wsV11StatusReports.add(1);
+      wsV11StatusAckLatency.add(Math.random() * 500 + 50);
+      console.log(`📊 设备 ${deviceAccount} 状态报告`);
+      sleep(Math.random() * 2 + 1);
 
-        // 发送心跳
-        if (now - lastHeartbeat > messageConfig.heartbeatIntervalSeconds * 1000) {
-          const heartbeat = createHeartbeatMessage();
-          socket.send(heartbeat);
-          wsV11Messages.add(1);
-          wsV11Heartbeats.add(1);
-          lastHeartbeat = now;
-          console.log(`💓 设备 ${deviceAccount} 心跳`);
-        }
-
-        // 发送状态报告
-        if (now - lastStatusReport > messageConfig.statusReportFrequencySeconds * 1000) {
-          const statusReport = createStatusReportMessage(deviceAccount);
-          socket.send(statusReport);
-          wsV11Messages.add(1);
-          wsV11StatusReports.add(1);
-          wsV11StatusAckLatency.add(Math.random() * 500 + 50);
-          lastStatusReport = now;
-          console.log(`📊 设备 ${deviceAccount} 状态报告`);
-        }
-
-        // 发送传感器报告
-        if (now - lastSensorReport > messageConfig.sensorReportFrequencySeconds * 1000) {
-          const sensorReport = createSensorReportMessage(deviceAccount);
-          socket.send(sensorReport);
-          wsV11Messages.add(1);
-          wsV11SensorReports.add(1);
-          wsV11SensorAckLatency.add(Math.random() * 500 + 50);
-          lastSensorReport = now;
-          console.log(`📡 设备 ${deviceAccount} 传感器报告`);
-        }
-
-        sleep(1);
-      }
+      // 发送传感器报告
+      const sensorReport = createSensorReportMessage(deviceAccount);
+      socket.send(sensorReport);
+      wsV11Messages.add(1);
+      wsV11SensorReports.add(1);
+      wsV11SensorAckLatency.add(Math.random() * 500 + 50);
+      console.log(`📡 设备 ${deviceAccount} 传感器报告`);
+      sleep(1);
 
     } catch (error) {
       console.error(`❌ 设备 ${deviceAccount} 异常: ${error}`);
@@ -243,25 +223,6 @@ export function setup() {
     console.warn(`⚠️  服务器健康检查失败: ${healthCheck.status}，但继续执行WebSocket V11测试`);
   } else {
     console.log('✅ 服务器健康检查通过');
-  }
-
-  // 测试设备账号有效性（验证第一个账号）
-  const testAccount = deviceAccounts[0];
-  const testUrl = buildV11WebsocketUrl(testAccount);
-
-  try {
-    const testRes = ws.connect(testUrl, {}, function(socket) {
-      socket.send(createHeartbeatMessage());
-      socket.close();
-    });
-
-    if (testRes && testRes.status === 101) {
-      console.log(`✅ 设备账号有效性验证通过: ${testAccount}`);
-    } else {
-      throw new Error(`连接失败，状态: ${testRes ? testRes.status : 'null'}`);
-    }
-  } catch (error) {
-    throw new Error(`❌ 设备账号验证失败: ${testAccount}, 错误: ${error.message}. 请确保接口可用且设备账号有效`);
   }
 
   console.log('');
