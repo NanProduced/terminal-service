@@ -12,29 +12,29 @@
 
   "deviceCreation": {
     "_comment": "设备账号创建参数 - 决定创建哪些设备账号及其属性",
-    "accountPrefix": "test",
-    "accountPrefix_description": "设备账号前缀 - 最终账号格式为: test3000, test3001, ..., test13000",
+    "accountPrefix": "k6test",
+    "accountPrefix_description": "设备账号前缀 - 最终账号格式为: 前缀+号码",
 
     "startNumber": 1,
     "startNumber_description": "账号起始号码 - 设备创建从此号码开始",
 
-    "endNumber": 10,
+    "endNumber": 1000,
     "endNumber_description": "账号结束号码 - 设备创建到此号码（包括此号码）",
 
-    "totalDevices": 10,
+    "totalDevices": 1000,
     "totalDevices_description": "总设备数 - 应等于 endNumber - startNumber + 1，影响预计耗时",
 
     "password": "colorlightcloud",
     "password_description": "所有设备的统一密码 - 设备登录和API认证会使用此密码",
 
-    "terminalGroup": 27,
+    "terminalGroup": 29,
     "terminalGroup_description": "终端分组ID - 创建的设备会归属到此分组，用于后续管理"
   },
 
   "batchSettings": {
     "_comment": "批量创建优化参数 - 控制创建速度、并发度和系统负载",
 
-    "concurrencyLimit": 10,
+    "concurrencyLimit": 100,
     "concurrencyLimit_description": "并发请求数 - 同时发送多少个API请求，增加此值会加快创建速度但增加服务器负载",
 
     "batchSize": 100,

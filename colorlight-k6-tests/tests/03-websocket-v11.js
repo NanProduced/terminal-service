@@ -214,23 +214,80 @@ export default function() {
 // ==================== 测试生命周期 ====================
 
 export function setup() {
+  const setupStartTime = new Date().toISOString();
+  console.log('');
   console.log('🚀 开始 WebSocket V11 协议测试');
-  console.log(`   WebSocket地址: ${serverEnv.websocketUrl.replace('/websocket', '/ColorWebSocket/terminal')}`);
-  console.log(`   混合负载: ${scenarioConfig.mixedLoad.vus} VU，${scenarioConfig.mixedLoad.duration}`);
-  console.log(`   峰值负载: ${scenarioConfig.peakBurst.stages[2].target} VU`);
+  console.log(`WebSocket地址: ${serverEnv.websocketUrl.replace('/websocket', '/ColorWebSocket/terminal')}`);
+  console.log(`设备账号范围: ${devices.accountPrefix}${devices.startNumber} - ${devices.accountPrefix}${devices.endNumber}`);
+  console.log(`测试设备数量: ${deviceAccounts.length}`);
+  console.log('');
+  console.log('场景配置:');
+  console.log(`  混合负载: ${scenarioConfig.mixedLoad.vus} VU，${scenarioConfig.mixedLoad.duration}`);
+  console.log(`  峰值负载: 初始 ${scenarioConfig.peakBurst.stages[0].target} VU → 目标 ${scenarioConfig.peakBurst.stages[scenarioConfig.peakBurst.stages.length - 1].target} VU`);
+  console.log('');
+  console.log('消息配置:');
+  const messageConfig = scenarioConfig.messageConfig;
+  console.log(`  心跳间隔: ${messageConfig.heartbeatIntervalSeconds} 秒`);
+  console.log(`  状态报告频率: ${messageConfig.statusReportFrequencySeconds} 秒`);
+  console.log(`  传感器报告频率: ${messageConfig.sensorReportFrequencySeconds} 秒`);
+  console.log('');
+  console.log('性能阈值:');
+  console.log(`  命令ACK延迟 P95: ${scenarioConfig.thresholds.command_ack_latency_p95}ms`);
+  console.log(`  状态ACK延迟 P95: ${scenarioConfig.thresholds.status_ack_latency_p95}ms`);
+  console.log(`  传感器ACK延迟 P95: ${scenarioConfig.thresholds.sensor_ack_latency_p95}ms`);
+  console.log('');
 
+  // 健康检查
   const healthCheck = http.get(`${serverEnv.baseUrl}${serverConfig.environments.test.healthCheckPath}`);
   if (healthCheck.status !== 200) {
-    console.warn(`⚠️  健康检查失败: ${healthCheck.status}`);
+    console.warn(`⚠️  服务器健康检查失败: ${healthCheck.status}，但继续执行WebSocket V11测试`);
   } else {
     console.log('✅ 服务器健康检查通过');
   }
 
-  return { startTime: new Date().toISOString() };
+  // 测试设备账号有效性（验证第一个账号）
+  const testAccount = deviceAccounts[0];
+  const testUrl = buildV11WebsocketUrl(testAccount);
+
+  try {
+    const testRes = ws.connect(testUrl, {}, function(socket) {
+      socket.send(createHeartbeatMessage());
+      socket.close();
+    });
+
+    if (testRes && testRes.status === 101) {
+      console.log(`✅ 设备账号有效性验证通过: ${testAccount}`);
+    } else {
+      throw new Error(`连接失败，状态: ${testRes ? testRes.status : 'null'}`);
+    }
+  } catch (error) {
+    throw new Error(`❌ 设备账号验证失败: ${testAccount}, 错误: ${error.message}. 请确保接口可用且设备账号有效`);
+  }
+
+  console.log('');
+  console.log('开始执行测试脚本，每个连接和消息都会输出日志信息');
+  console.log('');
+
+  return {
+    startTime: setupStartTime,
+    connectionCount: 0,
+    messageCount: 0,
+    errorCount: 0
+  };
 }
 
 export function teardown(data) {
+  console.log('');
   console.log('📊 WebSocket V11 协议测试完成');
-  console.log(`   开始时间: ${data.startTime}`);
-  console.log(`   结束时间: ${new Date().toISOString()}`);
+  console.log(`开始时间: ${data.startTime}`);
+  console.log(`结束时间: ${new Date().toISOString()}`);
+  console.log('');
+  console.log('建议检查的指标：');
+  console.log('- WebSocket V11连接建立时间和成功率');
+  console.log('- 心跳包、状态报告、传感器报告的发送情况');
+  console.log('- 消息确认(ACK)延迟分布（P50、P95、P99）');
+  console.log('- 连接保持时间分布和断线情况');
+  console.log('- 不同消息类型的处理能力');
+  console.log('- 服务器处理V11协议的并发能力');
+  console.log('');
 }

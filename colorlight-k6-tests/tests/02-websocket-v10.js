@@ -180,24 +180,53 @@ export default function() {
 // ==================== 测试生命周期 ====================
 
 export function setup() {
+  const setupStartTime = new Date().toISOString();
+  console.log('');
   console.log('🚀 开始 WebSocket V10 频繁连接测试');
-  console.log(`   WebSocket地址: ${serverEnv.websocketUrl.replace('/websocket', '/ColorWebSocket/websocket/chat')}`);
-  console.log(`   VU数量: ${scenarioConfig.basicLoad.vus}`);
-  console.log(`   GPS数据: 每个连接 ${scenarioConfig.connectionConfig.gpsPerConnectionMin}-${scenarioConfig.connectionConfig.gpsPerConnectionMax} 条`);
-  console.log(`   连接频率: 每 ${scenarioConfig.connectionConfig.connectionDelayMin}-${scenarioConfig.connectionConfig.connectionDelayMax} 秒建立新连接`);
+  console.log(`WebSocket地址: ${serverEnv.websocketUrl.replace('/websocket', '/ColorWebSocket/websocket/chat')}`);
+  console.log(`设备账号范围: ${devices.accountPrefix}${devices.startNumber} - ${devices.accountPrefix}${devices.endNumber}`);
+  console.log(`测试设备数量: ${deviceAccounts.length}`);
+  console.log(`VU数量: ${scenarioConfig.basicLoad.vus}`);
+  console.log(`基础负载运行时长: ${scenarioConfig.basicLoad.duration}`);
+  console.log(`峰值负载运行时长: ${scenarioConfig.peakLoad.stages[1].duration}`);
+  console.log(`GPS数据范围: 每个连接 ${scenarioConfig.connectionConfig.gpsPerConnectionMin}-${scenarioConfig.connectionConfig.gpsPerConnectionMax} 条`);
+  console.log(`连接间隔: ${scenarioConfig.connectionConfig.connectionDelayMin}-${scenarioConfig.connectionConfig.connectionDelayMax} 秒`);
+  console.log(`GPS发送间隔: ${scenarioConfig.connectionConfig.gpsIntervalMin}-${scenarioConfig.connectionConfig.gpsIntervalMax} 秒`);
+  console.log(`设备密码: ${devices.password}`);
+  console.log('');
 
+  // 健康检查
   const healthCheck = http.get(`${serverEnv.baseUrl}${serverConfig.environments.test.healthCheckPath}`);
   if (healthCheck.status !== 200) {
-    console.warn(`⚠️  健康检查失败: ${healthCheck.status}`);
+    console.warn(`⚠️  服务器健康检查失败: ${healthCheck.status}，但继续执行WebSocket连接测试`);
   } else {
     console.log('✅ 服务器健康检查通过');
   }
 
-  return { startTime: new Date().toISOString() };
+  console.log('');
+  console.log('开始执行测试脚本，每个连接和GPS发送都会输出日志信息');
+  console.log('');
+
+  return {
+    startTime: setupStartTime,
+    connectionCount: 0,
+    gpsCount: 0,
+    errorCount: 0
+  };
 }
 
 export function teardown(data) {
+  console.log('');
   console.log('📊 WebSocket V10 频繁连接测试完成');
-  console.log(`   开始时间: ${data.startTime}`);
-  console.log(`   结束时间: ${new Date().toISOString()}`);
+  console.log(`开始时间: ${data.startTime}`);
+  console.log(`结束时间: ${new Date().toISOString()}`);
+  console.log('');
+  console.log('建议检查的指标：');
+  console.log('- WebSocket连接建立时间和成功率');
+  console.log('- GPS数据发送频率和成功率');
+  console.log('- 设备连接保持时间分布');
+  console.log('- 心跳包发送情况');
+  console.log('- 连接失败和错误情况');
+  console.log('- 服务器处理WebSocket连接的能力');
+  console.log('');
 }

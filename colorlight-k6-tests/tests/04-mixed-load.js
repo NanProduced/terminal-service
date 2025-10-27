@@ -354,15 +354,156 @@ export function mixedPeakLoad() {
 // ==================== 测试生命周期 ====================
 
 export function setup() {
+  const setupStartTime = new Date().toISOString();
+  console.log('');
   console.log('🚀 开始混合负载测试');
-  console.log(`   HTTP RPS: ${scenarioConfig.httpScenario.rate}`);
-  console.log(`   WebSocket V10: ${scenarioConfig.websocketScenarios.v10.startVUs} VU`);
-  console.log(`   WebSocket V11: ${scenarioConfig.websocketScenarios.v11.startVUs} VU`);
-  console.log(`   总运行时长: ${scenarioConfig.httpScenario.duration}`);
+  console.log(`服务器地址: ${serverEnv.baseUrl}`);
+  console.log(`WebSocket地址: ${serverEnv.websocketUrl.replace('/websocket', '/ColorWebSocket')}`);
+  console.log('');
 
-  return { startTime: new Date().toISOString() };
+  console.log('设备分配方案:');
+  console.log(`  总设备数: ${totalDevices}`);
+  console.log(`  HTTP设备范围: ${accountPrefix}${httpStart} - ${accountPrefix}${httpEnd} (${httpDeviceAccounts.length}个)`);
+  console.log(`  WebSocket V10范围: ${accountPrefix}${wsV10Start} - ${accountPrefix}${wsV10End} (${wsV10DeviceAccounts.length}个)`);
+  console.log(`  WebSocket V11范围: ${accountPrefix}${wsV11Start} - ${accountPrefix}${wsV11End} (${wsV11DeviceAccounts.length}个)`);
+  console.log('');
+
+  console.log('HTTP状态上报场景:');
+  console.log(`  请求速率: ${scenarioConfig.httpScenario.rate} 请求/${scenarioConfig.httpScenario.timeUnit}`);
+  console.log(`  预分配VU: ${scenarioConfig.httpScenario.preAllocatedVUs}`);
+  console.log(`  最大VU: ${scenarioConfig.httpScenario.maxVUs}`);
+  console.log(`  运行时长: ${scenarioConfig.httpScenario.duration}`);
+  console.log('');
+
+  console.log('WebSocket V10场景:');
+  console.log(`  初始VU: ${scenarioConfig.websocketScenarios.v10.startVUs}`);
+  console.log(`  阶段数: ${scenarioConfig.websocketScenarios.v10.stages.length}`);
+  scenarioConfig.websocketScenarios.v10.stages.forEach((stage, i) => {
+    console.log(`    阶段${i + 1}: ${stage.duration} → ${stage.target} VU`);
+  });
+  console.log('');
+
+  console.log('WebSocket V11场景:');
+  console.log(`  初始VU: ${scenarioConfig.websocketScenarios.v11.startVUs}`);
+  console.log(`  阶段数: ${scenarioConfig.websocketScenarios.v11.stages.length}`);
+  scenarioConfig.websocketScenarios.v11.stages.forEach((stage, i) => {
+    console.log(`    阶段${i + 1}: ${stage.duration} → ${stage.target} VU`);
+  });
+  console.log('');
+
+  console.log('峰值负载场景:');
+  console.log(`  初始速率: ${scenarioConfig.peakScenario.startRate} 请求/秒`);
+  console.log(`  峰值速率: ${scenarioConfig.peakScenario.peakRate} 请求/秒`);
+  console.log(`  预分配VU: ${scenarioConfig.peakScenario.preAllocatedVUs}`);
+  console.log(`  最大VU: ${scenarioConfig.peakScenario.maxVUs}`);
+  console.log(`  启动时间: ${scenarioConfig.peakScenario.startTime}`);
+  console.log('');
+
+  console.log('性能阈值:');
+  console.log(`  HTTP请求失败率: < ${scenarioConfig.thresholds.http_failed_rate}`);
+  console.log(`  V10连接失败率: < ${scenarioConfig.thresholds.v10_failed_rate}`);
+  console.log(`  V11连接失败率: < ${scenarioConfig.thresholds.v11_failed_rate}`);
+  console.log('');
+
+  // 健康检查
+  const healthCheck = http.get(`${serverEnv.baseUrl}${serverConfig.environments.test.healthCheckPath}`);
+  if (healthCheck.status !== 200) {
+    console.warn(`⚠️  服务器健康检查失败: ${healthCheck.status}，但继续执行混合负载测试`);
+  } else {
+    console.log('✅ 服务器健康检查通过');
+  }
+
+  // 验证各协议的设备账号有效性
+  let validationFailed = false;
+
+  // 验证HTTP设备
+  const httpTestAccount = httpDeviceAccounts[0];
+  const httpAuth = 'Basic ' + encoding.b64encode(`${httpTestAccount}:${devices.password}`);
+  const httpTestData = generateTerminalStatusReport(httpTestAccount);
+  const httpTest = http.put(
+    `${serverEnv.baseUrl}/wp-json/screen/v1/status`,
+    JSON.stringify(httpTestData),
+    { headers: { 'Authorization': httpAuth, 'Content-Type': 'application/json' }, timeout: '10s' }
+  );
+
+  if (httpTest.status !== 200) {
+    console.error(`❌ HTTP设备账号验证失败: ${httpTestAccount}, 状态: ${httpTest.status}`);
+    validationFailed = true;
+  } else {
+    console.log(`✅ HTTP设备账号有效性验证通过: ${httpTestAccount}`);
+  }
+
+  // 验证V10设备
+  const v10TestAccount = wsV10DeviceAccounts[0];
+  const v10Url = `${serverEnv.websocketUrl.replace('/websocket', '/ColorWebSocket/websocket/chat')}?username=${v10TestAccount}&password=${devices.password}`;
+
+  try {
+    const v10TestRes = ws.connect(v10Url, {}, function(socket) {
+      socket.send(createV10GpsMessage(v10TestAccount));
+      socket.close();
+    });
+
+    if (v10TestRes && v10TestRes.status === 101) {
+      console.log(`✅ WebSocket V10设备账号有效性验证通过: ${v10TestAccount}`);
+    } else {
+      throw new Error(`连接失败，状态: ${v10TestRes ? v10TestRes.status : 'null'}`);
+    }
+  } catch (error) {
+    console.error(`❌ WebSocket V10设备账号验证失败: ${v10TestAccount}, 错误: ${error.message}`);
+    validationFailed = true;
+  }
+
+  // 验证V11设备
+  const v11TestAccount = wsV11DeviceAccounts[0];
+  const v11Url = `${serverEnv.websocketUrl.replace('/websocket', '/ColorWebSocket/terminal')}?username=${v11TestAccount}&password=${devices.password}&protocol_version=1.1`;
+
+  try {
+    const v11TestRes = ws.connect(v11Url, {}, function(socket) {
+      socket.send(JSON.stringify({ type: 'ping' }));
+      socket.close();
+    });
+
+    if (v11TestRes && v11TestRes.status === 101) {
+      console.log(`✅ WebSocket V11设备账号有效性验证通过: ${v11TestAccount}`);
+    } else {
+      throw new Error(`连接失败，状态: ${v11TestRes ? v11TestRes.status : 'null'}`);
+    }
+  } catch (error) {
+    console.error(`❌ WebSocket V11设备账号验证失败: ${v11TestAccount}, 错误: ${error.message}`);
+    validationFailed = true;
+  }
+
+  if (validationFailed) {
+    throw new Error('❌ 设备账号验证失败。请确保接口可用且所有设备账号有效');
+  }
+
+  console.log('');
+  console.log('开始执行测试脚本，各场景并发执行');
+  console.log('');
+
+  return {
+    startTime: setupStartTime,
+    httpRequestCount: 0,
+    v10ConnectionCount: 0,
+    v11ConnectionCount: 0,
+    errorCount: 0
+  };
 }
 
 export function teardown(data) {
+  console.log('');
   console.log('📊 混合负载测试完成');
+  console.log(`开始时间: ${data.startTime}`);
+  console.log(`结束时间: ${new Date().toISOString()}`);
+  console.log('');
+  console.log('建议检查的指标：');
+  console.log('- HTTP状态上报的请求成功率和响应时间分布（P50、P95、P99）');
+  console.log('- WebSocket V10连接建立成功率和GPS数据发送情况');
+  console.log('- WebSocket V11连接建立成功率和心跳/状态报告发送情况');
+  console.log('- 三种协议在并发情况下的相互影响');
+  console.log('- 服务器在混合负载下的资源利用率');
+  console.log('- 峰值负载阶段各协议的降级情况');
+  console.log('- 不同设备群组间的负载均衡');
+  console.log('- 长连接保持和断线重连能力');
+  console.log('');
 }

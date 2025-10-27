@@ -195,8 +195,18 @@ export default function() {
   statusReportFailed.add(response.status !== 200);
   statusReportDuration.add(response.timings.duration);
 
-  if (response.status !== 200) {
-    console.error(`❌ 设备状态上报失败: ${deviceAccount}, 状态: ${response.status}`);
+  // 详细的日志输出
+  const duration = Math.round(response.timings.duration);
+  const model = statusReportData.info.info.model;
+  const version = statusReportData.info.info.vername;
+
+  if (response.status === 200) {
+    // 成功的请求输出成功日志（参考 .k6 脚本方式）
+    console.log(`✅ 设备状态上报成功: ${deviceAccount}, 型号: ${model} v${version}, 响应时间: ${duration}ms`);
+  } else {
+    // 失败的请求输出失败日志
+    const errorDetail = response.body ? response.body.substring(0, 100) : '无响应内容';
+    console.error(`❌ 设备状态上报失败: ${deviceAccount}, 状态: ${response.status}, 型号: ${model}, 响应: ${errorDetail}`);
   }
 
   sleep(1);
@@ -205,25 +215,72 @@ export default function() {
 // ==================== 测试生命周期 ====================
 
 export function setup() {
+  const setupStartTime = new Date().toISOString();
+  console.log('');
   console.log('🚀 开始 HTTP 状态上报测试');
-  console.log(`   目标接口: ${serverEnv.baseUrl}/wp-json/screen/v1/status`);
-  console.log(`   设备账号范围: ${devices.accountPrefix}${devices.startNumber} - ${devices.accountPrefix}${devices.endNumber}`);
-  console.log(`   测试设备数量: ${deviceAccounts.length}`);
-  console.log(`   VU数量: ${scenarioConfig.basicLoad.vus}`);
-  console.log(`   运行时长: 基础${scenarioConfig.basicLoad.duration} + 峰值${scenarioConfig.peakLoad.stages[1].duration}`);
+  console.log(`目标接口: ${serverEnv.baseUrl}/wp-json/screen/v1/status`);
+  console.log(`设备账号范围: ${devices.accountPrefix}${devices.startNumber} - ${devices.accountPrefix}${devices.endNumber}`);
+  console.log(`测试设备数量: ${deviceAccounts.length}`);
+  console.log(`支持的终端型号: ${modelList.join(', ')}`);
+  console.log(`VU数量: ${scenarioConfig.basicLoad.vus}`);
+  console.log(`基础负载运行时长: ${scenarioConfig.basicLoad.duration}`);
+  console.log(`峰值负载运行时长: ${scenarioConfig.peakLoad.stages[1].duration}`);
+  console.log(`设备密码: ${devices.password}`);
+  console.log('');
 
+  // 健康检查
   const healthCheck = http.get(`${serverEnv.baseUrl}${serverConfig.environments.test.healthCheckPath}`);
   if (healthCheck.status !== 200) {
-    console.warn(`⚠️  健康检查失败: ${healthCheck.status}`);
+    console.warn(`⚠️  服务器健康检查失败: ${healthCheck.status}，但继续执行状态上报测试`);
   } else {
     console.log('✅ 服务器健康检查通过');
   }
 
-  return { startTime: new Date().toISOString() };
+  // 测试设备账号有效性（验证第一个账号）
+  const testAccount = deviceAccounts[0];
+  const testAuth = 'Basic ' + encoding.b64encode(`${testAccount}:${devices.password}`);
+  const testStatusData = generateTerminalStatusReport(testAccount);
+
+  const deviceTest = http.put(
+    `${serverEnv.baseUrl}/wp-json/screen/v1/status`,
+    JSON.stringify(testStatusData),
+    {
+      headers: {
+        'Authorization': testAuth,
+        'Content-Type': 'application/json',
+        'User-Agent': `ColorlightTerminal/${testStatusData.info.info.vername} (${testStatusData.info.info.model})`,
+      },
+      timeout: '10s',
+    }
+  );
+
+  if (deviceTest.status !== 200) {
+    throw new Error(`❌ 设备账号验证失败: ${testAccount}, 状态: ${deviceTest.status}, 响应: ${deviceTest.body}. 请确保接口可用且设备账号有效`);
+  }
+  console.log(`✅ 设备账号有效性验证通过: ${testAccount}`);
+  console.log('');
+  console.log('开始执行测试脚本，每个请求都会输出日志信息');
+  console.log('');
+
+  return {
+    startTime: setupStartTime,
+    testCount: 0,
+    successCount: 0,
+    failureCount: 0
+  };
 }
 
 export function teardown(data) {
+  console.log('');
   console.log('📊 HTTP 状态上报测试完成');
-  console.log(`   开始时间: ${data.startTime}`);
-  console.log(`   结束时间: ${new Date().toISOString()}`);
+  console.log(`开始时间: ${data.startTime}`);
+  console.log(`结束时间: ${new Date().toISOString()}`);
+  console.log('');
+  console.log('建议检查的指标：');
+  console.log('- 状态上报响应时间分布（P50、P95、P99）');
+  console.log('- 设备状态上报成功率');
+  console.log('- 不同终端型号的上报情况');
+  console.log('- 服务器处理能力和资源使用情况');
+  console.log('- 数据库写入性能');
+  console.log('');
 }

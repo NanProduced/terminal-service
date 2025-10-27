@@ -240,7 +240,7 @@ async function createDevice(username, counter, onResult) {
 
   // 构造新的扁平格式 requestBody (根据最新API文档)
   const requestBody = {
-    title: `测试终端-${counter}`,
+    title: `k6测试-${counter}`,
     username: username,
     password: password,
     terminalGroup: terminalGroup,
