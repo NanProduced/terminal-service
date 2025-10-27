@@ -10,6 +10,34 @@ const path = require('path');
 const http = require('http');
 const https = require('https');
 
+// ==================== 彩色输出工具 ====================
+
+const Colors = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  cyan: '\x1b[36m',
+  white: '\x1b[37m',
+  bgGreen: '\x1b[42m',
+  bgRed: '\x1b[41m',
+  bgBlue: '\x1b[44m'
+};
+
+function colorize(text, color) {
+  return `${color}${text}${Colors.reset}`;
+}
+
+function success(text) { return colorize(text, Colors.green); }
+function error(text) { return colorize(text, Colors.red); }
+function info(text) { return colorize(text, Colors.blue); }
+function warn(text) { return colorize(text, Colors.yellow); }
+function cyan(text) { return colorize(text, Colors.cyan); }
+function bold(text) { return colorize(text, Colors.bold); }
+
 // ==================== 配置加载 ====================
 
 function loadConfig(filePath) {
@@ -38,27 +66,68 @@ console.log(`   accountPrefix 值: ${deviceConfig.deviceCreation.accountPrefix}`
 // ==================== 数据生成函数 ====================
 
 /**
- * 生成中国车牌号
+ * 生成中国车牌号（更加真实）
+ * 格式: 省份(1字) + 城市(1字) + 5位号码
  */
 function generatePlateNumber() {
-  const provincePrefix = "京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤青藏川宁琼使领";
-  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const numbersAndLetters = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const lastChar = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ挂学警港澳";
+  // 省份简称（常见的31个省份）
+  const provinces = ['京', '津', '沪', '渝', '冀', '豫', '云', '辽', '黑', '湘',
+                     '皖', '鲁', '新', '苏', '浙', '赣', '鄂', '桂', '甘', '晋',
+                     '蒙', '陕', '吉', '闽', '贵', '粤', '青', '藏', '川', '宁', '琼'];
 
-  const province = provincePrefix[Math.floor(Math.random() * provincePrefix.length)];
-  const letter = letters[Math.floor(Math.random() * letters.length)];
+  // 城市代码（A-Y，通常 Z 不用）
+  const cityLetters = 'ABCDEFGHJKLMNPQRSTUVWXY';
 
-  let rest = "";
-  for (let i = 0; i < 5; i++) {
-    rest += numbersAndLetters[Math.floor(Math.random() * numbersAndLetters.length)];
+  // 5位号码生成：70% 纯数字，25% 4数字+1字母，5% 3数字+2字母
+  const plateCodePattern = Math.random();
+  let plateCode;
+
+  if (plateCodePattern < 0.70) {
+    // 70%: 5位纯数字（如 12345）
+    plateCode = generateRandomNumbers(5);
+  } else if (plateCodePattern < 0.95) {
+    // 25%: 4位数字 + 1位字母（如 1234D）
+    plateCode = generateRandomNumbers(4) + generateRandomLetter();
+  } else {
+    // 5%: 3位数字 + 2位字母（如 123BD）
+    plateCode = generateRandomNumbers(3) + generateRandomLetters(2);
   }
 
-  if (Math.random() > 0.5) {
-    rest += lastChar[Math.floor(Math.random() * lastChar.length)];
-  }
+  // 组合车牌号
+  const province = provinces[Math.floor(Math.random() * provinces.length)];
+  const city = cityLetters[Math.floor(Math.random() * cityLetters.length)];
 
-  return province + letter + rest;
+  return province + city + plateCode;
+}
+
+/**
+ * 生成指定个数的随机数字
+ */
+function generateRandomNumbers(count) {
+  let result = '';
+  for (let i = 0; i < count; i++) {
+    result += Math.floor(Math.random() * 10);
+  }
+  return result;
+}
+
+/**
+ * 生成单个随机字母（A-Z，不含 I 和 O，避免与数字混淆）
+ */
+function generateRandomLetter() {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // 去掉 I, O 以避免混淆
+  return letters[Math.floor(Math.random() * letters.length)];
+}
+
+/**
+ * 生成多个随机字母
+ */
+function generateRandomLetters(count) {
+  let result = '';
+  for (let i = 0; i < count; i++) {
+    result += generateRandomLetter();
+  }
+  return result;
 }
 
 /**
@@ -161,7 +230,7 @@ let firstRequest = true;
 /**
  * 创建单个设备
  */
-async function createDevice(username, counter) {
+async function createDevice(username, counter, onResult) {
   const serverUrl = serverConfig.environments.test.baseUrl;
   const apiPath = serverConfig.environments.test.createDeviceApiPath;
   const fullUrl = `${serverUrl}${apiPath}`;
@@ -182,27 +251,18 @@ async function createDevice(username, counter) {
     // customColumn1-5 不需要填充
   };
 
+  const startTime = Date.now();
+
   // 首次请求时打印详细的请求信息
   if (firstRequest) {
-    const requestBodyJson = JSON.stringify(requestBody);
-    console.log('\n📤 首次请求详情:');
-    console.log(`   URL: ${fullUrl}`);
-    console.log(`   方法: POST`);
-    console.log(`   请求头:`);
-    console.log(`      token: ${token.substring(0, 20)}...`);
-    console.log(`      Content-Type: application/json`);
-    console.log(`      User-Agent: Colorlight-K6-DeviceCreator/1.0`);
-    console.log(`\n   请求体 (扁平格式):`);
+    console.log('\n' + bold('━'.repeat(70)));
+    console.log(bold('📤 首次请求详情'));
+    console.log(bold('━'.repeat(70)));
+    console.log(`${cyan('URL:')} ${fullUrl}`);
+    console.log(`${cyan('Token:')} ${token.substring(0, 20)}...`);
+    console.log(`${cyan('请求体格式 (扁平结构):')} `);
     console.log(JSON.stringify(requestBody, null, 2));
-    console.log(`\n   JSON序列化验证:`);
-    console.log(`   ${requestBodyJson}`);
-    console.log(`\n   字段值检查:`);
-    console.log(`   - title: "${requestBody.title}" (类型: ${typeof requestBody.title})`);
-    console.log(`   - username: "${requestBody.username}" (类型: ${typeof requestBody.username})`);
-    console.log(`   - password: "${requestBody.password}" (类型: ${typeof requestBody.password})`);
-    console.log(`   - terminalGroup: ${requestBody.terminalGroup} (类型: ${typeof requestBody.terminalGroup})`);
-    console.log(`   - plateNumber: "${requestBody.plateNumber}" (类型: ${typeof requestBody.plateNumber})`);
-    console.log(`   - contactPhone: "${requestBody.contactPhone}" (类型: ${typeof requestBody.contactPhone})\n`);
+    console.log(bold('━'.repeat(70)) + '\n');
     firstRequest = false;
   }
 
@@ -218,61 +278,118 @@ async function createDevice(username, counter) {
 
   try {
     const requestBodyStr = JSON.stringify(requestBody);
-
-    // 前几次请求时也打印 JSON 字符串，验证序列化是否正确
-    if (counter <= 5) {
-      console.log(`\n[请求 #${counter}] ${username}`);
-      console.log(`   实际发送的JSON: ${requestBodyStr}`);
-      console.log(`   JSON长度: ${requestBodyStr.length} 字符`);
-    }
-
     const response = await makeRequest(fullUrl, options, requestBodyStr);
+    const duration = Date.now() - startTime;
 
     if (response.body && response.body.code === 200) {
-      return {
+      const result = {
         success: true,
         username: username,
+        duration: duration,
         terminalId: response.body.data?.terminalId,
         terminalName: response.body.data?.terminalName,
         accountName: response.body.data?.accountName
       };
-    } else {
-      console.error(`\n❌ 创建设备失败 [${username}]`);
-      console.error(`   URL: ${fullUrl}`);
-      console.error(`   HTTP状态码: ${response.statusCode}`);
-      console.error(`   响应码: ${response.body?.code || 'N/A'}`);
-      console.error(`   错误信息: ${response.body?.message || '无详细信息'}`);
-      console.error(`   完整响应: ${JSON.stringify(response.body, null, 2)}`);
 
-      return {
+      // 实时输出成功信息
+      if (onResult) {
+        onResult({
+          status: 'success',
+          username: username,
+          duration: duration,
+          message: `✅ 成功 | ${username} | ${duration}ms`
+        });
+      }
+
+      return result;
+    } else {
+      const result = {
         success: false,
         username: username,
+        duration: duration,
         error: response.body?.message || `HTTP ${response.statusCode}`,
         statusCode: response.statusCode,
         fullResponse: response.body
       };
+
+      // 实时输出失败信息
+      if (onResult) {
+        onResult({
+          status: 'failed',
+          username: username,
+          duration: duration,
+          error: response.body?.message,
+          message: `❌ 失败 | ${username} | ${response.body?.message || 'HTTP ' + response.statusCode}`
+        });
+      }
+
+      return result;
     }
   } catch (error) {
-    console.error(`\n❌ 网络错误或异常 [${username}]`);
-    console.error(`   错误信息: ${error.message}`);
-    console.error(`   错误堆栈: ${error.stack}`);
-
-    return {
+    const duration = Date.now() - startTime;
+    const result = {
       success: false,
       username: username,
+      duration: duration,
       error: error.message,
       stack: error.stack
     };
+
+    // 实时输出错误信息
+    if (onResult) {
+      onResult({
+        status: 'error',
+        username: username,
+        duration: duration,
+        error: error.message,
+        message: `⚠️  错误 | ${username} | ${error.message}`
+      });
+    }
+
+    return result;
   }
 }
 
 // ==================== 主程序 ====================
 
+// 实时日志队列，用于显示最近的结果
+let recentResults = [];
+const MAX_RECENT_RESULTS = 5;
+
+// 清屏函数
+function clearLines(count) {
+  for (let i = 0; i < count; i++) {
+    process.stdout.write('\x1b[1A\x1b[K');
+  }
+}
+
+// 显示实时统计面板
+function displayStatisticsPanel(current, total, successful, failed, avgDuration) {
+  const percentage = Math.round((current / total) * 100);
+  const progressBar = '█'.repeat(Math.floor(percentage / 2)) + '░'.repeat(50 - Math.floor(percentage / 2));
+
+  console.log('\n' + bold('━'.repeat(70)));
+  console.log(bold('📊 实时统计面板'));
+  console.log(bold('━'.repeat(70)));
+  console.log(`进度: [${success(progressBar)}] ${percentage}% (${current}/${total})`);
+  console.log(`成功: ${success(successful)} | 失败: ${failed > 0 ? error(failed) : warn('0')} | 平均耗时: ${avgDuration}ms`);
+  console.log(bold('━'.repeat(70)));
+
+  if (recentResults.length > 0) {
+    console.log(bold('📝 最近结果 (最后5条):'));
+    for (const result of recentResults.slice(-MAX_RECENT_RESULTS)) {
+      console.log(`   ${result.message}`);
+    }
+  }
+}
+
 async function main() {
-  console.log('\n╔════════════════════════════════════════════════════════════════╗');
-  console.log('║      Colorlight Terminal - 测试设备创建工具 v1.0              ║');
-  console.log('║              批量创建测试设备账号                            ║');
-  console.log('╚════════════════════════════════════════════════════════════════╝\n');
+  console.log('\n' + bold('╔' + '═'.repeat(68) + '╗'));
+  console.log(bold('║' + ' '.repeat(68) + '║'));
+  console.log(bold('║') + cyan('      Colorlight Terminal - 设备批量创建工具 v2.0'.padEnd(66)) + bold('║'));
+  console.log(bold('║') + cyan('              实时交互式设备创建系统'.padEnd(66)) + bold('║'));
+  console.log(bold('║' + ' '.repeat(68) + '║'));
+  console.log(bold('╚' + '═'.repeat(68) + '╝\n'));
 
   const config = deviceConfig.deviceCreation;
   const batchConfig = deviceConfig.batchSettings;
@@ -282,20 +399,19 @@ async function main() {
   const token = deviceConfig.authentication.token;
 
   // 显示服务器配置
-  console.log('🔌 服务器配置:');
-  console.log(`   基础地址: ${serverUrl}`);
-  console.log(`   API路径: ${apiPath}`);
-  console.log(`   完整URL: ${fullUrl}`);
-  console.log(`   Token: ${token.substring(0, 20)}...${token.substring(token.length - 20)}`);
-  console.log(`   设备创建超时: ${serverConfig.timeouts.deviceCreation}\n`);
+  console.log(bold('🔌 服务器配置:'));
+  console.log(`   ${cyan('基础地址:')} ${serverUrl}`);
+  console.log(`   ${cyan('API路径:')} ${apiPath}`);
+  console.log(`   ${cyan('Token:')} ${token.substring(0, 20)}...${token.substring(token.length - 20)}`);
+  console.log(`   ${cyan('超时设置:')} ${serverConfig.timeouts.deviceCreation}秒\n`);
 
-  console.log('📋 创建参数:');
-  console.log(`   账号前缀: ${config.accountPrefix}`);
-  console.log(`   账号范围: ${config.accountPrefix}${config.startNumber} ~ ${config.accountPrefix}${config.endNumber}`);
-  console.log(`   总数量: ${config.totalDevices} 个账号`);
-  console.log(`   并发数: ${batchConfig.concurrencyLimit} 个请求`);
-  console.log(`   密码: ${config.password}`);
-  console.log(`   终端分组: ${config.terminalGroup}\n`);
+  console.log(bold('📋 创建参数:'));
+  console.log(`   ${cyan('账号前缀:')} ${config.accountPrefix}`);
+  console.log(`   ${cyan('账号范围:')} ${config.accountPrefix}${config.startNumber} ~ ${config.accountPrefix}${config.endNumber}`);
+  console.log(`   ${cyan('总数量:')} ${success(config.totalDevices)} 个账号`);
+  console.log(`   ${cyan('并发数:')} ${config.concurrencyLimit || batchConfig.concurrencyLimit} 个请求`);
+  console.log(`   ${cyan('密码:')} ${config.password}`);
+  console.log(`   ${cyan('终端分组:')} ${config.terminalGroup}\n`);
 
   // 生成账号列表
   const accounts = [];
@@ -305,64 +421,88 @@ async function main() {
 
   let createdCount = 0;
   let failedCount = 0;
+  let totalDuration = 0;
   let failedAccounts = [];
   const startTime = Date.now();
 
   // 批量创建设备
-  console.log('🚀 开始创建设备...\n');
+  console.log(bold('🚀 开始创建设备...\n'));
 
-  for (let i = 0; i < accounts.length; i += batchConfig.concurrencyLimit) {
-    const batch = accounts.slice(i, Math.min(i + batchConfig.concurrencyLimit, accounts.length));
-    const promises = batch.map((account, index) =>
-      createDevice(account, config.startNumber + i + index)
-    );
+  const concurrency = batchConfig.concurrencyLimit || 10;
+
+  for (let i = 0; i < accounts.length; i += concurrency) {
+    const batch = accounts.slice(i, Math.min(i + concurrency, accounts.length));
+    const promises = batch.map((account, index) => {
+      const counter = config.startNumber + i + index;
+
+      // 创建带有实时回调的 Promise
+      return createDevice(account, counter, (result) => {
+        // 实时输出每个请求的结果
+        recentResults.push(result);
+
+        // 更新统计数据
+        if (result.status === 'success') {
+          createdCount++;
+          totalDuration += result.duration;
+        } else {
+          failedCount++;
+          failedAccounts.push({
+            username: account,
+            error: result.error || result.message
+          });
+        }
+      });
+    });
 
     const results = await Promise.all(promises);
 
     // 统计结果
     for (const result of results) {
-      if (result.success) {
-        createdCount++;
-      } else {
-        failedCount++;
+      if (!result.success) {
         failedAccounts.push({
           username: result.username,
-          error: result.error
+          error: result.error || '未知错误'
         });
       }
     }
 
-    // 显示进度
-    const processedCount = Math.min(i + batchConfig.concurrencyLimit, accounts.length);
-    const percentage = Math.round((processedCount / accounts.length) * 100);
-    const progressBar = '█'.repeat(Math.floor(percentage / 2)) + '░'.repeat(50 - Math.floor(percentage / 2));
-    process.stdout.write(`\r[${progressBar}] ${percentage}% (${processedCount}/${accounts.length})`);
+    // 显示实时进度面板
+    const processedCount = Math.min(i + concurrency, accounts.length);
+    const avgDuration = createdCount > 0 ? Math.round(totalDuration / createdCount) : 0;
+    displayStatisticsPanel(processedCount, accounts.length, createdCount, failedCount, avgDuration);
 
     // 批次间延迟
-    if (i + batchConfig.concurrencyLimit < accounts.length) {
-      await new Promise(resolve => setTimeout(resolve, batchConfig.delayBetweenBatchMs));
+    if (i + concurrency < accounts.length) {
+      await new Promise(resolve => setTimeout(resolve, batchConfig.delayBetweenBatchMs || 1000));
     }
   }
 
   const endTime = Date.now();
   const durationSeconds = Math.round((endTime - startTime) / 1000);
+  const successRate = ((createdCount / accounts.length) * 100).toFixed(2);
 
-  // 完成统计
-  console.log('\n\n✅ 设备创建完成!\n');
-  console.log('📊 创建统计:');
-  console.log(`   成功: ${createdCount} 个`);
-  console.log(`   失败: ${failedCount} 个`);
-  console.log(`   总耗时: ${durationSeconds} 秒 (${Math.round(durationSeconds / 60)} 分钟)`);
-  console.log(`   成功率: ${((createdCount / accounts.length) * 100).toFixed(2)}%\n`);
+  // 最终统计
+  console.log('\n' + bold('╔' + '═'.repeat(68) + '╗'));
+  console.log(bold('║') + (createdCount === accounts.length ? success('✅ 所有设备创建成功!'.padEnd(66)) : warn('⚠️  设备创建完成 (含失败)'.padEnd(66))) + bold('║'));
+  console.log(bold('╚' + '═'.repeat(68) + '╝\n'));
 
-  if (failedCount > 0 && failedCount <= 20) {
-    console.log('⚠️  失败的账号:');
-    for (const failed of failedAccounts.slice(0, 20)) {
-      console.log(`   - ${failed.username}: ${failed.error}`);
+  console.log(bold('📊 最终统计:'));
+  console.log(`   成功: ${success(createdCount)} 个 | 失败: ${failedCount > 0 ? error(failedCount) : warn('0')} 个`);
+  console.log(`   成功率: ${successRate >= 100 ? success(successRate + '%') : warn(successRate + '%')}`);
+  console.log(`   平均耗时: ${avgDuration}ms | 总耗时: ${durationSeconds}秒 (${Math.round(durationSeconds / 60)}分钟)`);
+  console.log(`   吞吐量: ${(accounts.length / durationSeconds).toFixed(2)} 个/秒\n`);
+
+  // 显示失败的账号
+  if (failedCount > 0) {
+    console.log(bold('❌ 失败的账号列表:'));
+    const failedToShow = failedAccounts.slice(0, 20);
+    for (const failed of failedToShow) {
+      console.log(`   ${error('✗')} ${failed.username}: ${failed.error}`);
     }
     if (failedCount > 20) {
-      console.log(`   ... 还有 ${failedCount - 20} 个失败\n`);
+      console.log(warn(`   ... 还有 ${failedCount - 20} 个失败账号\n`));
     }
+    console.log();
   }
 
   // 保存设备列表
@@ -373,10 +513,16 @@ async function main() {
     fs.mkdirSync(deviceListDir, { recursive: true });
   }
 
-  const listContent = `# Colorlight Terminal 测试设备列表\n# 创建时间: ${new Date().toLocaleString()}\n# 总数: ${createdCount}\n\n${accounts.join('\n')}\n`;
+  const listContent = `# Colorlight Terminal 测试设备列表
+# 创建时间: ${new Date().toLocaleString()}
+# 成功: ${createdCount} / 失败: ${failedCount} / 成功率: ${successRate}%
+# 总耗时: ${durationSeconds}秒
+
+${accounts.join('\n')}
+`;
   fs.writeFileSync(deviceListPath, listContent);
 
-  console.log(`📁 设备列表已保存到: ${deviceListPath}\n`);
+  console.log(`📁 设备列表已保存到: ${info(deviceListPath)}\n`);
 
   // 设置退出码
   process.exit(failedCount > 0 ? 1 : 0);
