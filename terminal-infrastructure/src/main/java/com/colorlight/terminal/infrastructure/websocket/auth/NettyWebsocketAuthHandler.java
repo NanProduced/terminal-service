@@ -8,6 +8,8 @@ import com.colorlight.terminal.application.port.inbound.auth.TerminalAuthUseCase
 import com.colorlight.terminal.infrastructure.config.properties.WebSocketConfigProperties;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
 import com.colorlight.terminal.infrastructure.websocket.config.NettyWebsocketProperties;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -66,16 +68,43 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
             return;
         }
 
-        // 只拦截 WebSocket 握手的 HTTP 请求
-        if (!isWebSocketHandshakeToPath(request)) {
+        if (!isWebSocketHandshakeRequest(request)) {
             ctx.fireChannelRead(request);
             return;
         }
 
-        // 异步处理WebSocket认证，避免阻塞I/O线程
-        // 需要增加引用计数，防止在异步处理期间被释放
+        QueryStringDecoder decoder = new QueryStringDecoder(request.uri());
+        String connectPath = decoder.path();
+        // 尝试匹配协议版本
+        ProtocolVersion matchedVersion = findProtocolVersionByPath(connectPath);
+
+        if (matchedVersion == null) {
+            log.warn("NettyWebsocketAuthHandler - 收到未识别的WebSocket握手路径: {}", connectPath);
+            // 发送错误响应
+            sendUnsupportedProtocolResponse(ctx);
+            ReferenceCountUtil.release(request);
+            return;
+        }
+
+        // 检查协议版本是否启用
+        boolean versionEnabled = webSocketConfigProperties.getProtocol()
+                .isVersionSupported(matchedVersion.getVersion(), matchedVersion.isSupported());
+        // 如果未启用，则返回错误响应
+        if (!versionEnabled) {
+            String requestedVersion = decoder.parameters()
+                    .getOrDefault("protocol_version", List.of(""))
+                    .stream()
+                    .findFirst()
+                    .orElse("");
+            log.warn("NettyWebsocketAuthHandler - WebSocket协议版本未启用: path={}, protocolVersion={}", connectPath, requestedVersion);
+            sendUnsupportedProtocolResponse(ctx);
+            ReferenceCountUtil.release(request);
+            return;
+        }
+
+        // 保留引用计数，避免在业务线程池中释放
         ReferenceCountUtil.retain(request);
-        
+        // 在业务线程池中处理WebSocket认证
         websocketAuthExecutor.execute(() -> handleWebSocketAuthentication(ctx, request));
     }
 
@@ -176,49 +205,80 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
      * @param req HTTP请求
      * @return 是否为有效的WebSocket握手请求
      */
-    private boolean isWebSocketHandshakeToPath(FullHttpRequest req) {
-        // 验证HTTP方法和WebSocket升级头
+    private boolean isWebSocketHandshakeRequest(FullHttpRequest req) {
         if (!HttpMethod.GET.equals(req.method())) {
             return false;
         }
-        
+
         CharSequence upgrade = req.headers().get(HttpHeaderNames.UPGRADE);
-        if (upgrade == null || !HttpHeaderValues.WEBSOCKET.contentEqualsIgnoreCase(upgrade)) {
-            return false;
-        }
+        return upgrade != null && HttpHeaderValues.WEBSOCKET.contentEqualsIgnoreCase(upgrade);
+    }
 
-        // 解析请求路径并匹配支持的协议版本
-        QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
-        String connectPath = decoder.path();
-
-        // 检查是否为任一支持的协议版本路径
+    /**
+     * 根据连接路径查找对应的协议版本
+     * @param connectPath 连接路径
+     * @return 匹配的协议版本
+     */
+    private ProtocolVersion findProtocolVersionByPath(String connectPath) {
         return Arrays.stream(ProtocolVersion.values())
-                .anyMatch(version -> version.getPath().equals(connectPath) &&
-                        // 优先使用配置项，降级到枚举配置保底
-                        webSocketConfigProperties.getProtocol().isVersionSupported(version.getVersion(), version.isSupported()));
+                .filter(version -> version.getPath().equals(connectPath))
+                .findFirst()
+                .orElse(null);
     }
 
+    /**
+     * 发送不支持的协议版本响应
+     * @param ctx 通道上下文
+     */
+    private void sendUnsupportedProtocolResponse(ChannelHandlerContext ctx) {
+        sendResponse(ctx, HttpResponseStatus.UPGRADE_REQUIRED, "不支持的WebSocket协议版本");
+    }
+
+    /**
+     * 发送错误响应
+     * @param ctx 通道上下文
+     */
     private void sendErrorResponse(ChannelHandlerContext ctx) {
-        // 确保在I/O线程中执行
+        sendResponse(ctx, HttpResponseStatus.UNAUTHORIZED, "认证失败");
+    }
+
+    /**
+     * 发送响应
+     * @param ctx 通道上下文
+     * @param status 响应状态码
+     * @param message 响应消息
+     */
+    private void sendResponse(ChannelHandlerContext ctx, HttpResponseStatus status, String message) {
+        // 确保在I/O线程中执行发送操作
         if (ctx.channel().eventLoop().inEventLoop()) {
-            doSendErrorResponse(ctx);
-        } else {
-            ctx.channel().eventLoop().execute(() -> doSendErrorResponse(ctx));
+            doSendResponse(ctx, status, message);
+        }
+        // 否则将发送操作委托给I/O线程执行
+        else {
+            ctx.channel().eventLoop().execute(() -> doSendResponse(ctx, status, message));
         }
     }
 
-    private void doSendErrorResponse(ChannelHandlerContext ctx) {
+    /**
+     * 发送响应
+     * @param ctx 通道上下文
+     * @param status 响应状态码
+     * @param message 响应消息
+     */
+    private void doSendResponse(ChannelHandlerContext ctx, HttpResponseStatus status, String message) {
         try {
+            // 创建响应
             DefaultFullHttpResponse response = new DefaultFullHttpResponse(
-                    HttpVersion.HTTP_1_1, HttpResponseStatus.UNAUTHORIZED,
-                    io.netty.buffer.Unpooled.copiedBuffer("认证失败", StandardCharsets.UTF_8)
+                    HttpVersion.HTTP_1_1, status,
+                    Unpooled.copiedBuffer(message, StandardCharsets.UTF_8)
             );
             response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
+            // 设置响应长度
             response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
 
-            ctx.writeAndFlush(response).addListener(io.netty.channel.ChannelFutureListener.CLOSE);
+            ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
         } catch (Exception e) {
-            log.error("NettyWebsocketAuthHandler - 发送错误响应异常", e);
+            log.error("NettyWebsocketAuthHandler - 发送响应异常", e);
             ctx.close();
         }
     }
