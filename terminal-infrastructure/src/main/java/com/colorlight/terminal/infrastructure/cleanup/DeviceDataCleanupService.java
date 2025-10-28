@@ -90,8 +90,6 @@ public class DeviceDataCleanupService {
             updateRecordStatus(deletionRecord.getId(), "FAILED", null, e.getMessage(), LocalDateTime.now());
             throw e;
         }
-
-        CompletableFuture.completedFuture(null);
     }
     
     /**
