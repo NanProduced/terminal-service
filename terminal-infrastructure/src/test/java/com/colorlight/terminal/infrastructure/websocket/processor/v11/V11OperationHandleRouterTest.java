@@ -375,7 +375,7 @@ class V11OperationHandleRouterTest {
             V11WebsocketMessage response = messageCaptor.getValue();
             assertThat(response.getType()).isEqualTo(V11WebsocketMessageTypeEnum.SCHEDULE.getId());
             assertThat(response.getReceiptId()).isEqualTo(8001);
-            assertThat(response.getData()).isNull(); // 待实现功能
+            assertThat(response.getData()).hasToString("{}");
         }
         
         @Test

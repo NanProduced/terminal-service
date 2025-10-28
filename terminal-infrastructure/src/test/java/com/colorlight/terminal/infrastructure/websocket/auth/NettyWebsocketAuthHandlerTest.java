@@ -160,11 +160,10 @@ class NettyWebsocketAuthHandlerTest {
         lenient().when(nettyWebsocketProperties.getServer()).thenReturn(serverConfig);
         lenient().when(serverConfig.getWebsocketPath()).thenReturn("/ws/terminal");
         lenient().when(webSocketConfigProperties.getProtocol()).thenReturn(protocolConfig);
-        // 配置为支持所有版本，确保测试进入认证逻辑
-        lenient().when(protocolConfig.isVersionSupported(eq("1.0"), eq(true))).thenReturn(true);
-        lenient().when(protocolConfig.isVersionSupported(eq("1.1"), eq(true))).thenReturn(true);
-        lenient().when(protocolConfig.isVersionSupported(eq("2.0"), eq(true))).thenReturn(false); // 用于unsupported版本测试
-        lenient().when(protocolConfig.isVersionSupported(anyString(), anyBoolean())).thenReturn(true);
+        lenient().when(protocolConfig.isVersionSupported(anyString(), anyBoolean()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
+        lenient().when(protocolConfig.isVersionSupported(eq("1.1"), eq(false))).thenReturn(true);
+        // 通过配置覆盖默认值，确保测试场景可验证不同协议开关
         
         // Channel属性Mock
         lenient().when(channel.attr(NettyWebsocketAuthHandler.TERMINAL_PRINCIPAL)).thenReturn(principalAttribute);
@@ -403,20 +402,49 @@ class NettyWebsocketAuthHandlerTest {
         }
         
         @Test
-        @DisplayName("当协议版本不受支持时应该透传请求")
-        void should_pass_through_unsupported_protocol_version() throws Exception {
-            // Given - 准备不受支持的协议版本请求
-            lenient().when(protocolConfig.isVersionSupported(eq("2.0"), eq(false))).thenReturn(false);
-            
+        @DisplayName("当协议版本不受支持时应该立即返回错误响应")
+        void should_reply_error_for_unsupported_protocol_version() throws Exception {
+            // Given - 准备不受支持的协议版本请求（路径未匹配任何已知版本）
             FullHttpRequest request = TestDataBuilder.buildWebSocketHandshakeRequest(
                 "/ColorWebSocket/v2.0", "testDevice", "testPassword", "2.0");
-            
+
+            ArgumentCaptor<FullHttpResponse> responseCaptor = ArgumentCaptor.forClass(FullHttpResponse.class);
+
             // When - 处理请求
             authHandler.channelRead(channelHandlerContext, request);
-            
-            // Then - 验证请求被透传
-            verify(channelHandlerContext).fireChannelRead(request);
+
+            // Then - 应返回错误响应并关闭连接
+            verify(channelHandlerContext, never()).fireChannelRead(request);
             verify(websocketAuthExecutor, never()).execute(any());
+            verify(channelHandlerContext).writeAndFlush(responseCaptor.capture());
+
+            FullHttpResponse response = responseCaptor.getValue();
+            assertThat(response.status()).isEqualTo(HttpResponseStatus.UPGRADE_REQUIRED);
+            assertThat(response.content().toString(StandardCharsets.UTF_8)).isEqualTo("不支持的 WebSocket 协议版本");
+        }
+
+        @Test
+        @DisplayName("当协议版本被配置禁用时应该返回错误响应")
+        void should_reply_error_when_protocol_version_disabled_by_config() throws Exception {
+            // Given - 将已知协议版本配置为禁用
+            when(protocolConfig.isVersionSupported(eq("1.1"), eq(false))).thenReturn(false);
+
+            FullHttpRequest request = TestDataBuilder.buildWebSocketHandshakeRequest(
+                "/ColorWebSocket/terminal", "testDevice", "testPassword", "1.1");
+
+            ArgumentCaptor<FullHttpResponse> responseCaptor = ArgumentCaptor.forClass(FullHttpResponse.class);
+
+            // When - 处理请求
+            authHandler.channelRead(channelHandlerContext, request);
+
+            // Then - 应直接返回错误响应
+            verify(channelHandlerContext, never()).fireChannelRead(request);
+            verify(websocketAuthExecutor, never()).execute(any());
+            verify(channelHandlerContext).writeAndFlush(responseCaptor.capture());
+
+            FullHttpResponse response = responseCaptor.getValue();
+            assertThat(response.status()).isEqualTo(HttpResponseStatus.UPGRADE_REQUIRED);
+            assertThat(response.content().toString(StandardCharsets.UTF_8)).isEqualTo("不支持的 WebSocket 协议版本");
         }
     }
     
