@@ -245,19 +245,17 @@ public class DeviceDataCleanupService {
      * 转换数据类型为JSON
      */
     private String convertDataTypesToJson(Set<DataType> dataTypes) {
-        if (dataTypes == null || dataTypes.isEmpty()) {
-            return null;
-        }
-        
         try {
-            List<String> typeNames = dataTypes.stream()
+            List<String> typeNames = dataTypes == null || dataTypes.isEmpty() ?
+                Collections.emptyList() :
+                dataTypes.stream()
                     .map(DataType::name)
                     .sorted()
                     .toList();
             return objectMapper.writeValueAsString(typeNames);
         } catch (Exception e) {
             log.error("转换DataTypes到JSON失败", e);
-            return null;
+            return "[]";  // 返回空数组JSON而不是null，确保数据库字段有值
         }
     }
     
@@ -265,15 +263,14 @@ public class DeviceDataCleanupService {
      * 转换删除统计为JSON
      */
     private String convertDeletedCountsToJson(Map<String, Integer> deletedCounts) {
-        if (deletedCounts == null || deletedCounts.isEmpty()) {
-            return null;
-        }
-        
         try {
+            if (deletedCounts == null || deletedCounts.isEmpty()) {
+                return "{}";  // 返回空对象JSON而不是null，确保数据库字段有值
+            }
             return objectMapper.writeValueAsString(deletedCounts);
         } catch (Exception e) {
             log.error("转换DeletedCounts到JSON失败", e);
-            return null;
+            return "{}";  // 返回空对象JSON而不是null
         }
     }
 }
