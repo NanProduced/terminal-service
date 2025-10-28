@@ -11,6 +11,47 @@ const path = require('path');
 // ==================== 工具函数 ====================
 
 /**
+ * 识别文件类型
+ */
+function identifyFileType(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8').trim();
+    const lines = content.split('\n');
+
+    // 通过文件名后缀识别（最快）
+    if (filePath.endsWith('_metrics.ndjson')) {
+      return { type: 'metrics-ndjson', description: '完整指标文件（推荐）' };
+    }
+    if (filePath.endsWith('_summary.json')) {
+      return { type: 'summary-json', description: '摘要文件（仅统计）' };
+    }
+
+    // 通过内容识别（容错）
+    if (lines.length === 1) {
+      try {
+        const obj = JSON.parse(lines[0]);
+        if (obj.metrics && obj.root_group) {
+          return { type: 'summary-json', description: '摘要文件（仅统计）' };
+        }
+      } catch (e) {}
+    } else if (lines.length > 1) {
+      try {
+        const firstObj = JSON.parse(lines[0]);
+        if (firstObj.type === 'Point' && firstObj.metric) {
+          return { type: 'metrics-ndjson', description: '完整指标文件（推荐）' };
+        }
+      } catch (e) {}
+    }
+
+    // 默认按 NDJSON 处理
+    return { type: 'metrics-ndjson', description: '完整指标文件（推荐）' };
+  } catch (error) {
+    console.error(`⚠️  文件类型识别失败: ${error.message}`);
+    return { type: 'unknown', description: '未知文件类型' };
+  }
+}
+
+/**
  * 加载JSON数据
  */
 function loadJsonResults(filePath) {
@@ -32,6 +73,83 @@ function loadJsonResults(filePath) {
     console.error(error.message);
     process.exit(1);
   }
+}
+
+/**
+ * 验证数据完整性
+ */
+function validateDataCompleteness(data, fileType) {
+  if (!data || data.length === 0) {
+    return {
+      valid: false,
+      dataPoints: 0,
+      completeness: 0,
+      warnings: ['数据为空']
+    };
+  }
+
+  const warnings = [];
+  let completeness = 100;
+  let metricTypes = new Set();
+  let timePoints = new Set();
+
+  if (fileType === 'metrics-ndjson') {
+    // NDJSON 格式的完整性检查
+    for (const record of data) {
+      if (record.type === 'Point' && record.metric) {
+        metricTypes.add(record.metric);
+      }
+      if (record.data && record.data.time) {
+        timePoints.add(new Date(record.data.time).getTime());
+      }
+    }
+
+    // 检查关键指标是否存在
+    const requiredMetrics = [
+      'http_req_duration',
+      'http_req_failed',
+      'http_reqs',
+    ];
+
+    const missingMetrics = requiredMetrics.filter(m => !metricTypes.has(m));
+    if (missingMetrics.length > 0) {
+      warnings.push(`缺少关键指标: ${missingMetrics.join(', ')}`);
+      completeness -= missingMetrics.length * 15;
+    }
+
+    // 时间跨度检查
+    if (timePoints.size > 0) {
+      const sortedTimes = Array.from(timePoints).sort((a, b) => a - b);
+      const duration = (sortedTimes[sortedTimes.length - 1] - sortedTimes[0]) / 1000;
+      if (duration < 300) {
+        warnings.push(`⚠️  测试运行时间较短 (${Math.round(duration)}秒)，结果可能不具代表性`);
+        completeness -= 20;
+      }
+    }
+  } else if (fileType === 'summary-json') {
+    // JSON 摘要文件的完整性检查
+    if (data[0] && data[0].metrics) {
+      const metrics = data[0].metrics;
+      const hasHttpMetrics = metrics.http_reqs || metrics.http_req_duration;
+      const hasWsMetrics = metrics.ws_connecting || metrics.ws_session_duration;
+
+      if (!hasHttpMetrics && !hasWsMetrics) {
+        warnings.push('未找到 HTTP 或 WebSocket 指标');
+        completeness -= 30;
+      }
+    }
+
+    warnings.push('⚠️  使用摘要文件分析，数据精度可能不足。建议使用完整指标文件 (*_metrics.ndjson)');
+    completeness -= 25;
+  }
+
+  return {
+    valid: completeness >= 50,
+    dataPoints: data.length,
+    completeness: Math.max(0, completeness),
+    warnings: warnings,
+    metrics: metricTypes
+  };
 }
 
 /**
@@ -111,11 +229,36 @@ function analyzeResults(inputFile) {
   console.log('║          K6 性能测试分析报告                                ║');
   console.log('╚════════════════════════════════════════════════════════════════╝\n');
 
+  // 第1步：识别文件类型
+  const fileTypeInfo = identifyFileType(inputFile);
+  console.log(`📁 文件类型: ${fileTypeInfo.description}`);
+  console.log(`   路径: ${path.basename(inputFile)}\n`);
+
+  // 第2步：加载数据
   const data = loadJsonResults(inputFile);
   if (data.length === 0) {
     console.error('❌ 结果文件为空');
     process.exit(1);
   }
+
+  // 第3步：验证数据完整性
+  const completenessInfo = validateDataCompleteness(data, fileTypeInfo.type);
+  console.log(`📊 数据质量: ${completenessInfo.completeness.toFixed(0)}% 完整度`);
+
+  if (completenessInfo.warnings.length > 0) {
+    console.log(`⚠️  数据提示:`);
+    completenessInfo.warnings.forEach(warning => {
+      console.log(`   • ${warning}`);
+    });
+    console.log('');
+  }
+
+  if (!completenessInfo.valid && completenessInfo.completeness < 30) {
+    console.error('\n❌ 数据质量过低，无法进行可靠的分析');
+    process.exit(1);
+  }
+
+  console.log('');
 
   // 提取指标数据
   const metrics = {};
@@ -292,7 +435,12 @@ function analyzeResults(inputFile) {
 
   const reportContent = `Colorlight Terminal K6性能测试分析报告
 生成时间: ${new Date().toLocaleString()}
+
+=== 文件信息 ===
 分析文件: ${path.basename(inputFile)}
+文件类型: ${fileTypeInfo.description}
+数据质量: ${completenessInfo.completeness.toFixed(0)}% 完整度
+${completenessInfo.warnings.length > 0 ? `数据提示:\n${completenessInfo.warnings.map(w => `  • ${w}`).join('\n')}` : ''}
 
 === 测试概览 ===
 运行时长: ${formatDuration(testDuration)}
