@@ -14,10 +14,10 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.websocketx.*;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.Executor;
@@ -61,7 +61,13 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
 
             // 异步处理连接初始化，避免阻塞EventLoop线程
             // 连接初始化可能包含Redis写操作等耗时操作
-            websocketConnectionExecutor.execute(() -> initializeWebsocketSessionAsync(ctx));
+            try {
+                websocketConnectionExecutor.execute(() -> initializeWebsocketSessionAsync(ctx));
+            } catch (TaskRejectedException ex) {
+                log.error("NettyWebsocketFrameHandler - WebSocket连接线程池已满，拒绝握手: channelId={}",
+                        ctx.channel().id().asShortText(), ex);
+                ctx.channel().eventLoop().execute(ctx::close);
+            }
         } else if (evt instanceof IdleStateEvent idleStateEvent) {
             handleIdleStateEvent(ctx, idleStateEvent);
         }
@@ -140,6 +146,12 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
             String deviceIdStr = ctx.channel().attr(NettyWebsocketAuthHandler.DEVICE_ID).get();
             TerminalPrincipal principal = ctx.channel().attr(NettyWebsocketAuthHandler.TERMINAL_PRINCIPAL).get();
             ProtocolVersion protocolVersion = ctx.channel().attr(NettyWebsocketAuthHandler.PROTOCOL_VERSION).get();
+            if (protocolVersion == null) {
+                log.error("NettyWebsocketFrameHandler - WebSocket会话初始化失败: 缺少协议版本, channelId={}",
+                        ctx.channel().id().asShortText());
+                ctx.channel().eventLoop().execute(ctx::close);
+                return;
+            }
 
             // 3. 验证认证信息完整性
             if (StringUtils.isBlank(deviceIdStr) || principal == null) {

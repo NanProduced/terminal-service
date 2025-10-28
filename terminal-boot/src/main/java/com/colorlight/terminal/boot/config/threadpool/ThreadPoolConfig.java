@@ -13,6 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
@@ -154,15 +155,18 @@ public class ThreadPoolConfig {
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
 
-        // 拒绝策略：由调用者线程执行（关键任务，保证执行）
-        // 增加监控：记录拒绝事件，便于后续分析和告警
+        // 拒绝策略：抛出异常 + 告警（避免I/O线程卡顿）
+        // 重要提示：deviceEventExecutor被Netty WebSocket处理器使用，调用者是I/O线程
+        // 如果使用CallerRunsPolicy在I/O线程执行阻塞操作，会导致整个Netty EventLoop卡顿
+        // 造成连接延迟/背压/掉线等级联失败。所以必须抛出异常，由上层Handler捕获并返回503
         executor.setRejectedExecutionHandler((task, executor1) -> {
-            log.warn("ThreadPool - 设备事件任务被拒绝，使用调用者线程执行: pool=device-event, " +
-                    "activeCount={}, queueSize={}, taskClass={}",
-                    executor1.getActiveCount(), executor1.getQueue().size(),
+            String errorMsg = String.format(
+                    "ThreadPool - 设备事件线程池已满（拒绝任务）: pool=device-event, activeCount=%d, queueSize=%d, maxPoolSize=%d, taskClass=%s, 建议检查是否有长期阻塞任务或业务流量突增",
+                    executor1.getActiveCount(), executor1.getQueue().size(), executor1.getMaximumPoolSize(),
                     task.getClass().getSimpleName());
-            // 使用调用者线程执行，确保任务不丢失
-            task.run();
+            log.error(errorMsg);
+            // ✅ 抛出异常，让上层Handler捕获并返回503给客户端
+            throw new RejectedExecutionException(errorMsg);
         });
 
         executor.initialize();
@@ -424,15 +428,18 @@ public class ThreadPoolConfig {
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
 
-        // 拒绝策略：由调用者线程执行（连接建立是关键任务，避免连接失败）
-        // 增强监控：记录详细的拒绝信息
+        // 拒绝策略：抛出异常 + 告警（避免I/O线程卡顿）
+        // 重要提示：websocketConnectionExecutor被Netty WebSocket处理器使用，调用者是I/O线程
+        // 如果使用CallerRunsPolicy在I/O线程执行阻塞操作，会导致整个Netty EventLoop卡顿
+        // 即使连接建立是关键任务，也不能在I/O线程执行同步阻塞操作，否则优先级反转
         executor.setRejectedExecutionHandler((task, ext) -> {
-            log.warn("ThreadPool - WebSocket连接任务被拒绝，使用调用者线程执行: pool=ws-connection, " +
-                    "activeCount={}, queueSize={}, maxPoolSize={}, taskClass={}",
+            String errorMsg = String.format(
+                    "ThreadPool - WebSocket连接线程池已满（拒绝任务）: pool=ws-connection, activeCount=%d, queueSize=%d, maxPoolSize=%d, taskClass=%s, 建议检查连接建立高峰是否过载",
                     ext.getActiveCount(), ext.getQueue().size(), ext.getMaximumPoolSize(),
                     task.getClass().getSimpleName());
-            // 使用调用者线程执行，确保连接建立不会失败
-            task.run();
+            log.error(errorMsg);
+            // ✅ 抛出异常，让上层Handler捕获并关闭连接或返回错误
+            throw new RejectedExecutionException(errorMsg);
         });
 
         executor.initialize();
