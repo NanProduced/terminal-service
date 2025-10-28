@@ -65,15 +65,17 @@ function createV10HeartbeatMessage() {
 function createV10GpsMessage(deviceAccount) {
   const coords = generateRandomGpsCoordinates();
 
-  const gpsData = JSON.stringify([{
+  // ✅ 修复: 只需创建数组，无需额外stringify
+  // GPS字段应该是数组，而不是字符串
+  const gpsArray = [{
     sensorType: "gps",
     latitude: coords.latitude,
     longitude: coords.longitude
-  }]);
+  }];
 
   return JSON.stringify({
     name: deviceAccount,
-    gps: gpsData
+    gps: gpsArray  // ✅ 直接传递数组，由外层JSON.stringify处理
   });
 }
 

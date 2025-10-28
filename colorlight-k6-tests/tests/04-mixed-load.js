@@ -232,15 +232,15 @@ export function httpStatusReporting() {
   const statusReportData = generateTerminalStatusReport(deviceAccount);
 
   const response = http.put(
-    `${serverEnv.baseUrl}/wp-json/screen/v1/status`,
-    JSON.stringify(statusReportData),
-    {
-      headers: {
-        'Authorization': authHeader,
-        'Content-Type': 'application/json',
-      },
-      timeout: '15s',
-    }
+      `${serverEnv.baseUrl}/wp-json/screen/v1/status`,
+      JSON.stringify(statusReportData),
+      {
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json',
+        },
+        timeout: '15s',
+      }
   );
 
   check(response, {
@@ -355,9 +355,9 @@ export function mixedPeakLoad() {
     const statusReportData = generateTerminalStatusReport(deviceAccount);
 
     const response = http.put(
-      `${serverEnv.baseUrl}/wp-json/screen/v1/status`,
-      JSON.stringify(statusReportData),
-      { headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }, timeout: '15s' }
+        `${serverEnv.baseUrl}/wp-json/screen/v1/status`,
+        JSON.stringify(statusReportData),
+        { headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }, timeout: '15s' }
     );
 
     check(response, { 'HTTP成功': (r) => r.status === 200 });
@@ -380,8 +380,8 @@ export function mixedPeakLoad() {
     const accounts = isV10 ? wsV10DeviceAccounts : wsV11DeviceAccounts;
     const deviceAccount = accounts[Math.floor(Math.random() * accounts.length)];
     const wsUrl = isV10
-      ? `${serverEnv.websocketUrl.replace('/websocket', '/ColorWebSocket/websocket/chat')}?username=${deviceAccount}&password=${devices.password}`
-      : `${serverEnv.websocketUrl.replace('/websocket', '/ColorWebSocket/terminal')}?username=${deviceAccount}&password=${devices.password}&protocol_version=1.1`;
+        ? `${serverEnv.websocketUrl.replace('/websocket', '/ColorWebSocket/websocket/chat')}?username=${deviceAccount}&password=${devices.password}`
+        : `${serverEnv.websocketUrl.replace('/websocket', '/ColorWebSocket/terminal')}?username=${deviceAccount}&password=${devices.password}&protocol_version=1.1`;
 
     const protocolName = isV10 ? 'V10' : 'V11';
     console.log(`🔄 混合峰值-${protocolName}: 设备 ${deviceAccount} 建立连接`);
@@ -494,9 +494,9 @@ export function setup() {
   const httpAuth = 'Basic ' + encoding.b64encode(`${httpTestAccount}:${devices.password}`);
   const httpTestData = generateTerminalStatusReport(httpTestAccount);
   const httpTest = http.put(
-    `${serverEnv.baseUrl}/wp-json/screen/v1/status`,
-    JSON.stringify(httpTestData),
-    { headers: { 'Authorization': httpAuth, 'Content-Type': 'application/json' }, timeout: '10s' }
+      `${serverEnv.baseUrl}/wp-json/screen/v1/status`,
+      JSON.stringify(httpTestData),
+      { headers: { 'Authorization': httpAuth, 'Content-Type': 'application/json' }, timeout: '10s' }
   );
 
   if (httpTest.status < 200 || httpTest.status >= 500) {
