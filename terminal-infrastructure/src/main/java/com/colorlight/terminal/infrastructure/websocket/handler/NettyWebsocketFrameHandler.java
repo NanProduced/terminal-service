@@ -17,10 +17,10 @@ import io.netty.handler.timeout.IdleStateEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
 
 /**
  * NettyWebSocket帧处理器
@@ -63,7 +63,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
             // 连接初始化可能包含Redis写操作等耗时操作
             try {
                 websocketConnectionExecutor.execute(() -> initializeWebsocketSessionAsync(ctx));
-            } catch (RejectedExecutionException ex) {
+            } catch (TaskRejectedException ex) {
                 log.error("NettyWebsocketFrameHandler - WebSocket连接线程池已满，拒绝握手: channelId={}",
                         ctx.channel().id().asShortText(), ex);
                 ctx.channel().eventLoop().execute(ctx::close);

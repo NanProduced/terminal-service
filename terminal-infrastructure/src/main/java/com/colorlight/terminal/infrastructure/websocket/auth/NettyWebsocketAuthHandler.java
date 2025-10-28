@@ -26,6 +26,7 @@ import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -34,7 +35,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
 
 @Slf4j
 @Component
@@ -104,7 +104,7 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
         ReferenceCountUtil.retain(request);
         try {
             websocketAuthExecutor.execute(() -> handleWebSocketAuthentication(ctx, request));
-        } catch (RejectedExecutionException e) {
+        } catch (TaskRejectedException e) {
             log.error("NettyWebsocketAuthHandler - WebSocket 认证线程池已满，拒绝请求: path={}", connectPath, e);
             ReferenceCountUtil.release(request, 2);
             sendServiceUnavailableResponse(ctx);
