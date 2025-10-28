@@ -23,31 +23,31 @@
       "enabled": true,
 
       "basicLoad": {
-        "_comment": "基础负载阶段 - 测试的第一阶段，运行指定时长",
-        "vus": 20,
-        "vus_description": "虚拟用户数 - 同时多少个用户在发送请求（增加此值会增加并发压力，影响总体RPS）",
+        "_comment": "基础负载阶段 - 测试的第一阶段，运行指定时长 (2核2线程优化)",
+        "vus": 15,
+        "vus_description": "虚拟用户数 - 同时多少个用户在发送请求 (从20降至15)",
 
         "duration": "5m",
-        "duration_description": "持续时间 - 基础负载阶段持续多长时间（格式：30s/5m/1h等），影响总测试时长和总请求数",
+        "duration_description": "持续时间 - 基础负载阶段持续多长时间（格式：30s/5m/1h等）",
 
-        "arrivalRate": 20,
-        "arrivalRate_description": "到达率(RPS) - 每秒多少个请求到达服务器（167 VU通常产生~167 RPS的HTTP请求）"
+        "arrivalRate": 15,
+        "arrivalRate_description": "到达率(RPS) - 每秒多少个请求到达服务器 (从20降至15)"
       },
 
       "peakLoad": {
-        "_comment": "峰值负载阶段 - 测试的第二阶段，模拟流量突增",
+        "_comment": "峰值负载阶段 - 测试的第二阶段，模拟流量突增 (2核2线程优化)",
         "startTime": "15m",
         "startTime_description": "开始时间 - 从第几分钟开始峰值测试（需≥basicLoad.duration）",
 
-        "startVUs": 167,
-        "peakVUs": 333,
+        "startVUs": 50,
+        "peakVUs": 100,
         "stages": [
-          {"duration": "2m", "target": 167},
-          {"duration": "3m", "target": 333},
-          {"duration": "3m", "target": 167},
+          {"duration": "2m", "target": 50},
+          {"duration": "3m", "target": 100},
+          {"duration": "3m", "target": 50},
           {"duration": "2m", "target": 0}
         ],
-        "stages_description": "分阶段增减VU - 从startVU逐步增加到peakVU再降回0，模拟真实流量变化"
+        "stages_description": "分阶段增减VU - 从50增至100再降回0 (从333降至100)"
       },
 
       "thresholds": {
@@ -72,25 +72,25 @@
       "enabled": true,
 
       "basicLoad": {
-        "_comment": "基础负载阶段 - 测试的第一阶段",
-        "vus": 100,
-        "vus_description": "虚拟用户数 - 同时多少个设备在建立WebSocket连接",
+        "_comment": "基础负载阶段 - 测试的第一阶段 (2核2线程服务器优化配置)",
+        "vus": 40,
+        "vus_description": "虚拟用户数 - 同时多少个设备在建立WebSocket连接 (从100降至40)",
 
         "duration": "10m",
         "duration_description": "持续时间 - 基础负载持续多长时间"
       },
 
       "peakLoad": {
-        "_comment": "峰值负载阶段 - 模拟突发连接",
+        "_comment": "峰值负载阶段 - 模拟突发连接 (2核2线程优化)",
         "startTime": "10m",
         "stages": [
-          {"duration": "1m", "target": 100},
-          {"duration": "2m", "target": 200},
-          {"duration": "2m", "target": 300},
-          {"duration": "2m", "target": 200},
-          {"duration": "1m", "target": 100}
+          {"duration": "1m", "target": 40},
+          {"duration": "2m", "target": 80},
+          {"duration": "2m", "target": 120},
+          {"duration": "2m", "target": 80},
+          {"duration": "1m", "target": 40}
         ],
-        "stages_description": "分阶段增减VU - 从100增加到300再逐步降低"
+        "stages_description": "分阶段增减VU - 从40增加到120再逐步降低 (从300降至120)"
       },
 
       "connectionConfig": {
@@ -133,25 +133,25 @@
       "enabled": true,
 
       "mixedLoad": {
-        "_comment": "基础负载阶段 - 测试的第一阶段",
-        "vus": 80,
-        "vus_description": "虚拟用户数 - 同时多少个设备在保持长连接",
+        "_comment": "基础负载阶段 - 测试的第一阶段 (2核2线程服务器优化配置)",
+        "vus": 40,
+        "vus_description": "虚拟用户数 - 同时多少个设备在保持长连接 (从80降至40，适配2核2线程)",
 
         "duration": "12m",
         "duration_description": "持续时间 - 基础负载持续多长时间"
       },
 
       "peakBurst": {
-        "_comment": "峰值负载阶段 - 模拟突发连接和消息",
+        "_comment": "峰值负载阶段 - 模拟突发连接和消息 (2核2线程优化)",
         "startTime": "12m",
         "stages": [
-          {"duration": "1m", "target": 40},
-          {"duration": "2m", "target": 120},
-          {"duration": "2m", "target": 200},
+          {"duration": "1m", "target": 30},
           {"duration": "2m", "target": 60},
-          {"duration": "1m", "target": 40}
+          {"duration": "2m", "target": 80},
+          {"duration": "2m", "target": 50},
+          {"duration": "1m", "target": 30}
         ],
-        "stages_description": "分阶段增减VU - 模拟流量波动，最高200个并发连接"
+        "stages_description": "分阶段增减VU - 模拟流量波动，最高80个并发连接 (从200降至80)"
       },
 
       "messageConfig": {
@@ -191,9 +191,9 @@
       "enabled": true,
 
       "httpScenario": {
-        "_comment": "HTTP部分配置 - 持续发送状态上报请求",
-        "rate": 100,
-        "rate_description": "到达率(RPS) - 每秒发送100个HTTP请求",
+        "_comment": "HTTP部分配置 - 持续发送状态上报请求 (2核2线程优化)",
+        "rate": 50,
+        "rate_description": "到达率(RPS) - 每秒发送50个HTTP请求 (从100降至50)",
 
         "timeUnit": "1s",
         "timeUnit_description": "时间单位 - RPS的计算时间单位（1s表示每秒）",
@@ -201,66 +201,66 @@
         "duration": "20m",
         "duration_description": "持续时间 - HTTP部分运行20分钟",
 
-        "preAllocatedVUs": 50,
-        "preAllocatedVUs_description": "预分配VU - 预先创建50个虚拟用户，加快启动",
+        "preAllocatedVUs": 25,
+        "preAllocatedVUs_description": "预分配VU - 预先创建25个虚拟用户 (从50降至25)",
 
-        "maxVUs": 200,
-        "maxVUs_description": "最大VU - 最多允许200个虚拟用户（自动扩展）"
+        "maxVUs": 100,
+        "maxVUs_description": "最大VU - 最多允许100个虚拟用户 (从200降至100)"
       },
 
       "websocketScenarios": {
-        "_comment": "WebSocket部分配置 - 同时测试V10和V11两种版本",
+        "_comment": "WebSocket部分配置 - 同时测试V10和V11两种版本 (2核2线程优化)",
 
         "v10": {
-          "startVUs": 30,
-          "startVUs_description": "起始VU - WebSocket V10从30个虚拟用户开始",
+          "startVUs": 20,
+          "startVUs_description": "起始VU - WebSocket V10从20个虚拟用户开始 (从30降至20)",
 
-          "peakVUs": 60,
-          "peakVUs_description": "峰值VU - WebSocket V10最多60个虚拟用户",
+          "peakVUs": 40,
+          "peakVUs_description": "峰值VU - WebSocket V10最多40个虚拟用户 (从60降至40)",
 
           "stages": [
-            {"duration": "3m", "target": 60},
-            {"duration": "14m", "target": 60},
-            {"duration": "3m", "target": 30}
+            {"duration": "3m", "target": 40},
+            {"duration": "14m", "target": 40},
+            {"duration": "3m", "target": 20}
           ],
-          "stages_description": "分阶段策略 - 3分钟增加到60，保持14分钟，3分钟降低到30"
+          "stages_description": "分阶段策略 - 3分钟增加到40，保持14分钟，3分钟降低到20"
         },
 
         "v11": {
-          "startVUs": 30,
-          "startVUs_description": "起始VU - WebSocket V11从30个虚拟用户开始",
+          "startVUs": 20,
+          "startVUs_description": "起始VU - WebSocket V11从20个虚拟用户开始 (从30降至20)",
 
-          "peakVUs": 60,
-          "peakVUs_description": "峰值VU - WebSocket V11最多60个虚拟用户",
+          "peakVUs": 40,
+          "peakVUs_description": "峰值VU - WebSocket V11最多40个虚拟用户 (从60降至40)",
 
           "stages": [
-            {"duration": "3m", "target": 60},
-            {"duration": "14m", "target": 60},
-            {"duration": "3m", "target": 30}
+            {"duration": "3m", "target": 40},
+            {"duration": "14m", "target": 40},
+            {"duration": "3m", "target": 20}
           ],
           "stages_description": "分阶段策略 - 与V10相同的梯度"
         }
       },
 
       "peakScenario": {
-        "_comment": "峰值阶段配置 - 三个协议同时达到最高负载",
+        "_comment": "峰值阶段配置 - 三个协议同时达到最高负载 (2核2线程优化)",
         "startTime": "10m",
         "startTime_description": "开始时间 - 从第10分钟开始峰值测试",
 
-        "startRate": 100,
-        "startRate_description": "起始RPS - 峰值阶段从100 RPS开始",
+        "startRate": 50,
+        "startRate_description": "起始RPS - 峰值阶段从50 RPS开始 (从100降至50)",
 
-        "peakRate": 300,
-        "peakRate_description": "峰值RPS - 峰值阶段最高300 RPS",
+        "peakRate": 150,
+        "peakRate_description": "峰值RPS - 峰值阶段最高150 RPS (从300降至150)",
 
         "duration": "10m",
         "duration_description": "持续时间 - 峰值阶段持续10分钟",
 
-        "preAllocatedVUs": 150,
-        "preAllocatedVUs_description": "预分配VU - 预先创建150个虚拟用户",
+        "preAllocatedVUs": 75,
+        "preAllocatedVUs_description": "预分配VU - 预先创建75个虚拟用户 (从150降至75)",
 
-        "maxVUs": 400,
-        "maxVUs_description": "最大VU - 最多允许400个虚拟用户（HTTP+WS总和）"
+        "maxVUs": 200,
+        "maxVUs_description": "最大VU - 最多允许200个虚拟用户 (从400降至200)"
       },
 
       "thresholds": {

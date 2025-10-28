@@ -246,7 +246,7 @@ export default function() {
       wsV11Connections.add(1);
       console.log(`✅ 设备 ${deviceAccount} V11连接成功，开始执行测试操作`);
 
-      // 设置V1.1协议心跳机制（空消息心跳，30秒间隔）
+      // 设置V1.1协议心跳机制（空消息心跳，30秒间隔，规避Nginx 60秒超时）
       const heartbeatInterval = setInterval(() => {
         try {
           socket.send(''); // V1.1协议使用空消息作为心跳
@@ -340,13 +340,13 @@ export default function() {
           console.log(`📍 设备 ${deviceAccount} 发送V11GPS报告 messageId=${messageId}`);
         }
 
-        // 随机休眠
-        const sleepTime = randomFloat(0.6, 2.0);
+        // 短间隔休眠（保持消息流活跃，避免Nginx超时）
+        const sleepTime = randomFloat(1.0, 2.0);
         sleep(sleepTime);
       }
 
-      // 随机休眠
-      sleep(randomFloat(2.0, 5.0));
+      // 操作完成后短休眠（确保心跳能够按时发送）
+      sleep(randomFloat(1.5, 3.0));
     });
 
     // 检查连接是否成功
@@ -355,19 +355,19 @@ export default function() {
     });
     wsV11ConnectionFailed.add(!ok);
 
-    // 处理连接失败
+    // 处理连接失败或异常断开
     if (!ok) {
       wsV11Errors.add(1);
       console.error(`❌ 设备 ${deviceAccount} V11连接失败: 状态=${res ? res.status : 'null'}`);
-      const retryDelay = randomFloat(1.0, 3.0);
-      console.log(`⏱️ 设备 ${deviceAccount} 等待${retryDelay.toFixed(1)}秒后重试V11连接`);
+      const retryDelay = randomFloat(0.5, 1.5);  // 快速重试，规避超时
+      console.log(`⏱️ 设备 ${deviceAccount} ${retryDelay.toFixed(1)}秒后自动重试V11连接`);
       sleep(retryDelay);
       continue;
     }
 
-    // 连接成功后的等待
-    const nextConnectionDelay = randomFloat(1.0, 3.0);
-    console.log(`⏱️ 设备 ${deviceAccount} V11测试完成，等待${nextConnectionDelay.toFixed(1)}秒后重新连接`);
+    // 连接正常完成后的短暂等待（快速重连保持压力）
+    const nextConnectionDelay = randomFloat(0.5, 1.5);
+    console.log(`⏱️ 设备 ${deviceAccount} V11测试完成，${nextConnectionDelay.toFixed(1)}秒后重新连接`);
     sleep(nextConnectionDelay);
   }
 }
