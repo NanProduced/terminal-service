@@ -260,7 +260,7 @@ public class ThreadPoolConfig {
         executor.setMaxPoolSize(maxPoolSize);
         
         // 队列容量 - 缓冲RPC调用
-        executor.setQueueCapacity(500);
+        executor.setQueueCapacity(5000);
         
         // 线程空闲时间 - 较长保活
         executor.setKeepAliveSeconds(300);
