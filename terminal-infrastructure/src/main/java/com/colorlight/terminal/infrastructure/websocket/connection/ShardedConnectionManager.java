@@ -221,30 +221,46 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
     
     /**
      * 清理无效连接 - 定期维护任务
+     * 同时更新totalConnections和versionCounter以保持数据一致性
      */
     public int cleanupInvalidConnections() {
         if (!running) {
             return 0;
         }
-        
+
         globalLock.writeLock().lock();
         try {
-            int cleanedCount = 0;
-            
+            AtomicInteger cleanedCount = new AtomicInteger(0);
+            Map<ProtocolVersion, Integer> totalCleanedByVersion = new EnumMap<>(ProtocolVersion.class);
+
+            // 收集所有分片的清理统计
             for (ConnectionShard shard : shards) {
-                cleanedCount += shard.cleanupInvalidConnections();
+                Map<ProtocolVersion, Integer> shardCleaned = shard.cleanupInvalidConnections();
+
+                // 汇总每个协议版本的清理数量
+                shardCleaned.forEach((version, count) -> {
+                    totalCleanedByVersion.merge(version, count, Integer::sum);
+                    cleanedCount.addAndGet(count);
+                });
             }
-            
+
             // 更新总计数
-            totalConnections.addAndGet(-cleanedCount);
-            
-            if (cleanedCount > 0) {
-                log.info("ShardedConnectionManager - 清除 {} 个无效连接, 当前连接数: {}",
-                        cleanedCount, totalConnections.get());
+            if (cleanedCount.get() > 0) {
+                totalConnections.addAndGet(-cleanedCount.get());
+
+                // 同步更新versionCounter - 这是关键修复
+                // 确保versionCounter与实际连接数一致
+                totalCleanedByVersion.forEach((version, count) -> versionCounter.computeIfPresent(version, (k, v) -> {
+                    int newValue = Math.max(0, v.get() - count);
+                    return newValue > 0 ? new AtomicInteger(newValue) : null;
+                }));
+
+                log.info("ShardedConnectionManager - 清除 {} 个无效连接, 当前连接数: {}, 协议版本分布: {}",
+                        cleanedCount.get(), totalConnections.get(), totalCleanedByVersion);
             }
-            
-            return cleanedCount;
-            
+
+            return cleanedCount.get();
+
         } finally {
             globalLock.writeLock().unlock();
         }
@@ -259,7 +275,7 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
      * @return 协议版本与连接数的映射
      */
     public Map<ProtocolVersion, Integer> getProtocolVersionConnections() {
-        Map<ProtocolVersion, Integer> result = new HashMap<>();
+        Map<ProtocolVersion, Integer> result = new EnumMap<>(ProtocolVersion.class);
         for (Map.Entry<ProtocolVersion, AtomicInteger> entry : versionCounter.entrySet()) {
             result.put(entry.getKey(), entry.getValue().get());
         }
@@ -345,28 +361,33 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
         /**
          * 清理无效连接
          * 实现连接健康检查逻辑
+         *
+         * @return 清理的连接按协议版本的分布统计 (协议版本 -> 清理数量)
          */
-        public int cleanupInvalidConnections() {
+        public Map<ProtocolVersion, Integer> cleanupInvalidConnections() {
             shardLock.writeLock().lock();
             try {
                 Iterator<Map.Entry<Long, TerminalConnection>> iterator = connections.entrySet().iterator();
-                int cleanedCount = 0;
-                
+                Map<ProtocolVersion, Integer> cleanedByVersion = new EnumMap<>(ProtocolVersion.class);
+
                 while (iterator.hasNext()) {
                     Map.Entry<Long, TerminalConnection> entry = iterator.next();
                     TerminalConnection connection = entry.getValue();
-                    
+
                     // 检查连接是否有效
                     if (!isSessionValid(connection)) {
+                        // 统计被清理连接的协议版本
+                        ProtocolVersion version = connection.getProtocolVersion();
+                        cleanedByVersion.merge(version, 1, Integer::sum);
+
                         iterator.remove();
-                        cleanedCount++;
-                        log.debug("ConnectionShard - 清除无效连接: {} - 分片编号: {}",
-                                entry.getKey(), shardId);
+                        log.debug("ConnectionShard - 清除无效连接: {} - 分片编号: {} - 协议版本: {}",
+                                entry.getKey(), shardId, version);
                     }
                 }
-                
-                return cleanedCount;
-                
+
+                return cleanedByVersion;
+
             } finally {
                 shardLock.writeLock().unlock();
             }
