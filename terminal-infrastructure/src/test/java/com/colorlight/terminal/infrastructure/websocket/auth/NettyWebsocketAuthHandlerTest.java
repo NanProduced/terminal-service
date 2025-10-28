@@ -420,7 +420,7 @@ class NettyWebsocketAuthHandlerTest {
 
             FullHttpResponse response = responseCaptor.getValue();
             assertThat(response.status()).isEqualTo(HttpResponseStatus.UPGRADE_REQUIRED);
-            assertThat(response.content().toString(StandardCharsets.UTF_8)).isEqualTo("不支持的WebSocket协议版本");
+            assertThat(response.content().toString(StandardCharsets.UTF_8)).isEqualTo("不支持的 WebSocket 协议版本");
         }
 
         @Test
@@ -444,7 +444,7 @@ class NettyWebsocketAuthHandlerTest {
 
             FullHttpResponse response = responseCaptor.getValue();
             assertThat(response.status()).isEqualTo(HttpResponseStatus.UPGRADE_REQUIRED);
-            assertThat(response.content().toString(StandardCharsets.UTF_8)).isEqualTo("不支持的WebSocket协议版本");
+            assertThat(response.content().toString(StandardCharsets.UTF_8)).isEqualTo("不支持的 WebSocket 协议版本");
         }
     }
     

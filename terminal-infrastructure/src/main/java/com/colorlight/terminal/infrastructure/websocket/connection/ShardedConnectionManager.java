@@ -233,47 +233,42 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
             AtomicInteger cleanedCount = new AtomicInteger(0);
             Map<ProtocolVersion, Integer> totalCleanedByVersion = new EnumMap<>(ProtocolVersion.class);
 
-            // 收集所有分片的清理统计
             for (ConnectionShard shard : shards) {
                 Map<ProtocolVersion, Integer> shardCleaned = shard.cleanupInvalidConnections();
+                if (shardCleaned.isEmpty()) {
+                    continue;
+                }
 
-                // 汇总每个协议版本的清理数量
                 shardCleaned.forEach((version, count) -> {
                     totalCleanedByVersion.merge(version, count, Integer::sum);
                     cleanedCount.addAndGet(count);
                 });
             }
 
-            // 更新总计数
-            if (cleanedCount.get() > 0) {
-                totalConnections.addAndGet(-cleanedCount.get());
+            int removed = cleanedCount.get();
+            if (removed > 0) {
+                int remaining = totalConnections.updateAndGet(current -> Math.max(0, current - removed));
 
-                // 同步更新versionCounter - 这是关键修复
-                // 确保versionCounter与实际连接数一致
-                totalCleanedByVersion.forEach((version, count) -> versionCounter.computeIfPresent(version, (k, v) -> {
-                    int newValue = Math.max(0, v.get() - count);
-                    return newValue > 0 ? new AtomicInteger(newValue) : null;
-                }));
+                totalCleanedByVersion.forEach((version, count) ->
+                        versionCounter.computeIfPresent(version, (key, counter) -> {
+                            int updated = counter.addAndGet(-count);
+                            if (updated <= 0) {
+                                counter.set(0);
+                                return null;
+                            }
+                            return counter;
+                        })
+                );
 
                 log.info("ShardedConnectionManager - 清除 {} 个无效连接, 当前连接数: {}, 协议版本分布: {}",
-                        cleanedCount.get(), totalConnections.get(), totalCleanedByVersion);
+                        removed, remaining, totalCleanedByVersion);
             }
 
-            return cleanedCount.get();
-
+            return removed;
         } finally {
             globalLock.writeLock().unlock();
         }
     }
-    
-    // ============== 生命周期管理 ==============
-    
-    /**
-     * 获取协议版本连接数统计
-     * 提供给监控服务使用，避免使用反射
-     *
-     * @return 协议版本与连接数的映射
-     */
     public Map<ProtocolVersion, Integer> getProtocolVersionConnections() {
         Map<ProtocolVersion, Integer> result = new EnumMap<>(ProtocolVersion.class);
         for (Map.Entry<ProtocolVersion, AtomicInteger> entry : versionCounter.entrySet()) {
@@ -420,3 +415,4 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
         }
     }
 }
+
