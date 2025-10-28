@@ -10,6 +10,7 @@ import com.colorlight.ccloud.schedule.interfaces.TerminalScheduleRpcService;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 import com.colorlight.terminal.application.domain.status.ReportSource;
+import com.colorlight.terminal.commons.utils.JsonUtils;
 import org.apache.dubbo.rpc.RpcException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -543,7 +544,7 @@ class DubboMainServiceRpcAdapterTest {
         @DisplayName("应该成功获取设备排程并转换为JSON")
         void should_successfully_get_device_schedule_and_convert_to_json() {
             // Given
-            Schedule mockSchedule = createMockSchedule();
+            String mockSchedule = JsonUtils.toJson(createMockSchedule());
             when(terminalScheduleRpcService.getScheduleByLedId(TEST_DEVICE_ID)).thenReturn(mockSchedule);
 
             // When
@@ -576,7 +577,7 @@ class DubboMainServiceRpcAdapterTest {
         void should_correctly_call_schedule_service_get_by_led_id() {
             // Given
             Long specificDeviceId = 99999L;
-            Schedule mockSchedule = createMockSchedule();
+            String mockSchedule = JsonUtils.toJson(createMockSchedule());
             when(terminalScheduleRpcService.getScheduleByLedId(specificDeviceId)).thenReturn(mockSchedule);
 
             // When
@@ -604,7 +605,7 @@ class DubboMainServiceRpcAdapterTest {
         @DisplayName("应该处理复杂排程对象的JSON转换")
         void should_handle_complex_schedule_object_json_conversion() {
             // Given
-            Schedule complexSchedule = createMockSchedule();
+            String complexSchedule = JsonUtils.toJson(createMockSchedule());
             when(terminalScheduleRpcService.getScheduleByLedId(TEST_DEVICE_ID)).thenReturn(complexSchedule);
 
             // When
