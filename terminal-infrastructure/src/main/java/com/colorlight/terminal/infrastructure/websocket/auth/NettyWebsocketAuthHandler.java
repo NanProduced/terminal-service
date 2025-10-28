@@ -26,6 +26,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 
 @Slf4j
 @Component
@@ -102,21 +103,35 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
             return;
         }
 
-        // 保留引用计数，避免在业务线程池中释放
+        // 保留引用计数，异步处理认证（从I/O线程移出）
         ReferenceCountUtil.retain(request);
-        // 在业务线程池中处理WebSocket认证
-        websocketAuthExecutor.execute(() -> handleWebSocketAuthentication(ctx, request));
+        try {
+            // 在业务线程池中处理WebSocket认证
+            websocketAuthExecutor.execute(() -> handleWebSocketAuthentication(ctx, request));
+        } catch (RejectedExecutionException e) {
+            // 如果线程池拒绝任务，释放额外的retain计数，返回503 Service Unavailable
+            log.error("NettyWebsocketAuthHandler - WebSocket认证线程池已满，拒绝请求: {}", e.getMessage());
+            ReferenceCountUtil.release(request);
+            sendServiceUnavailableResponse(ctx);  // 返回503，而不是401
+        }
     }
 
     /**
      * 在业务线程池中处理WebSocket认证
      * 避免阻塞Netty的I/O线程
+     *
+     * 引用计数管理：
+     * - I/O线程中已执行过retain()（refCnt: 2）
+     * - 本方法中所有失败路径都需要额外release()来补偿那个retain
+     * - 只有成功通过fireChannelRead()转发时，后续handler会处理那个retain
      */
     private void handleWebSocketAuthentication(ChannelHandlerContext ctx, FullHttpRequest request) {
         try {
             // 检查连接是否还有效
             if (!ctx.channel().isActive()) {
                 log.debug("NettyWebsocketAuthHandler - 连接已关闭，跳过认证处理");
+                // ❌ 连接无效，无法转发，释放额外的retain
+                ReferenceCountUtil.release(request);
                 return;
             }
 
@@ -124,31 +139,36 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
             if (!authenticateRequest(ctx, request)) {
                 log.debug("NettyWebsocketAuthHandler - WebSocket认证失败,发送401并关闭连接");
                 sendErrorResponse(ctx);
+                // ❌ 认证失败，未能转发，释放额外的retain
+                ReferenceCountUtil.release(request);
                 return;
             }
 
             // 认证成功后将请求URI转换为内部统一路径
             // 使所有协议版本都使用统一的内部WebSocket路径进行处理
             request.setUri(nettyWebsocketProperties.getServer().getWebsocketPath());
-            
+
             // 将处理结果回调到I/O线程
+            // ✅ fireChannelRead后，后续handler负责处理那个额外的retain
             ctx.channel().eventLoop().execute(() -> {
                 try {
                     ctx.pipeline().remove(this);
                     ctx.fireChannelRead(request);
+                    // fireChannelRead成功 - 后续handler会release()
                 } catch (Exception e) {
-                    log.error("NettyWebsocketAuthHandler - 认证成功后处理异常", e);
+                    log.error("NettyWebsocketAuthHandler - 认证成功后处理异常，fireChannelRead失败", e);
+                    // fireChannelRead失败 - 需要额外release来补偿
+                    ReferenceCountUtil.release(request);
                     sendErrorResponse(ctx);
                 }
             });
 
         } catch (Exception e) {
             log.error("NettyWebsocketAuthHandler - Websocket认证异常", e);
+            // ❌ 认证异常，未能转发，释放额外的retain
+            ReferenceCountUtil.release(request);
             // 异步发送错误响应
             ctx.channel().eventLoop().execute(() -> sendErrorResponse(ctx));
-        } finally {
-            // 释放引用计数
-            ReferenceCountUtil.release(request);
         }
     }
 
@@ -235,11 +255,20 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
     }
 
     /**
-     * 发送错误响应
+     * 发送认证失败响应（401 Unauthorized）
      * @param ctx 通道上下文
      */
     private void sendErrorResponse(ChannelHandlerContext ctx) {
         sendResponse(ctx, HttpResponseStatus.UNAUTHORIZED, "认证失败");
+    }
+
+    /**
+     * 发送服务不可用响应（503 Service Unavailable）
+     * 当线程池拒绝任务时，表示服务器过载
+     * @param ctx 通道上下文
+     */
+    private void sendServiceUnavailableResponse(ChannelHandlerContext ctx) {
+        sendResponse(ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "服务器过载，请稍后重试");
     }
 
     /**
