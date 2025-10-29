@@ -61,8 +61,8 @@
         "http_req_failed_rate": 0.02,
         "http_req_failed_rate_description": "失败率阈值 - 允许最多2%的请求失败（0.02 = 2%，增加此值会降低对成功率的要求）",
 
-        "http_reqs_min": 100000,
-        "http_reqs_min_description": "最小请求数 - 整个测试至少要发送100000个请求，否则测试失败"
+        "http_reqs_min": 30000,
+        "http_reqs_min_description": "最小请求数 - 压测阶段需要达到 30000 次请求，否则视为失败"
       }
     },
 

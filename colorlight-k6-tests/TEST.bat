@@ -154,10 +154,10 @@ if "!VALIDATE_EXIT!"=="0" (
     echo [ERR] 场景执行失败，退出码: !RUN_EXIT!
     echo       可能原因: 性能阈值未达到或服务不可用
     if exist "!SUMMARY_FILE!" (
-        echo [INFO] 但摘要文件已生成，可以分析结果
+        echo [INFO] 摘要文件已生成，可使用 ANALYZE.bat 查看详细数据
         set "SCRIPT_EXIT=99"
     ) else if exist "!METRICS_FILE!" (
-        echo [INFO] 指标文件已生成，可以分析结果
+        echo [INFO] 指标文件已生成，可使用 ANALYZE.bat 查看详细数据
         set "SCRIPT_EXIT=99"
     ) else (
         echo [ERR] 未生成任何结果文件
@@ -180,16 +180,20 @@ set "METRICS_EXISTS=0"
 set "SUMMARY_SIZE=0"
 set "METRICS_SIZE=0"
 
+REM 等待结果文件写入完成（最多 5 秒）
+call :__ensure_file_ready "!SUMMARY!" 5 >nul
+call :__ensure_file_ready "!METRICS!" 5 >nul
+
 REM 检查摘要文件
 if exist "!SUMMARY!" (
-    REM 使用 PowerShell 获取精确的文件大小
-    for /f %%Z in ('powershell -NoProfile -Command "if(Test-Path \"!SUMMARY!\") { (Get-Item \"!SUMMARY!\").Length }" 2^>nul') do set "SUMMARY_SIZE=%%Z"
+    REM 直接读取文件大小，避免依赖 PowerShell
+    for %%F in ("!SUMMARY!") do set "SUMMARY_SIZE=%%~zF"
 
     if !SUMMARY_SIZE! GTR 0 (
         set "SUMMARY_EXISTS=1"
         echo [OK] 摘要文件存在: !SUMMARY! (大小: !SUMMARY_SIZE! 字节)
     ) else (
-        echo [WARN] 摘要文件存在但为空: !SUMMARY!
+        echo [WARN] 摘要文件存在但大小为 0 字节: !SUMMARY!
     )
 ) else (
     echo [WARN] 摘要文件不存在: !SUMMARY!
@@ -197,14 +201,14 @@ if exist "!SUMMARY!" (
 
 REM 检查指标文件
 if exist "!METRICS!" (
-    REM 使用 PowerShell 获取精确的文件大小
-    for /f %%Z in ('powershell -NoProfile -Command "if(Test-Path \"!METRICS!\") { (Get-Item \"!METRICS!\").Length }" 2^>nul') do set "METRICS_SIZE=%%Z"
+    REM 直接读取文件大小，避免依赖 PowerShell
+    for %%F in ("!METRICS!") do set "METRICS_SIZE=%%~zF"
 
     if !METRICS_SIZE! GTR 0 (
         set "METRICS_EXISTS=1"
         echo [OK] 指标文件存在: !METRICS! (大小: !METRICS_SIZE! 字节)
     ) else (
-        echo [WARN] 指标文件存在但为空: !METRICS!
+        echo [WARN] 指标文件存在但大小为 0 字节: !METRICS!
     )
 ) else (
     echo [WARN] 指标文件不存在: !METRICS!
@@ -231,6 +235,32 @@ if "!METRICS_EXISTS!"=="1" (
 REM 情况3：两个文件都不存在或为空 → 完全失败
 endlocal
 exit /b 1
+
+:__ensure_file_ready
+setlocal enabledelayedexpansion
+set "TARGET_FILE=%~1"
+set "MAX_RETRY=%~2"
+if not defined MAX_RETRY set "MAX_RETRY=5"
+set /a RETRY_COUNT=0
+
+:__ensure_file_ready_loop
+set "FILE_SIZE="
+if exist "!TARGET_FILE!" (
+    for %%F in ("!TARGET_FILE!") do set "FILE_SIZE=%%~zF"
+    if defined FILE_SIZE if !FILE_SIZE! GTR 0 (
+        endlocal
+        exit /b 0
+    )
+)
+
+if !RETRY_COUNT! GEQ !MAX_RETRY! (
+    endlocal
+    exit /b 1
+)
+
+set /a RETRY_COUNT+=1
+timeout /t 1 /nobreak >nul
+goto :__ensure_file_ready_loop
 
 :__run_all_scenarios
 echo ================================================
