@@ -24,14 +24,14 @@
 
       "basicLoad": {
         "_comment": "基础负载阶段 - 测试的第一阶段，运行指定时长 (2核2线程优化)",
-        "vus": 15,
-        "vus_description": "虚拟用户数 - 同时多少个用户在发送请求 (从20降至15)",
+        "vus": 20,
+        "vus_description": "虚拟用户数 - 同时多少个用户在发送请求（2核2线程服务器推荐20）",
 
         "duration": "1m",
         "duration_description": "持续时间 - 基础负载阶段持续多长时间（格式：30s/5m/1h等）",
 
-        "arrivalRate": 15,
-        "arrivalRate_description": "到达率(RPS) - 每秒多少个请求到达服务器 (从20降至15)"
+        "arrivalRate": 20,
+        "arrivalRate_description": "到达率(RPS) - 每秒多少个请求到达服务器（2核2线程推荐20 RPS）"
       },
 
       "peakLoad": {
@@ -39,13 +39,13 @@
         "startTime": "1m",
         "startTime_description": "开始时间 - 从第几分钟开始峰值测试（需≥basicLoad.duration）",
 
-        "startVUs": 50,
-        "peakVUs": 100,
+        "startVUs": 40,
+        "peakVUs": 80,
         "stages": [
-          {"duration": "1m", "target": 50},
-          {"duration": "1m", "target": 100}
+          {"duration": "1m", "target": 40},
+          {"duration": "1m", "target": 80}
         ],
-        "stages_description": "分阶段增减VU - 从50增至100再降回0 (从333降至100)"
+        "stages_description": "分阶段增减VU - 基础20→峰值40→峰值80（2核2线程适配）"
       },
 
       "thresholds": {
@@ -66,26 +66,26 @@
 
     "websocket-v10": {
       "name": "WebSocket V10频繁连接测试",
-      "name_description": "场景名称 - 测试高频连接和GPS数据处理性能",
+      "name_description": "场景名称 - 测试高频连接和GPS数据处理性能（目标：打满500个WebSocket并发）",
       "enabled": true,
 
       "basicLoad": {
         "_comment": "基础负载阶段 - 测试的第一阶段 (2核2线程服务器优化配置)",
-        "vus": 40,
-        "vus_description": "虚拟用户数 - 同时多少个设备在建立WebSocket连接 (从100降至40)",
+        "vus": 150,
+        "vus_description": "虚拟用户数 - 同时多少个设备在建立WebSocket连接（2核2线程推荐150 VU用于打满500个并发）",
 
         "duration": "1m",
-        "duration_description": "持续时间 - 基础负载持续多长时间"
+        "duration_description": "持续时间 - 基础负载持续多长时间（高频连接模式，150 VU可产生高连接频率）"
       },
 
       "peakLoad": {
-        "_comment": "峰值负载阶段 - 模拟突发连接 (2核2线程优化)",
+        "_comment": "峰值负载阶段 - 模拟突发连接 (2核2线程优化，目标500个并发)",
         "startTime": "1m",
         "stages": [
-          {"duration": "1m", "target": 40},
-          {"duration": "30s", "target": 60}
+          {"duration": "1m", "target": 150},
+          {"duration": "30s", "target": 300}
         ],
-        "stages_description": "分阶段增减VU - 从40增加到120再逐步降低 (从300降至120)"
+        "stages_description": "分阶段增减VU - 基础150→峰值150→峰值300（高频连接产生大量并发）"
       },
 
       "connectionConfig": {
@@ -124,26 +124,26 @@
 
     "websocket-v11": {
       "name": "WebSocket V11协议测试",
-      "name_description": "场景名称 - 测试长连接稳定性和消息处理能力",
+      "name_description": "场景名称 - 测试长连接稳定性和消息处理能力（目标：打满500个WebSocket并发）",
       "enabled": true,
 
       "mixedLoad": {
         "_comment": "基础负载阶段 - 测试的第一阶段 (2核2线程服务器优化配置)",
-        "vus": 40,
-        "vus_description": "虚拟用户数 - 同时多少个设备在保持长连接 (从80降至40，适配2核2线程)",
+        "vus": 250,
+        "vus_description": "虚拟用户数 - 同时多少个设备在保持长连接（2核2线程推荐250 VU，长连接1:1对应并发连接）",
 
         "duration": "1m",
-        "duration_description": "持续时间 - 基础负载持续多长时间"
+        "duration_description": "持续时间 - 基础负载持续多长时间（250个长连接，稳定测试）"
       },
 
       "peakBurst": {
-        "_comment": "峰值负载阶段 - 模拟突发连接和消息 (2核2线程优化)",
+        "_comment": "峰值负载阶段 - 模拟突发连接和消息 (2核2线程优化，目标500个并发)",
         "startTime": "1m",
         "stages": [
-          {"duration": "1m", "target": 30},
-          {"duration": "30s", "target": 60}
+          {"duration": "1m", "target": 250},
+          {"duration": "30s", "target": 450}
         ],
-        "stages_description": "分阶段增减VU - 模拟流量波动，最高80个并发连接 (从200降至80)"
+        "stages_description": "分阶段增减VU - 基础250→峰值250→峰值450（长连接接近500并发上限）"
       },
 
       "messageConfig": {
@@ -183,54 +183,54 @@
       "enabled": true,
 
       "httpScenario": {
-        "_comment": "HTTP部分配置 - 持续发送状态上报请求 (2核2线程优化)",
-        "rate": 50,
-        "rate_description": "到达率(RPS) - 每秒发送50个HTTP请求 (从100降至50)",
+        "_comment": "HTTP部分配置 - 持续发送状态上报请求 (2核2线程优化，与WebSocket并发)",
+        "rate": 30,
+        "rate_description": "到达率(RPS) - 每秒发送30个HTTP请求（2核2线程推荐，与WebSocket并发降低单点压力）",
 
         "timeUnit": "1s",
         "timeUnit_description": "时间单位 - RPS的计算时间单位（1s表示每秒）",
 
         "duration": "20m",
-        "duration_description": "持续时间 - HTTP部分运行20分钟",
+        "duration_description": "持续时间 - HTTP部分运行20分钟（与WebSocket运行时间同步）",
 
-        "preAllocatedVUs": 25,
-        "preAllocatedVUs_description": "预分配VU - 预先创建25个虚拟用户 (从50降至25)",
+        "preAllocatedVUs": 15,
+        "preAllocatedVUs_description": "预分配VU - 预先创建15个虚拟用户（2核2线程推荐）",
 
-        "maxVUs": 100,
-        "maxVUs_description": "最大VU - 最多允许100个虚拟用户 (从200降至100)"
+        "maxVUs": 50,
+        "maxVUs_description": "最大VU - 最多允许50个虚拟用户（保留资源给WebSocket）"
       },
 
       "websocketScenarios": {
         "_comment": "WebSocket部分配置 - 同时测试V10和V11两种版本 (2核2线程优化)",
 
         "v10": {
-          "startVUs": 20,
-          "startVUs_description": "起始VU - WebSocket V10从20个虚拟用户开始 (从30降至20)",
+          "startVUs": 80,
+          "startVUs_description": "起始VU - WebSocket V10从80个虚拟用户开始（2核2线程推荐，混合模式下的频繁连接）",
 
-          "peakVUs": 40,
-          "peakVUs_description": "峰值VU - WebSocket V10最多40个虚拟用户 (从60降至40)",
+          "peakVUs": 150,
+          "peakVUs_description": "峰值VU - WebSocket V10最多150个虚拟用户（混合模式下的高频并发）",
 
           "stages": [
-            {"duration": "3m", "target": 40},
-            {"duration": "14m", "target": 40},
-            {"duration": "3m", "target": 20}
+            {"duration": "3m", "target": 80},
+            {"duration": "14m", "target": 80},
+            {"duration": "3m", "target": 150}
           ],
-          "stages_description": "分阶段策略 - 3分钟增加到40，保持14分钟，3分钟降低到20"
+          "stages_description": "分阶段策略 - 3分钟升至80，保持14分钟，最后3分钟升至150（混合模式下的V10并发）"
         },
 
         "v11": {
-          "startVUs": 20,
-          "startVUs_description": "起始VU - WebSocket V11从20个虚拟用户开始 (从30降至20)",
+          "startVUs": 120,
+          "startVUs_description": "起始VU - WebSocket V11从120个虚拟用户开始（2核2线程推荐，混合模式下的长连接）",
 
-          "peakVUs": 40,
-          "peakVUs_description": "峰值VU - WebSocket V11最多40个虚拟用户 (从60降至40)",
+          "peakVUs": 200,
+          "peakVUs_description": "峰值VU - WebSocket V11最多200个虚拟用户（混合模式下的长连接并发）",
 
           "stages": [
-            {"duration": "3m", "target": 40},
-            {"duration": "14m", "target": 40},
-            {"duration": "3m", "target": 20}
+            {"duration": "3m", "target": 120},
+            {"duration": "14m", "target": 120},
+            {"duration": "3m", "target": 200}
           ],
-          "stages_description": "分阶段策略 - 与V10相同的梯度"
+          "stages_description": "分阶段策略 - 3分钟升至120，保持14分钟，最后3分钟升至200（混合模式下的V11并发）"
         }
       },
 
@@ -239,32 +239,32 @@
         "startTime": "10m",
         "startTime_description": "开始时间 - 从第10分钟开始峰值测试",
 
-        "startRate": 50,
-        "startRate_description": "起始RPS - 峰值阶段从50 RPS开始 (从100降至50)",
+        "startRate": 20,
+        "startRate_description": "起始RPS - 峰值阶段从20 RPS开始（2核2线程推荐，保守设置）",
 
-        "peakRate": 150,
-        "peakRate_description": "峰值RPS - 峰值阶段最高150 RPS (从300降至150)",
+        "peakRate": 50,
+        "peakRate_description": "峰值RPS - 峰值阶段最高50 RPS（2核2线程推荐，避免HTTP过载）",
 
         "duration": "10m",
-        "duration_description": "持续时间 - 峰值阶段持续10分钟",
+        "duration_description": "持续时间 - 峰值阶段持续10分钟（与WebSocket峰值同步）",
 
-        "preAllocatedVUs": 75,
-        "preAllocatedVUs_description": "预分配VU - 预先创建75个虚拟用户 (从150降至75)",
+        "preAllocatedVUs": 30,
+        "preAllocatedVUs_description": "预分配VU - 预先创建30个虚拟用户（2核2线程推荐，给WebSocket留足资源）",
 
-        "maxVUs": 200,
-        "maxVUs_description": "最大VU - 最多允许200个虚拟用户 (从400降至200)"
+        "maxVUs": 80,
+        "maxVUs_description": "最大VU - 最多允许80个虚拟用户（2核2线程限制，避免过载）"
       },
 
       "thresholds": {
-        "_comment": "性能阈值 - 混合负载的综合指标",
-        "http_failed_rate": 0.05,
-        "http_failed_rate_description": "HTTP失败率 - 允许最多5%的HTTP请求失败（三协议混合会降低对单个协议的要求）",
+        "_comment": "性能阈值 - 混合负载的综合指标（2核2线程推荐值）",
+        "http_failed_rate": 0.03,
+        "http_failed_rate_description": "HTTP失败率 - 允许最多3%的HTTP请求失败（2核2线程推荐，降低的HTTP压力应有更好的成功率）",
 
-        "v10_failed_rate": 0.10,
-        "v10_failed_rate_description": "V10连接失败率 - 允许最多10%的WebSocket V10连接失败",
+        "v10_failed_rate": 0.08,
+        "v10_failed_rate_description": "V10连接失败率 - 允许最多8%的WebSocket V10连接失败（2核2线程推荐）",
 
-        "v11_failed_rate": 0.10,
-        "v11_failed_rate_description": "V11连接失败率 - 允许最多10%的WebSocket V11连接失败"
+        "v11_failed_rate": 0.08,
+        "v11_failed_rate_description": "V11连接失败率 - 允许最多8%的WebSocket V11连接失败（2核2线程推荐）"
       }
     }
   }
