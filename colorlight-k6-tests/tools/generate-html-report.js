@@ -970,15 +970,97 @@ function generateHtmlReport(stats, testParams, filePath, fileType) {
             margin-left: 5px;
         }
 
-        /* ==================== 参数配置卡片 ==================== */
-        .params-section {
+        /* ==================== 配置验证提示 ==================== */
+        .validation-section {
+            background: #f0f4f8;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .validation-section h3 {
+            font-size: 1.3em;
+            color: #f59e0b;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f59e0b;
+        }
+
+        .validation-success {
+            background: #d1fae5;
+            border-left: 4px solid #10b981;
+            padding: 15px;
+            border-radius: 6px;
+            color: #047857;
+            font-weight: 600;
+        }
+
+        .warning-item {
+            display: flex;
+            gap: 15px;
+            padding: 15px;
+            margin-bottom: 12px;
+            border-radius: 6px;
+            border-left: 4px solid;
+            background: white;
+        }
+
+        .warning-item.warning-warning {
+            border-left-color: #ef4444;
+            background: #fee2e2;
+        }
+
+        .warning-item.warning-info {
+            border-left-color: #3b82f6;
+            background: #dbeafe;
+        }
+
+        .warning-icon {
+            font-size: 1.5em;
+            flex-shrink: 0;
+        }
+
+        .warning-content {
+            flex: 1;
+        }
+
+        .warning-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: var(--dark);
+        }
+
+        .warning-item.warning-warning .warning-title {
+            color: #991b1b;
+        }
+
+        .warning-item.warning-info .warning-title {
+            color: #1e40af;
+        }
+
+        .warning-message {
+            font-size: 0.95em;
+            line-height: 1.5;
+            color: #6b7280;
+        }
+
+        .warning-item.warning-warning .warning-message {
+            color: #7c2d12;
+        }
+
+        .warning-item.warning-info .warning-message {
+            color: #1e3a8a;
+        }
+
+        /* ==================== 详细配置信息 ==================== */
+        .config-details {
             background: var(--light);
             border-radius: 8px;
             padding: 25px;
             margin-bottom: 40px;
         }
 
-        .params-section h2 {
+        .config-details h3 {
             font-size: 1.5em;
             color: var(--primary);
             margin-bottom: 20px;
@@ -986,51 +1068,74 @@ function generateHtmlReport(stats, testParams, filePath, fileType) {
             border-bottom: 2px solid var(--primary);
         }
 
-        .param-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-        }
-
-        .param-item {
+        .config-details details {
             background: white;
-            padding: 15px;
             border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
             border-left: 4px solid var(--primary);
+            cursor: pointer;
         }
 
-        .param-key {
+        .config-details details summary {
             font-weight: 600;
             color: var(--dark);
-            font-size: 0.95em;
-            margin-bottom: 5px;
+            font-size: 1em;
+            user-select: none;
+            padding: 5px 0;
         }
 
-        .param-value {
-            color: var(--primary);
-            font-size: 1.2em;
-            font-weight: 700;
+        .config-details details[open] summary {
+            margin-bottom: 15px;
         }
 
-        .param-extra {
-            font-size: 0.85em;
-            color: #6b7280;
-            margin-top: 8px;
-            line-height: 1.5em;
-        }
-
-        .param-extra .badge {
-            margin-left: 8px;
-        }
-
-        .param-detail {
-            margin-top: 6px;
-        }
-
-        .empty-tip {
-            color: #9ca3af;
-            font-size: 0.95em;
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
             padding: 10px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .config-item:last-child {
+            border-bottom: none;
+        }
+
+        .config-key {
+            font-weight: 500;
+            color: #6b7280;
+            min-width: 200px;
+            font-size: 0.95em;
+        }
+
+        .config-value {
+            color: var(--primary);
+            font-weight: 600;
+            text-align: right;
+            flex: 1;
+            padding-left: 20px;
+        }
+
+        .stages-container {
+            background: #f9fafb;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 8px 0;
+        }
+
+        .stage-item {
+            padding: 8px;
+            background: white;
+            border-radius: 3px;
+            margin-bottom: 6px;
+            font-size: 0.9em;
+            color: var(--dark);
+            border-left: 3px solid var(--primary);
+            padding-left: 10px;
+        }
+
+        .stage-item:last-child {
+            margin-bottom: 0;
         }
 
         /* ==================== 指标分组 ==================== */
@@ -1183,8 +1288,11 @@ function generateHtmlReport(stats, testParams, filePath, fileType) {
                 </div>
             </div>
 
-            <!-- 测试参数 -->
-            ${generateParamsSection(testParams)}
+            <!-- 配置验证提示 -->
+            ${generateValidationWarnings(testParams)}
+
+            <!-- 详细配置信息 -->
+            ${generateDetailedConfigSection(testParams)}
 
             <!-- 分类指标展示 -->
             ${generateTimingMetricsSection(classified.timing)}
@@ -1214,89 +1322,362 @@ function generateHtmlReport(stats, testParams, filePath, fileType) {
 }
 
 /**
- * 生成参数配置部分
+ * 生成详细的配置信息展示
+ * 包括完整的配置树、阈值、特殊参数等
  */
-function generateParamsSection(testParams) {
-  // 提取第一个启用的场景参数（跳过 _ 开头的注释键）
-  const scenarios = testParams.scenarios || {};
-  let scenarioName = '未知场景';
-  let scenarioKey = '';
-  let scenario = {};
+function generateDetailedConfigSection(testParams) {
+  if (!testParams || !testParams.scenarios) {
+    return '';
+  }
 
+  const scenarios = testParams.scenarios || {};
+  let currentScenario = null;
+  let scenarioKey = '';
+
+  // 找出当前启用的场景
   for (const [key, scen] of Object.entries(scenarios)) {
-    // 跳过以 _ 开头的注释键和非对象类型
-    if (key.startsWith('_') || typeof scen !== 'object' || scen === null) {
-      continue;
-    }
+    if (key.startsWith('_') || typeof scen !== 'object' || scen === null) continue;
     if (scen.enabled !== false) {
-      scenarioName = scen.name || key;
       scenarioKey = key;
-      scenario = scen;
+      currentScenario = scen;
       break;
     }
   }
 
-  const deviceRange = testParams.deviceRange || {};
+  if (!currentScenario) return '';
 
-  // 根据场景类型提取参数
-  let vus = 'N/A';
-  let duration = 'N/A';
-  let arrivalRate = 'N/A';
-  let peakVUs = 'N/A';
-
-  if (scenario.basicLoad) {
-    vus = scenario.basicLoad.vus || 'N/A';
-    duration = scenario.basicLoad.duration || 'N/A';
-    arrivalRate = scenario.basicLoad.arrivalRate || 'N/A';
-  } else if (scenario.mixedLoad) {
-    vus = scenario.mixedLoad.vus || 'N/A';
-    duration = scenario.mixedLoad.duration || 'N/A';
-  }
-
-  if (scenario.peakLoad) {
-    peakVUs = scenario.peakLoad.peakVUs || 'N/A';
-  } else if (scenario.peakBurst) {
-    peakVUs = scenario.peakBurst.peakVUs || 'N/A';
-  } else if (scenario.httpScenario) {
-    // mixed-load 场景
-    vus = scenario.httpScenario.preAllocatedVUs || 'N/A';
-    duration = scenario.httpScenario.duration || 'N/A';
-    arrivalRate = scenario.httpScenario.rate || 'N/A';
-  }
-
-  return `
-    <div class="params-section">
-        <h2>⚙️ 测试配置参数</h2>
-        <div class="param-grid">
-            <div class="param-item">
-                <div class="param-key">测试场景</div>
-                <div class="param-value">${scenarioName}</div>
+  // 构建配置详情HTML
+  let configHTML = `
+    <div class="config-details">
+        <h3>📋 完整配置参数</h3>
+        <details open>
+            <summary>基本信息</summary>
+            <div class="config-item">
+                <span class="config-key">场景标识:</span>
+                <span class="config-value">${scenarioKey}</span>
             </div>
-            <div class="param-item">
-                <div class="param-key">虚拟用户数</div>
-                <div class="param-value">${vus}</div>
+            <div class="config-item">
+                <span class="config-key">场景名称:</span>
+                <span class="config-value">${currentScenario.name || 'N/A'}</span>
             </div>
-            <div class="param-item">
-                <div class="param-key">运行时长</div>
-                <div class="param-value">${duration}</div>
+            <div class="config-item">
+                <span class="config-key">设备范围:</span>
+                <span class="config-value">#${testParams.deviceRange?.startNumber || 1}-${testParams.deviceRange?.endNumber || 'N/A'} (共 ${(testParams.deviceRange?.endNumber || 0) - (testParams.deviceRange?.startNumber || 1) + 1} 个)</span>
             </div>
-            <div class="param-item">
-                <div class="param-key">设备范围</div>
-                <div class="param-value">#${deviceRange.startNumber || 1}-${deviceRange.endNumber || 'N/A'}</div>
+            <div class="config-item">
+                <span class="config-key">启用状态:</span>
+                <span class="config-value">${currentScenario.enabled !== false ? '✅ 启用' : '❌ 禁用'}</span>
             </div>
-            <div class="param-item">
-                <div class="param-key">到达率(RPS)</div>
-                <div class="param-value">${arrivalRate}</div>
-            </div>
-            <div class="param-item">
-                <div class="param-key">峰值VU</div>
-                <div class="param-value">${peakVUs}</div>
-            </div>
-        </div>
-    </div>
+        </details>
   `;
+
+  // 基础负载配置
+  if (currentScenario.basicLoad) {
+    configHTML += `
+        <details>
+            <summary>基础负载阶段</summary>
+            <div class="config-item">
+                <span class="config-key">虚拟用户数(VU):</span>
+                <span class="config-value">${currentScenario.basicLoad.vus || 'N/A'}</span>
+            </div>
+            <div class="config-item">
+                <span class="config-key">持续时长:</span>
+                <span class="config-value">${currentScenario.basicLoad.duration || 'N/A'}</span>
+            </div>
+            <div class="config-item">
+                <span class="config-key">到达率(RPS):</span>
+                <span class="config-value">${currentScenario.basicLoad.arrivalRate || 'N/A'} 请求/秒</span>
+            </div>
+        </details>
+    `;
+  } else if (currentScenario.mixedLoad) {
+    configHTML += `
+        <details>
+            <summary>基础负载阶段</summary>
+            <div class="config-item">
+                <span class="config-key">虚拟用户数(VU):</span>
+                <span class="config-value">${currentScenario.mixedLoad.vus || 'N/A'}</span>
+            </div>
+            <div class="config-item">
+                <span class="config-key">持续时长:</span>
+                <span class="config-value">${currentScenario.mixedLoad.duration || 'N/A'}</span>
+            </div>
+        </details>
+    `;
+  } else if (currentScenario.httpScenario) {
+    configHTML += `
+        <details>
+            <summary>HTTP 请求配置</summary>
+            <div class="config-item">
+                <span class="config-key">预分配VU:</span>
+                <span class="config-value">${currentScenario.httpScenario.preAllocatedVUs || 'N/A'}</span>
+            </div>
+            <div class="config-item">
+                <span class="config-key">最大VU:</span>
+                <span class="config-value">${currentScenario.httpScenario.maxVUs || 'N/A'}</span>
+            </div>
+            <div class="config-item">
+                <span class="config-key">到达率(RPS):</span>
+                <span class="config-value">${currentScenario.httpScenario.rate || 'N/A'} 请求/秒</span>
+            </div>
+            <div class="config-item">
+                <span class="config-key">持续时长:</span>
+                <span class="config-value">${currentScenario.httpScenario.duration || 'N/A'}</span>
+            </div>
+        </details>
+    `;
+  }
+
+  // 峰值负载配置
+  if (currentScenario.peakLoad) {
+    const stages = currentScenario.peakLoad.stages || [];
+    let stagesHTML = stages.map((s, i) =>
+      `<div class="stage-item">阶段${i+1}: 时长 ${s.duration} → 目标VU ${s.target}</div>`
+    ).join('');
+
+    configHTML += `
+        <details>
+            <summary>峰值负载阶段</summary>
+            <div class="config-item">
+                <span class="config-key">开始时间:</span>
+                <span class="config-value">${currentScenario.peakLoad.startTime || 'N/A'}</span>
+            </div>
+            <div class="config-item">
+                <span class="config-key">分阶段增减VU:</span>
+                <div class="stages-container">${stagesHTML}</div>
+            </div>
+        </details>
+    `;
+  } else if (currentScenario.peakBurst) {
+    const stages = currentScenario.peakBurst.stages || [];
+    let stagesHTML = stages.map((s, i) =>
+      `<div class="stage-item">阶段${i+1}: 时长 ${s.duration} → 目标VU ${s.target}</div>`
+    ).join('');
+
+    configHTML += `
+        <details>
+            <summary>峰值突发阶段</summary>
+            <div class="config-item">
+                <span class="config-key">开始时间:</span>
+                <span class="config-value">${currentScenario.peakBurst.startTime || 'N/A'}</span>
+            </div>
+            <div class="config-item">
+                <span class="config-key">分阶段增减VU:</span>
+                <div class="stages-container">${stagesHTML}</div>
+            </div>
+        </details>
+    `;
+  }
+
+  // 性能阈值配置
+  if (currentScenario.thresholds) {
+    const thresholds = currentScenario.thresholds;
+    configHTML += `
+        <details>
+            <summary>性能阈值</summary>
+    `;
+
+    for (const [key, value] of Object.entries(thresholds)) {
+      if (key.startsWith('_')) continue;
+
+      let displayValue = value;
+      let displayKey = key.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+      if (key.includes('rate') && typeof value === 'number') {
+        displayValue = `${(value * 100).toFixed(1)}%`;
+      }
+
+      configHTML += `
+            <div class="config-item">
+                <span class="config-key">${displayKey}:</span>
+                <span class="config-value">${displayValue}</span>
+            </div>
+      `;
+    }
+
+    configHTML += `</details>`;
+  }
+
+  // WebSocket 特殊配置
+  if (currentScenario.connectionConfig) {
+    configHTML += `
+        <details>
+            <summary>WebSocket 连接配置</summary>
+            <div class="config-item">
+                <span class="config-key">每连接GPS条数:</span>
+                <span class="config-value">${currentScenario.connectionConfig.gpsPerConnectionMin}-${currentScenario.connectionConfig.gpsPerConnectionMax}</span>
+            </div>
+            <div class="config-item">
+                <span class="config-key">GPS 发送间隔:</span>
+                <span class="config-value">${currentScenario.connectionConfig.gpsIntervalMin}-${currentScenario.connectionConfig.gpsIntervalMax} 秒</span>
+            </div>
+            <div class="config-item">
+                <span class="config-key">连接间隔:</span>
+                <span class="config-value">${currentScenario.connectionConfig.connectionDelayMin}-${currentScenario.connectionConfig.connectionDelayMax} 秒</span>
+            </div>
+        </details>
+    `;
+  }
+
+  // 消息配置
+  if (currentScenario.messageConfig) {
+    configHTML += `
+        <details>
+            <summary>消息发送配置</summary>
+            <div class="config-item">
+                <span class="config-key">心跳间隔:</span>
+                <span class="config-value">${currentScenario.messageConfig.heartbeatIntervalSeconds} 秒</span>
+            </div>
+            <div class="config-item">
+                <span class="config-key">状态报告频率:</span>
+                <span class="config-value">${currentScenario.messageConfig.statusReportFrequencySeconds} 秒</span>
+            </div>
+            <div class="config-item">
+                <span class="config-key">传感器报告频率:</span>
+                <span class="config-value">${currentScenario.messageConfig.sensorReportFrequencySeconds} 秒</span>
+            </div>
+        </details>
+    `;
+  }
+
+  configHTML += `</div>`;
+  return configHTML;
 }
 
+/**
+ * 验证配置参数的合理性
+ * 返回警告列表
+ */
+function validateConfigAndGetWarnings(testParams) {
+  const warnings = [];
+
+  if (!testParams || !testParams.scenarios) {
+    return warnings;
+  }
+
+  const scenarios = testParams.scenarios || {};
+  let currentScenario = null;
+  let scenarioKey = '';
+
+  // 找出当前启用的场景
+  for (const [key, scen] of Object.entries(scenarios)) {
+    if (key.startsWith('_') || typeof scen !== 'object' || scen === null) continue;
+    if (scen.enabled !== false) {
+      scenarioKey = key;
+      currentScenario = scen;
+      break;
+    }
+  }
+
+  if (!currentScenario) return warnings;
+
+  // 检查虚拟用户数
+  let vus = 0;
+  if (currentScenario.basicLoad?.vus) vus = currentScenario.basicLoad.vus;
+  else if (currentScenario.mixedLoad?.vus) vus = currentScenario.mixedLoad.vus;
+  else if (currentScenario.httpScenario?.preAllocatedVUs) vus = currentScenario.httpScenario.preAllocatedVUs;
+
+  if (vus > 500) {
+    warnings.push({
+      level: 'warning',
+      title: '虚拟用户数较大',
+      message: `当前VU数为 ${vus}，可能导致服务器超载。建议 ≤ 500。`,
+      icon: '⚠️'
+    });
+  } else if (vus > 300) {
+    warnings.push({
+      level: 'info',
+      title: '虚拟用户数中等',
+      message: `当前VU数为 ${vus}，处于中等负载。请监控服务器性能。`,
+      icon: 'ℹ️'
+    });
+  }
+
+  // 检查RPS（到达率）
+  let rps = 0;
+  if (currentScenario.basicLoad?.arrivalRate) rps = currentScenario.basicLoad.arrivalRate;
+  else if (currentScenario.httpScenario?.rate) rps = currentScenario.httpScenario.rate;
+
+  if (rps > 500) {
+    warnings.push({
+      level: 'warning',
+      title: '请求速率较高',
+      message: `当前RPS为 ${rps}，可能对服务器造成压力。建议 ≤ 500。`,
+      icon: '⚠️'
+    });
+  }
+
+  // 检查设备范围
+  const deviceRange = testParams.deviceRange || {};
+  const startNum = deviceRange.startNumber || 1;
+  const endNum = deviceRange.endNumber || 500;
+  const deviceCount = endNum - startNum + 1;
+
+  if (deviceCount > 10000) {
+    warnings.push({
+      level: 'warning',
+      title: '设备数量过多',
+      message: `当前设备范围包含 ${deviceCount} 个设备，可能超过系统容量。建议 ≤ 10000。`,
+      icon: '⚠️'
+    });
+  } else if (deviceCount > 5000) {
+    warnings.push({
+      level: 'info',
+      title: '设备数量较大',
+      message: `当前设备范围包含 ${deviceCount} 个设备，请确保系统有足够容量。`,
+      icon: 'ℹ️'
+    });
+  }
+
+  // 检查RPS与设备数的匹配度
+  if (rps > 0 && rps > deviceCount) {
+    warnings.push({
+      level: 'info',
+      title: 'RPS > 设备数',
+      message: `RPS (${rps}) 大于设备数 (${deviceCount})，单个设备会收到多个请求。`,
+      icon: 'ℹ️'
+    });
+  }
+
+  return warnings;
+}
+
+/**
+ * 生成配置验证警告展示
+ */
+function generateValidationWarnings(testParams) {
+  const warnings = validateConfigAndGetWarnings(testParams);
+
+  if (warnings.length === 0) {
+    return `
+      <div class="validation-section">
+          <div class="validation-success">
+              <span>✅ 配置验证通过</span> - 所有参数都在合理范围内
+          </div>
+      </div>
+    `;
+  }
+
+  let warningHTML = `
+    <div class="validation-section">
+        <h3>⚠️ 配置提示</h3>
+  `;
+
+  for (const warning of warnings) {
+    warningHTML += `
+        <div class="warning-item warning-${warning.level}">
+            <div class="warning-icon">${warning.icon}</div>
+            <div class="warning-content">
+                <div class="warning-title">${warning.title}</div>
+                <div class="warning-message">${warning.message}</div>
+            </div>
+        </div>
+    `;
+  }
+
+  warningHTML += `</div>`;
+  return warningHTML;
+}
 
 // ==================== 主函数 ====================
 
