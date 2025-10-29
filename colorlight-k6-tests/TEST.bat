@@ -75,14 +75,14 @@ echo 请选择要执行的压测场景:
 echo.
 
 REM 动态调用Node.js生成菜单项（包含预估时间）
-node tools\generate-menu.js 2>nul
+node tools/generate-menu.js 2>nul
 if errorlevel 1 (
     REM 如果菜单生成失败，使用默认菜单
-    echo [1] HTTP状态上报 - 约 28 分钟
-    echo [2] WebSocket V10 压测 - 约 18 分钟
-    echo [3] WebSocket V11 压测 - 约 20 分钟
-    echo [4] 混合场景压测 - 约 20 分钟
-    echo [5] 压测基准 - 顺序执行以上所有场景，约 1 小时 35 分钟或更长
+    echo [1] HTTP状态上报测试 - 约 28 分钟
+    echo [2] WebSocket V10频繁连接测试 - 约 18 分钟
+    echo [3] WebSocket V11协议测试 - 约 20 分钟
+    echo [4] 混合负载测试 - 约 20 分钟
+    echo [5] 压测基准 - 约 1 小时 35 分钟
 )
 
 echo.
@@ -272,7 +272,7 @@ setlocal enabledelayedexpansion
 set "METRICS_FILE=%~1"
 
 echo [INFO] 生成HTML报告...
-node tools\generate-html-report.js "!METRICS_FILE!"
+node tools/generate-html-report.js "!METRICS_FILE!"
 
 REM 检查输出文件是否存在
 set "OUTPUT_HTML=!METRICS_FILE:.ndjson=.html!"

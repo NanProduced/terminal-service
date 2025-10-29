@@ -133,60 +133,56 @@ function calculateConfigDuration(config) {
 
 /**
  * 计算预估测试时间
- * 基于观察的硬编码值进行反推：
- *   - status-report: 配置3m → 硬编码28m  (公式: 3 * 9 + 1 = 28)
- *   - websocket-v10: 配置2.5m → 硬编码18m (公式: 2.5 * 7 + 0.5 ≈ 18)
- *   - websocket-v11: 配置2.5m → 硬编码20m (公式: 2.5 * 8 = 20)
- *   - mixed-load: 配置20m → 硬编码20m (公式: 20 * 1 = 20)
+ * 直接返回K6脚本的配置运行时间
+ * 不考虑初始化、连接建立等额外开销
  *
- * 通用公式：预估 = 配置时长 × 倍数 + 缓冲时间
- * 其中倍数根据场景复杂度调整（简单=7, 复杂=9）
+ * K6脚本运行时间计算：
+ *   - status-report: basicLoad(1m) + peakLoad stages(1m+1m) = 3m
+ *   - websocket-v10: basicLoad(1m) + peakLoad stages(1m+30s) = 2.5m
+ *   - websocket-v11: mixedLoad(1m) + peakBurst stages(1m+30s) = 2.5m
+ *   - mixed-load: max(HTTP 20m, WebSocket stages 20m) = 20m
  *
- * @param {number} configMinutes - 配置中的总时长（分钟）
- * @param {string} scenarioName - 场景名称，用于选择倍数
- * @returns {number} 预估时间（分钟）
+ * @param {number} configMinutes - 配置中计算的总时长（分钟）
+ * @param {string} scenarioName - 场景名称（暂未使用，保留接口）
+ * @returns {number} K6脚本的预估运行时间（分钟）
  */
 function estimateTestDuration(configMinutes, scenarioName = '') {
-  // 根据场景类型选择倍数
-  let multiplier = 8;  // 默认倍数
-  let buffer = 1;      // 缓冲时间（分钟）
-
-  if (scenarioName === 'status-report') {
-    multiplier = 9;
-    buffer = 1;
-  } else if (scenarioName === 'websocket-v10') {
-    multiplier = 7;
-    buffer = 0.5;
-  } else if (scenarioName === 'websocket-v11') {
-    multiplier = 8;
-    buffer = 0;
-  } else if (scenarioName === 'mixed-load') {
-    multiplier = 1;    // mixed-load是长期运行，直接使用配置时长
-    buffer = 0;
-  }
-
-  const estimated = configMinutes * multiplier + buffer;
-  return Math.round(estimated);
+  // 直接返回配置时长，无需乘以任何倍数
+  return Math.round(configMinutes * 10) / 10; // 保留1位小数精度
 }
 
 /**
  * 格式化持续时间为可读文本
  * @param {number} minutes - 分钟数
- * @returns {string} 格式化的时间字符串，如 "约 28 分钟"
+ * @returns {string} 格式化的时间字符串，如 "约 2 分 30 秒"、"约 3 分钟"、"约 1 小时 35 分钟"
  */
 function formatDuration(minutes) {
   if (minutes < 1) {
     return `约 ${Math.round(minutes * 60)} 秒`;
   } else if (minutes >= 60) {
     const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
+    const mins = Math.round((minutes % 60) * 10) / 10; // 保留1位小数
     if (mins === 0) {
       return `约 ${hours} 小时`;
-    } else {
+    } else if (Number.isInteger(mins)) {
       return `约 ${hours} 小时 ${mins} 分钟`;
+    } else {
+      // 比如 1 小时 35.5 分钟 显示为 1 小时 35 分 30 秒
+      const minsInt = Math.floor(mins);
+      const seconds = Math.round((mins - minsInt) * 60);
+      return `约 ${hours} 小时 ${minsInt} 分 ${seconds} 秒`;
     }
   } else {
-    return `约 ${Math.round(minutes)} 分钟`;
+    // 1分钟以上60分钟以下
+    // 如果是整数，显示"约 X 分钟"
+    // 如果有小数，显示"约 X 分 Y 秒"
+    if (Number.isInteger(minutes)) {
+      return `约 ${minutes} 分钟`;
+    } else {
+      const minsInt = Math.floor(minutes);
+      const seconds = Math.round((minutes - minsInt) * 60);
+      return `约 ${minsInt} 分 ${seconds} 秒`;
+    }
   }
 }
 
