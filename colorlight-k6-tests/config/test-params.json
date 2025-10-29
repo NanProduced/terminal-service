@@ -27,7 +27,7 @@
         "vus": 15,
         "vus_description": "虚拟用户数 - 同时多少个用户在发送请求 (从20降至15)",
 
-        "duration": "2m",
+        "duration": "1m",
         "duration_description": "持续时间 - 基础负载阶段持续多长时间（格式：30s/5m/1h等）",
 
         "arrivalRate": 15,
@@ -36,16 +36,14 @@
 
       "peakLoad": {
         "_comment": "峰值负载阶段 - 测试的第二阶段，模拟流量突增 (2核2线程优化)",
-        "startTime": "2m",
+        "startTime": "1m",
         "startTime_description": "开始时间 - 从第几分钟开始峰值测试（需≥basicLoad.duration）",
 
         "startVUs": 50,
         "peakVUs": 100,
         "stages": [
           {"duration": "1m", "target": 50},
-          {"duration": "1m", "target": 100},
-          {"duration": "1m", "target": 50},
-          {"duration": "1m", "target": 0}
+          {"duration": "1m", "target": 100}
         ],
         "stages_description": "分阶段增减VU - 从50增至100再降回0 (从333降至100)"
       },
@@ -76,19 +74,16 @@
         "vus": 40,
         "vus_description": "虚拟用户数 - 同时多少个设备在建立WebSocket连接 (从100降至40)",
 
-        "duration": "10m",
+        "duration": "1m",
         "duration_description": "持续时间 - 基础负载持续多长时间"
       },
 
       "peakLoad": {
         "_comment": "峰值负载阶段 - 模拟突发连接 (2核2线程优化)",
-        "startTime": "10m",
+        "startTime": "1m",
         "stages": [
           {"duration": "1m", "target": 40},
-          {"duration": "2m", "target": 80},
-          {"duration": "2m", "target": 120},
-          {"duration": "2m", "target": 80},
-          {"duration": "1m", "target": 40}
+          {"duration": "30s", "target": 60}
         ],
         "stages_description": "分阶段增减VU - 从40增加到120再逐步降低 (从300降至120)"
       },
@@ -137,19 +132,16 @@
         "vus": 40,
         "vus_description": "虚拟用户数 - 同时多少个设备在保持长连接 (从80降至40，适配2核2线程)",
 
-        "duration": "12m",
+        "duration": "1m",
         "duration_description": "持续时间 - 基础负载持续多长时间"
       },
 
       "peakBurst": {
         "_comment": "峰值负载阶段 - 模拟突发连接和消息 (2核2线程优化)",
-        "startTime": "12m",
+        "startTime": "1m",
         "stages": [
           {"duration": "1m", "target": 30},
-          {"duration": "2m", "target": 60},
-          {"duration": "2m", "target": 80},
-          {"duration": "2m", "target": 50},
-          {"duration": "1m", "target": 30}
+          {"duration": "30s", "target": 60}
         ],
         "stages_description": "分阶段增减VU - 模拟流量波动，最高80个并发连接 (从200降至80)"
       },
