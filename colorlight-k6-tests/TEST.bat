@@ -155,19 +155,25 @@ if "!VALIDATE_EXIT!"=="0" (
     echo [OK] 场景执行完成，正在生成HTML报告...
     echo       指标文件: !METRICS_FILE!
     echo.
-    if exist "toolsgenerate-html-report.js" (
+    if exist "tools\generate-html-report.js" (
         call :__generate_html_report "!METRICS_FILE!"
     ) else (
         echo [ERR] 找不到HTML生成脚本
+        set "SCRIPT_EXIT=1"
     )
-) else if "!RUN_EXIT!"=="0" (
-    echo [WARN] K6 完成但文件验证失败
-    echo        请检查磁盘空间和文件权限
-    set "SCRIPT_EXIT=1"
+
+    if not "!RUN_EXIT!"=="0" (
+        echo [WARN] k6 返回码 !RUN_EXIT!，请检查阈值或脚本配置
+        set "SCRIPT_EXIT=!RUN_EXIT!"
+    )
 ) else (
-    echo [ERR] 场景执行失败，退出码: !RUN_EXIT!
-    echo       可能原因: 性能阈值未达到或服务不可用
+    if "!RUN_EXIT!"=="0" (
+        echo [WARN] K6 完成但文件验证失败
+        echo        请检查磁盘空间和文件权限
+        set "SCRIPT_EXIT=1"
     ) else (
+        echo [ERR] 场景执行失败，退出码: !RUN_EXIT!
+        echo       可能原因: 性能阈值未达到或服务不可用
         set "SCRIPT_EXIT=!RUN_EXIT!"
     )
 )
@@ -176,19 +182,20 @@ echo.
 pause
 exit /b !SCRIPT_EXIT!
 
+
 :__validate_output_files
 setlocal enabledelayedexpansion
 
 set "METRICS=%~1"
 set "K6_EXIT=%~2"
 
+set "SUMMARY_EXISTS=0"
+set "SUMMARY_SIZE=0"
 set "METRICS_EXISTS=0"
 set "METRICS_SIZE=0"
 
 REM 等待结果文件写入完成（最多 5 秒）
 call :__ensure_file_ready "!METRICS!" 5 >nul
-
-)
 
 REM 检查指标文件
 if exist "!METRICS!" (

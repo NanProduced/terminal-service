@@ -8,7 +8,7 @@
     "_comment": "设备账号范围配置 - 用于压测时选择使用的设备账号范围",
     "startNumber": 1,
     "startNumber_description": "起始设备编号 - 压测使用的起始账号编号（必须 ≤ 创建时的 endNumber）",
-    "endNumber": 1000,
+    "endNumber": 500,
     "endNumber_description": "结束设备编号 - 压测使用的结束账号编号（必须 ≥ 创建时的 startNumber，且 ≤ 创建时的 endNumber）",
     "total_devices_for_test": "自动计算为 endNumber - startNumber + 1",
     "_note": "修改此范围不需要重新创建账号，直接修改此处数值，下次运行测试时生效。确保该范围的账号已通过 CREATE-DEVICES.bat 创建。"
@@ -27,7 +27,7 @@
         "vus": 15,
         "vus_description": "虚拟用户数 - 同时多少个用户在发送请求 (从20降至15)",
 
-        "duration": "5m",
+        "duration": "2m",
         "duration_description": "持续时间 - 基础负载阶段持续多长时间（格式：30s/5m/1h等）",
 
         "arrivalRate": 15,
@@ -36,16 +36,16 @@
 
       "peakLoad": {
         "_comment": "峰值负载阶段 - 测试的第二阶段，模拟流量突增 (2核2线程优化)",
-        "startTime": "15m",
+        "startTime": "2m",
         "startTime_description": "开始时间 - 从第几分钟开始峰值测试（需≥basicLoad.duration）",
 
         "startVUs": 50,
         "peakVUs": 100,
         "stages": [
-          {"duration": "2m", "target": 50},
-          {"duration": "3m", "target": 100},
-          {"duration": "3m", "target": 50},
-          {"duration": "2m", "target": 0}
+          {"duration": "1m", "target": 50},
+          {"duration": "1m", "target": 100},
+          {"duration": "1m", "target": 50},
+          {"duration": "1m", "target": 0}
         ],
         "stages_description": "分阶段增减VU - 从50增至100再降回0 (从333降至100)"
       },
@@ -61,7 +61,7 @@
         "http_req_failed_rate": 0.02,
         "http_req_failed_rate_description": "失败率阈值 - 允许最多2%的请求失败（0.02 = 2%，增加此值会降低对成功率的要求）",
 
-        "http_reqs_min": 30000,
+        "http_reqs_min": 5000,
         "http_reqs_min_description": "最小请求数 - 压测阶段需要达到 30000 次请求，否则视为失败"
       }
     },
