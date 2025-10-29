@@ -1323,7 +1323,7 @@ function generateHtmlReport(stats, testParams, filePath, fileType) {
             ${generateValidationWarnings(testParams)}
 
             <!-- 详细配置信息 -->
-            ${generateDetailedConfigSection(testParams)}
+            ${generateDetailedConfigSection(testParams, filePath)}
 
             <!-- 分类指标展示 -->
             ${generateTimingMetricsSection(classified.timing)}
@@ -1356,7 +1356,7 @@ function generateHtmlReport(stats, testParams, filePath, fileType) {
  * 生成详细的配置信息展示
  * 包括完整的配置树、阈值、特殊参数等
  */
-function generateDetailedConfigSection(testParams) {
+function generateDetailedConfigSection(testParams, filePath) {
   if (!testParams || !testParams.scenarios) {
     return '';
   }
@@ -1365,13 +1365,36 @@ function generateDetailedConfigSection(testParams) {
   let currentScenario = null;
   let scenarioKey = '';
 
-  // 找出当前启用的场景
-  for (const [key, scen] of Object.entries(scenarios)) {
-    if (key.startsWith('_') || typeof scen !== 'object' || scen === null) continue;
-    if (scen.enabled !== false) {
-      scenarioKey = key;
-      currentScenario = scen;
-      break;
+  // 场景编号与key的映射关系
+  const scenarioMapping = {
+    '1': 'status-report',
+    '2': 'websocket-v10',
+    '3': 'websocket-v11',
+    '4': 'mixed-load'
+  };
+
+  // 从文件名中提取场景编号 (例如 scenario2 -> '2')
+  let scenarioIdx = null;
+  if (filePath) {
+    const match = filePath.match(/scenario(\d+)/);
+    if (match) {
+      scenarioIdx = match[1];
+      scenarioKey = scenarioMapping[scenarioIdx] || '';
+      if (scenarioKey && scenarios[scenarioKey]) {
+        currentScenario = scenarios[scenarioKey];
+      }
+    }
+  }
+
+  // 如果从文件名中没有找到场景，则找出当前启用的第一个场景（备选方案）
+  if (!currentScenario) {
+    for (const [key, scen] of Object.entries(scenarios)) {
+      if (key.startsWith('_') || typeof scen !== 'object' || scen === null) continue;
+      if (scen.enabled !== false) {
+        scenarioKey = key;
+        currentScenario = scen;
+        break;
+      }
     }
   }
 
