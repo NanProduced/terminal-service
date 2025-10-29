@@ -51,8 +51,7 @@ CREATE TABLE `device_screenshot_record` (
   `size` BIGINT UNSIGNED NULL COMMENT '文件大小-字节',
   `update_time` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
   PRIMARY KEY (`device_id`),
-  KEY `idx_upload_time` (`upload_time`) COMMENT '上传时间查询索引-按时间排序',
-  KEY `idx_object_key` (`object_key`) COMMENT '对象键查询索引-MinIO清理'
+  KEY `idx_upload_time` (`upload_time`) COMMENT '上传时间查询索引-按时间排序'
 ) ENGINE=InnoDB 
   DEFAULT CHARSET=utf8mb4 
   COLLATE=utf8mb4_unicode_ci 
@@ -100,9 +99,6 @@ CREATE TABLE `device_deletion_record` (
   `create_time` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '记录创建时间',
   PRIMARY KEY (`id`),
   KEY `idx_device_id` (`device_id`) COMMENT '设备查询索引-运维查看',
-  KEY `idx_device_create_time` (`device_id`, `create_time`) COMMENT '设备时间复合索引-历史查询',
-  KEY `idx_status_create_time` (`status`, `create_time`) COMMENT '状态时间复合索引-任务监控',
-  KEY `idx_cleanup_mode` (`cleanup_mode`) COMMENT '清理模式索引-统计分析',
   CONSTRAINT `chk_cleanup_mode` CHECK (`cleanup_mode` IN ('ALL', 'INCLUDE', 'EXCLUDE')),
   CONSTRAINT `chk_status` CHECK (`status` IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'PARTIAL'))
 ) ENGINE=InnoDB 
