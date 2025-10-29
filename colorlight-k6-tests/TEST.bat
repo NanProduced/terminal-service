@@ -93,6 +93,17 @@ if errorlevel 1 (
 )
 echo [OK] k6 检查通过。
 echo.
+echo [INFO] 检查 Node.js 执行环境...
+node --version >nul 2>&1
+if errorlevel 1 (
+    echo [ERR] 未检测到 Node.js，请先安装并配置 PATH。
+    echo        下载地址: https://nodejs.org/
+    set "SCRIPT_EXIT=1"
+    exit /b 1
+)
+echo [OK] Node.js 检查通过.
+echo.
+echo.
 
 if not exist results mkdir results >nul 2>&1
 if not exist logs mkdir logs >nul 2>&1
@@ -124,28 +135,31 @@ if not defined TIMESTAMP (
     for /f "tokens=1-2 delims=/:" %%a in ('time /t') do set "TIMESTAMP=!TIMESTAMP!%%a%%b"
 )
 
-set "SUMMARY_FILE=results\!TIMESTAMP!_scenario%IDX%_summary.json"
+
 set "METRICS_FILE=results\!TIMESTAMP!_scenario%IDX%_metrics.ndjson"
 set "LOG_FILE=logs\!TIMESTAMP!_scenario%IDX%.log"
 
 echo [INFO] 启动 k6...
 echo.
 
-"%K6_COMMAND%" run --summary-export="!SUMMARY_FILE!" --out="json=!METRICS_FILE!" "%SCRIPT_PATH%"
+"%K6_COMMAND%" run --out="json=!METRICS_FILE!" "%SCRIPT_PATH%"
 set "RUN_EXIT=!errorlevel!"
 
 echo.
 echo [INFO] 验证输出文件...
 
-call :__validate_output_files "!SUMMARY_FILE!" "!METRICS_FILE!" !RUN_EXIT!
+call :__validate_output_files "!METRICS_FILE!" !RUN_EXIT!
 set "VALIDATE_EXIT=!errorlevel!"
 
 if "!VALIDATE_EXIT!"=="0" (
-    echo [OK] 场景执行完成，结果已写入 results/ 目录。
-    echo       摘要文件: !SUMMARY_FILE!
+    echo [OK] 场景执行完成，正在生成HTML报告...
     echo       指标文件: !METRICS_FILE!
-    echo       请使用 ANALYZE.bat 分析结果
-    set "SCRIPT_EXIT=0"
+    echo.
+    if exist "toolsgenerate-html-report.js" (
+        call :__generate_html_report "!METRICS_FILE!"
+    ) else (
+        echo [ERR] 找不到HTML生成脚本
+    )
 ) else if "!RUN_EXIT!"=="0" (
     echo [WARN] K6 完成但文件验证失败
     echo        请检查磁盘空间和文件权限
@@ -153,14 +167,7 @@ if "!VALIDATE_EXIT!"=="0" (
 ) else (
     echo [ERR] 场景执行失败，退出码: !RUN_EXIT!
     echo       可能原因: 性能阈值未达到或服务不可用
-    if exist "!SUMMARY_FILE!" (
-        echo [INFO] 摘要文件已生成，可使用 ANALYZE.bat 查看详细数据
-        set "SCRIPT_EXIT=99"
-    ) else if exist "!METRICS_FILE!" (
-        echo [INFO] 指标文件已生成，可使用 ANALYZE.bat 查看详细数据
-        set "SCRIPT_EXIT=99"
     ) else (
-        echo [ERR] 未生成任何结果文件
         set "SCRIPT_EXIT=!RUN_EXIT!"
     )
 )
@@ -171,32 +178,16 @@ exit /b !SCRIPT_EXIT!
 
 :__validate_output_files
 setlocal enabledelayedexpansion
-set "SUMMARY=%~1"
-set "METRICS=%~2"
-set "K6_EXIT=%~3"
 
-set "SUMMARY_EXISTS=0"
+set "METRICS=%~1"
+set "K6_EXIT=%~2"
+
 set "METRICS_EXISTS=0"
-set "SUMMARY_SIZE=0"
 set "METRICS_SIZE=0"
 
 REM 等待结果文件写入完成（最多 5 秒）
-call :__ensure_file_ready "!SUMMARY!" 5 >nul
 call :__ensure_file_ready "!METRICS!" 5 >nul
 
-REM 检查摘要文件
-if exist "!SUMMARY!" (
-    REM 直接读取文件大小，避免依赖 PowerShell
-    for %%F in ("!SUMMARY!") do set "SUMMARY_SIZE=%%~zF"
-
-    if !SUMMARY_SIZE! GTR 0 (
-        set "SUMMARY_EXISTS=1"
-        echo [OK] 摘要文件存在: !SUMMARY! (大小: !SUMMARY_SIZE! 字节)
-    ) else (
-        echo [WARN] 摘要文件存在但大小为 0 字节: !SUMMARY!
-    )
-) else (
-    echo [WARN] 摘要文件不存在: !SUMMARY!
 )
 
 REM 检查指标文件
@@ -261,6 +252,26 @@ if !RETRY_COUNT! GEQ !MAX_RETRY! (
 set /a RETRY_COUNT+=1
 timeout /t 1 /nobreak >nul
 goto :__ensure_file_ready_loop
+
+:__generate_html_report
+setlocal enabledelayedexpansion
+set "METRICS_FILE=%~1"
+
+echo [INFO] 生成HTML报告...
+node tools\generate-html-report.js "!METRICS_FILE!"
+
+REM 检查输出文件是否存在
+set "OUTPUT_HTML=!METRICS_FILE:.ndjson=.html!"
+if exist "!OUTPUT_HTML!" (
+    echo [OK] HTML报告生成成功
+    endlocal
+    exit /b 0
+) else (
+    echo [ERR] HTML报告生成失败
+    endlocal
+    exit /b 1
+)
+
 
 :__run_all_scenarios
 echo ================================================
