@@ -293,23 +293,54 @@ function identifyFileType(filePath) {
 }
 
 /**
- * 加载结果文件
+ * 加载结果文件 - 使用流式读取以支持大文件
  */
 function loadResultFile(filePath) {
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.trim().split('\n');
-    return lines.map(line => {
-      try {
-        return JSON.parse(line);
-      } catch (e) {
-        return null;
-      }
-    }).filter(item => item !== null);
-  } catch (error) {
-    console.error(`❌ 加载文件失败: ${filePath}`);
-    throw error;
-  }
+  const readline = require('readline');
+  const results = [];
+
+  return new Promise((resolve, reject) => {
+    try {
+      const fileStream = fs.createReadStream(filePath, { encoding: 'utf8' });
+      const rl = readline.createInterface({
+        input: fileStream,
+        crlfDelay: Infinity
+      });
+
+      let lineCount = 0;
+      rl.on('line', (line) => {
+        lineCount++;
+        if (lineCount % 50000 === 0) {
+          console.log(`   📖 已处理 ${lineCount} 行...`);
+        }
+
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed) {
+            results.push(parsed);
+          }
+        } catch (e) {
+          // 跳过无效的JSON行
+        }
+      });
+
+      rl.on('close', () => {
+        console.log(`   ✓ 共处理 ${lineCount} 行，解析 ${results.length} 条记录`);
+        resolve(results);
+      });
+
+      rl.on('error', (error) => {
+        reject(error);
+      });
+
+      fileStream.on('error', (error) => {
+        reject(error);
+      });
+    } catch (error) {
+      console.error(`❌ 加载文件失败: ${filePath}`);
+      reject(error);
+    }
+  });
 }
 
 /**
@@ -1681,7 +1712,7 @@ function generateValidationWarnings(testParams) {
 
 // ==================== 主函数 ====================
 
-function main() {
+async function main() {
   const inputFile = process.argv[2];
 
   if (!inputFile) {
@@ -1697,39 +1728,44 @@ function main() {
   console.log('📊 开始生成HTML报告...');
   console.log(`   📁 输入文件: ${inputFile}`);
 
-  // 加载数据
-  const fileType = identifyFileType(inputFile);
-  const rawData = loadResultFile(inputFile);
-  const testParams = loadTestParams();
-
-  // 解析指标
-  const stats = parseMetrics(rawData);
-
-  // 生成HTML
-  const htmlContent = generateHtmlReport(stats, testParams, inputFile, fileType);
-
-  // 保存HTML文件
-  const outputPath = inputFile.replace(/\.[^.]+$/, '.html');
-  fs.writeFileSync(outputPath, htmlContent, 'utf8');
-
-  console.log(`✅ HTML报告已生成: ${outputPath}`);
-
-  // 自动打开浏览器
   try {
-    const platform = process.platform;
-    if (platform === 'win32') {
-      execSync(`start "" "${outputPath}"`, { stdio: 'ignore' });
-    } else if (platform === 'darwin') {
-      execSync(`open "${outputPath}"`, { stdio: 'ignore' });
-    } else if (platform === 'linux') {
-      execSync(`xdg-open "${outputPath}"`, { stdio: 'ignore' });
-    }
-    console.log('🌐 已在浏览器中打开报告');
-  } catch (error) {
-    console.log(`ℹ️  请手动打开文件: ${outputPath}`);
-  }
+    // 加载数据
+    const fileType = identifyFileType(inputFile);
+    const rawData = await loadResultFile(inputFile);
+    const testParams = loadTestParams();
 
-  process.exit(0);
+    // 解析指标
+    const stats = parseMetrics(rawData);
+
+    // 生成HTML
+    const htmlContent = generateHtmlReport(stats, testParams, inputFile, fileType);
+
+    // 保存HTML文件
+    const outputPath = inputFile.replace(/\.[^.]+$/, '.html');
+    fs.writeFileSync(outputPath, htmlContent, 'utf8');
+
+    console.log(`✅ HTML报告已生成: ${outputPath}`);
+
+    // 自动打开浏览器
+    try {
+      const platform = process.platform;
+      if (platform === 'win32') {
+        execSync(`start "" "${outputPath}"`, { stdio: 'ignore' });
+      } else if (platform === 'darwin') {
+        execSync(`open "${outputPath}"`, { stdio: 'ignore' });
+      } else if (platform === 'linux') {
+        execSync(`xdg-open "${outputPath}"`, { stdio: 'ignore' });
+      }
+      console.log('🌐 已在浏览器中打开报告');
+    } catch (error) {
+      console.log(`ℹ️  请手动打开文件: ${outputPath}`);
+    }
+
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ 生成报告时出错:', error.message);
+    process.exit(1);
+  }
 }
 
 main();
