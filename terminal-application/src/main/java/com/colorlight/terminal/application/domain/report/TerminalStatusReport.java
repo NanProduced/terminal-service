@@ -580,6 +580,7 @@ public class TerminalStatusReport {
             /**
              * WiFi SSID名称
              */
+            @JsonProperty("SSID")
             private String SSID;
 
             /**
