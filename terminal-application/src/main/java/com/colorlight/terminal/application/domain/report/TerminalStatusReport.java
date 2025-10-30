@@ -611,6 +611,31 @@ public class TerminalStatusReport {
              * 可用SSID列表
              */
             private List<SsidEntry> ssids;
+
+            /**
+             * WiFi信道
+             */
+            private Integer channel;
+
+            private List<Peer> peers;
+
+            private boolean weakPassword;
+
+            private Integer strength;
+
+        }
+
+        /**
+         * WiFi SSID条目
+         */
+        @Data
+        @NoArgsConstructor
+        @AllArgsConstructor
+        @Builder
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        private static class Peer {
+            private String ip;
+            private String mac;
         }
 
         /**
