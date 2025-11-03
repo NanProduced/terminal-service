@@ -292,25 +292,41 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     @SuppressWarnings("unchecked")
     public void removeDeviceStatus(Long deviceId) {
         String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
-        
+
         try {
-            redisTemplate.execute(new SessionCallback<Object>() {
+            List<Object> results = (List<Object>) redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
                 public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
                     operations.multi();
-                    
+
                     // 删除状态详情
                     operations.delete(statusKey);
-                    
-                    // 从索引中移除
+
+                    // 从索引中移除（返回移除的成员数）
                     operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
-                    
-                    // 减少在线设备计数
-                    operations.opsForValue().decrement(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
-                    
+
                     return operations.exec();
                 }
             });
+
+            // 验证事务结果（exec失败返回空列表）
+            if (results == null || results.isEmpty()) {
+                log.warn("DeviceOnlineStatus - 删除设备状态事务失败: deviceId={}", deviceId);
+                return;
+            }
+
+            // 验证结果集大小（应该有2个操作的结果: 1个DELETE + 1个SREM）
+            if (results.size() >= 2) {
+                // 第2个操作是 SREM，检查是否实际移除了设备
+                Object sremResult = results.get(1);
+                if (sremResult != null && sremResult.equals(1L)) {
+                    // 仅当实际移除时才减少计数器
+                    decrementOnlineCountSafely(1);
+                } else {
+                    log.debug("DeviceOnlineStatus - 设备不在索引中: deviceId={}, sremResult={}",
+                        deviceId, sremResult);
+                }
+            }
 
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 删除设备状态失败: deviceId={}", deviceId, e);
@@ -586,11 +602,8 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                     // 重置TTL为重连窗口时间
                     operations.expire(statusKey, getReconnectTtl());
 
-                    // 从在线设备索引中移除
+                    // 从在线设备索引中移除（返回移除的成员数）
                     operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
-
-                    // 减少在线设备计数
-                    operations.opsForValue().decrement(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
 
                     return operations.exec();
                 }
@@ -604,18 +617,22 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 return null;
             }
 
-            // 验证结果集大小（应该有5个操作的结果: 2个HSET + 1个EXPIRE + 1个SREM + 1个DECR）
-            if (results.size() != 5) {
-                log.error("DeviceOnlineStatus - 离线标记事务结果不完整: deviceId={}, expected=5, actual={}",
+            // 验证结果集大小（应该有4个操作的结果: 2个HSET + 1个EXPIRE + 1个SREM）
+            if (results.size() != 4) {
+                log.error("DeviceOnlineStatus - 离线标记事务结果不完整: deviceId={}, expected=4, actual={}",
                     deviceId, results.size());
                 // 结果不完整，返回null防止数据不一致
                 return null;
             }
 
             // 验证索引移除结果（第4个操作，SREM应该返回1表示成功移除）
-            if (results.get(3) == null || !results.get(3).equals(1L)) {
+            Object sremResult = results.get(3);
+            if (sremResult != null && sremResult.equals(1L)) {
+                // 仅当实际移除时才减少计数器
+                decrementOnlineCountSafely(1);
+            } else {
                 log.warn("DeviceOnlineStatus - 设备索引移除失败或设备不在索引中: deviceId={}, sremResult={}",
-                    deviceId, results.get(3));
+                    deviceId, sremResult);
             }
 
             // 标记当前状态对象为离线（返回给调用方用于保存在线时长记录）
@@ -691,25 +708,18 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                         // 重置TTL为重连窗口时间
                         operations.expire(statusKey, reconnectTtl);
 
-                        // 从在线设备索引中移除
+                        // 从在线设备索引中移除（返回移除的成员数）
                         operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
-                    }
-
-                    // 批量减少在线设备计数
-                    if (validDeviceIds.size() > 1) {
-                        operations.opsForValue().decrement(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY, validDeviceIds.size());
-                    } else {
-                        operations.opsForValue().decrement(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
                     }
 
                     return null;
                 }
             });
 
-            // 统计 SREM 操作的成功情况（用于监控）
-            int removedCount = 0;      // 成功移除的设备数
-            int notFoundCount = 0;     // 设备不在索引中的数量
-            int failedCount = 0;       // SREM 操作返回异常的数量
+            // 统计 SREM 操作的实际移除情况
+            int actualRemovedCount = 0;  // 实际移除的设备数（SREM 返回1）
+            int notFoundCount = 0;       // 设备不在索引中的数量（SREM 返回0）
+            int failedCount = 0;         // SREM 操作返回异常的数量
 
             List<DeviceOnlineStatus> successfulStatuses = new ArrayList<>();
             for (int i = 0; i < validDeviceIds.size(); i++) {
@@ -723,7 +733,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 if (sremResult != null) {
                     // SREM 返回移除的成员数：1 表示成功移除，0 表示成员不存在
                     if (sremResult.equals(1L)) {
-                        removedCount++;
+                        actualRemovedCount++;  // 实际移除计数
                     } else if (sremResult.equals(0L)) {
                         notFoundCount++;
                     }
@@ -739,14 +749,19 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 }
             }
 
+            // 根据实际移除的设备数递减计数器
+            if (actualRemovedCount > 0) {
+                decrementOnlineCountSafely(actualRemovedCount);
+            }
+
             long duration = System.currentTimeMillis() - startTime;
             double successRate = validDeviceIds.isEmpty() ? 0.0 :
                 (double) successfulStatuses.size() / validDeviceIds.size() * 100;
 
             log.info("DeviceOnlineStatus - 批量标记设备离线完成: total={}, valid={}, successful={}, " +
-                    "removed={}, notFound={}, failed={}, successRate={}%, duration={}ms, reconnectTtl={}s",
+                    "actualRemoved={}, notFound={}, failed={}, successRate={}%, duration={}ms, reconnectTtl={}s",
                     deviceIds.size(), validDeviceIds.size(), successfulStatuses.size(),
-                    removedCount, notFoundCount, failedCount, successRate, duration, reconnectTtl.getSeconds());
+                    actualRemovedCount, notFoundCount, failedCount, successRate, duration, reconnectTtl.getSeconds());
 
             return successfulStatuses;
 
@@ -797,6 +812,38 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             redisTemplate.opsForValue().set(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY, onlineDeviceCount);
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 重置在线设备数量失败", e);
+        }
+    }
+
+    /**
+     * 安全地递减在线设备计数，确保不会变为负数
+     *
+     * @param amount 递减数量
+     */
+    private void decrementOnlineCountSafely(long amount) {
+        if (amount <= 0) {
+            return;
+        }
+
+        try {
+            // 使用 Lua 脚本确保原子性和下限保护
+            String luaScript =
+                "local current = redis.call('GET', KEYS[1]) or '0' " +
+                "local newVal = math.max(0, tonumber(current) - tonumber(ARGV[1])) " +
+                "redis.call('SET', KEYS[1], newVal) " +
+                "return newVal";
+
+            redisTemplate.execute(
+                (RedisCallback<Long>) connection -> connection.eval(
+                    luaScript.getBytes(),
+                    org.springframework.data.redis.connection.ReturnType.INTEGER,
+                    1,
+                    RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY.getBytes(),
+                    String.valueOf(amount).getBytes()
+                )
+            );
+        } catch (Exception e) {
+            log.error("DeviceOnlineStatus - 递减在线设备数量失败: amount={}", amount, e);
         }
     }
 
