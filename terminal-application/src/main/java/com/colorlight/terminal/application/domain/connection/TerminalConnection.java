@@ -55,16 +55,19 @@ public class TerminalConnection {
     /**
      * 发送消息计数 - 统一到Connection层管理
      */
+    @Builder.Default
     private final AtomicLong sentMessageCount = new AtomicLong(0);
 
     /**
      * 接收消息计数 - 统一到Connection层管理
      */
+    @Builder.Default
     private final AtomicLong receivedMessageCount = new AtomicLong(0);
 
     /**
      * 错误消息计数 - 统一到Connection层管理
      */
+    @Builder.Default
     private final AtomicLong errorMessageCount = new AtomicLong(0);
 
     /**
