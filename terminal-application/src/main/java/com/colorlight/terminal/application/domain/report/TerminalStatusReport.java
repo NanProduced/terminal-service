@@ -849,6 +849,13 @@ public class TerminalStatusReport {
          * 内容上报状态（0-关闭，1-开启）
          */
         private int content_report_status;
+
+        /**
+         * 节目上报状态（0-关闭，1-开启）
+         */
+        private int program_report_status;
+
+
     }
 
     /**
