@@ -553,7 +553,7 @@ class ShardedConnectionManagerTest {
             Long deviceId = 10002L;
             TerminalConnection connection = InfrastructureTestDataFactory.createTerminalConnection(deviceId, ProtocolVersion.V1_1);
             connection.setSession(faultySession);
-            
+
             // 强制添加连接（绕过验证）
             connectionManager.addConnection(deviceId, connection);
 

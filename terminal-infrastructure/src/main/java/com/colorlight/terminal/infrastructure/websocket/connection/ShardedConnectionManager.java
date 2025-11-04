@@ -66,7 +66,13 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
     }
     
     // ============== 公开接口实现 ==============
-    
+
+    /**
+     * 添加终端连接
+     * @param deviceId 设备ID
+     * @param connection WebSocket会话
+     * @return 添加成功返回true，否则返回false
+     */
     @Override
     public boolean addConnection(Long deviceId, TerminalConnection connection) {
         if (!running || deviceId == null || connection == null) {
@@ -102,33 +108,64 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
             return false;
         }
     }
-    
+
+    /**
+     * 移除终端连接
+     * @param deviceId 设备ID
+     * @return 移除的终端连接对象，移除失败返回null
+     */
     @Override
     public TerminalConnection removeConnection(Long deviceId) {
         if (!running || deviceId == null) {
             return null;
         }
-        
+
         try {
             ConnectionShard shard = getShardForDevice(deviceId);
             TerminalConnection removed = shard.removeConnection(deviceId);
-            
+
             if (removed != null) {
-                // 减少连接计数
-                totalConnections.decrementAndGet();
-                // 减少协议版本计数
-                versionCounter.get(removed.getProtocolVersion()).decrementAndGet();
+                // 安全地减少连接计数（防止负数）
+                int newTotal = totalConnections.decrementAndGet();
+                if (newTotal < 0) {
+                    totalConnections.set(0);
+                    log.warn("ShardedConnectionManager - 连接计数异常（低于0），已重置为0");
+                }
+
+                // 安全地减少协议版本计数（防止NPE和负数）
+                ProtocolVersion version = removed.getProtocolVersion();
+                versionCounter.compute(version, (key, counter) -> {
+                    if (counter == null) {
+                        log.warn("ShardedConnectionManager - 协议版本计数不存在，version: {}", version);
+                        return null;
+                    }
+
+                    int newCount = counter.decrementAndGet();
+                    if (newCount < 0) {
+                        counter.set(0);
+                        log.warn("ShardedConnectionManager - 协议版本计数异常（低于0），version: {}, 已重置为0", version);
+                        return counter;
+                    }
+
+                    return counter;
+                });
+
                 log.debug("ShardedConnectionManager - 移除终端连接: {}, total: {}", deviceId, totalConnections.get());
             }
-            
+
             return removed;
-            
+
         } catch (Exception e) {
             log.error("ShardedConnectionManager - 移除终端连接失败: {}", deviceId, e);
             return null;
         }
     }
-    
+
+    /**
+     * 获取终端连接
+     * @param deviceId 设备ID
+     * @return 终端连接对象，获取失败返回null
+     */
     @Override
     public Optional<TerminalConnection> getConnection(Long deviceId) {
         if (!running || deviceId == null) {
@@ -287,6 +324,7 @@ public class ShardedConnectionManager implements ConnectionManagerPort, Disposab
         AtomicInteger counter = versionCounter.get(version);
         return counter != null ? counter.get() : 0;
     }
+
 
     @Override
     public void destroy() {
