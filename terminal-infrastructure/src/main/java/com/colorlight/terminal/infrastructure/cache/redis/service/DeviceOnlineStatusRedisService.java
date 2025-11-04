@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.*;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -62,7 +63,32 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final DeviceConfigPort deviceConfigPort;
-    
+
+    // ==================== Lua脚本定义 ====================
+
+    /**
+     * 原子递减在线设备计数器的Lua脚本
+     * 功能：获取当前值，递减后保证>=0，然后返回新值
+     * <p>
+     * 脚本参数：
+     *   KEYS[1]: 计数器key
+     *   ARGV[1]: 递减数量
+     * </p>
+     * 返回值：递减后的计数器值（保证>=0）
+     */
+    private static final DefaultRedisScript<Long> DECREMENT_ONLINE_COUNT_SCRIPT;
+
+    static {
+        DECREMENT_ONLINE_COUNT_SCRIPT = new DefaultRedisScript<>();
+        DECREMENT_ONLINE_COUNT_SCRIPT.setScriptText(
+            "local current = redis.call('GET', KEYS[1]) or '0' " +
+            "local newVal = math.max(0, tonumber(current) - tonumber(ARGV[1])) " +
+            "redis.call('SET', KEYS[1], newVal) " +
+            "return newVal"
+        );
+        DECREMENT_ONLINE_COUNT_SCRIPT.setResultType(Long.class);
+    }
+
     /**
      * 获取状态TTL配置 - 用于正常在线状态
      */
@@ -176,36 +202,27 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
      * @param status 部分设备状态字段
      */
     @Override
-    @SuppressWarnings("unchecked")
     public void updateDeviceStatus(DeviceOnlineStatus status) {
         String statusKey = getStatusKey(status.getDeviceId());
 
         try {
-            // 1. 构建更新字段映射
             Map<String, Object> updateFields = convertToRedisMap(status);
 
-            // 2. 执行原子更新
-            List<Object> results = (List<Object>) redisTemplate.execute(new SessionCallback<Object>() {
+            // 执行管道批量更新
+            redisTemplate.executePipelined(new SessionCallback<Object>() {
                 @Override
+                @SuppressWarnings("unchecked")
                 public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
-                    operations.multi();
-
                     // 更新状态字段
                     operations.opsForHash().putAll(statusKey, updateFields);
 
                     // 重新设置TTL
                     operations.expire(statusKey, getStatusTtl());
 
-                    return operations.exec();
+                    return null;
                 }
             });
-
-            // 验证事务是否执行成功
-            if (results.isEmpty()) {
-                log.error("DeviceOnlineStatus - 心跳更新事务失败: deviceId={}, statusKey={}",
-                    status.getDeviceId(), statusKey);
-                // 心跳更新失败不抛异常，避免阻塞心跳处理
-            }
+            // Pipeline 已执行，无需检查结果（高频操作，失败不阻塞）
 
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 更新设备状态失败: deviceId={}", status.getDeviceId(), e);
@@ -493,16 +510,14 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void removeDeviceStatusForStartupCleanup(Long deviceId) {
         String statusKey = getStatusKey(deviceId);
 
         try {
-            redisTemplate.execute(new SessionCallback<Object>() {
+            redisTemplate.executePipelined(new SessionCallback<Object>() {
                 @Override
+                @SuppressWarnings("unchecked")
                 public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
-                    operations.multi();
-
                     // 删除状态详情（不影响计数器）
                     operations.delete(statusKey);
 
@@ -511,7 +526,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
 
                     // 启动清理时不修改计数器，因为已经在启动时重置
 
-                    return operations.exec();
+                    return null;
                 }
             });
 
@@ -553,20 +568,20 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         try {
             long startTime = System.currentTimeMillis();
 
-            // 第一步：批量获取当前状态并过滤
+            // 批量获取当前状态并过滤
             List<DeviceOnlineStatus> offlineDevices = filterValidDevicesForOffline(deviceIds);
 
             if (offlineDevices.isEmpty()) {
                 return new ArrayList<>();
             }
 
-            // 第二步：使用Pipeline批量执行离线操作
+            // 使用Pipeline批量执行离线操作
             long currentTime = System.currentTimeMillis();
             Duration reconnectTtl = getReconnectTtl();
 
             List<Object> pipelineResults = executeBatchOfflineOperations(offlineDevices, currentTime, reconnectTtl);
 
-            // 第三步：处理Pipeline结果并统计
+            // 处理Pipeline结果并统计
             OfflineProcessResult processResult = processBatchOfflineResults(offlineDevices, pipelineResults);
 
             // 根据实际移除的设备数递减计数器
@@ -574,6 +589,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 decrementOnlineCountSafely(processResult.actualRemovedCount);
             }
 
+            // 记录日志
             logBatchOfflineCompletion(deviceIds.size(), offlineDevices.size(), processResult,
                                      System.currentTimeMillis() - startTime, reconnectTtl);
 
@@ -734,20 +750,11 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
 
         try {
             // 使用 Lua 脚本确保原子性和下限保护
-            String luaScript =
-                "local current = redis.call('GET', KEYS[1]) or '0' " +
-                "local newVal = math.max(0, tonumber(current) - tonumber(ARGV[1])) " +
-                "redis.call('SET', KEYS[1], newVal) " +
-                "return newVal";
-
+            // Spring Data Redis 3.3.x 推荐方式：使用 RedisScript + redisTemplate.execute()
             redisTemplate.execute(
-                (RedisCallback<Long>) connection -> connection.eval(
-                    luaScript.getBytes(),
-                    org.springframework.data.redis.connection.ReturnType.INTEGER,
-                    1,
-                    RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY.getBytes(),
-                    String.valueOf(amount).getBytes()
-                )
+                DECREMENT_ONLINE_COUNT_SCRIPT,
+                List.of(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY),
+                String.valueOf(amount)
             );
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 递减在线设备数量失败: amount={}", amount, e);

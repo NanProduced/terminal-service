@@ -107,8 +107,8 @@ class DeviceOnlineStatusRedisServiceTest {
             // When - 执行智能判断
             redisService.smartDetermined(status);
 
-            // Then - 验证更新操作被调用
-            verify(mockRedisTemplate).execute(any(SessionCallback.class));
+            // Then - 验证Pipeline更新操作被调用
+            verify(mockRedisTemplate).executePipelined(any(SessionCallback.class));
         }
 
         @Test
@@ -136,8 +136,8 @@ class DeviceOnlineStatusRedisServiceTest {
             // When - 执行智能判断
             redisService.smartDetermined(status);
 
-            // Then - 验证更新操作被调用
-            verify(mockRedisTemplate).execute(any(SessionCallback.class));
+            // Then - 验证Pipeline更新操作被调用
+            verify(mockRedisTemplate).executePipelined(any(SessionCallback.class));
         }
     }
 
@@ -222,17 +222,17 @@ class DeviceOnlineStatusRedisServiceTest {
             assertThatCode(() -> redisService.updateDeviceStatus(status))
                 .doesNotThrowAnyException();
 
-            // Then - 验证Redis事务操作被调用
-            verify(mockRedisTemplate).execute(any(SessionCallback.class));
+            // Then - 验证Redis Pipeline操作被调用
+            verify(mockRedisTemplate).executePipelined(any(SessionCallback.class));
         }
 
         @Test
-        @DisplayName("应该在更新失败时抛出异常")
+        @DisplayName("应该在更新失败时不抛出异常")
         @SuppressWarnings("unchecked")
         void should_throw_exception_when_update_fails() {
             // Given - 准备设备状态和模拟异常
             DeviceOnlineStatus status = InfrastructureTestDataFactory.createDeviceOnlineStatus(1002L, OnlineStatus.ONLINE);
-            when(mockRedisTemplate.execute(any(SessionCallback.class))).thenThrow(new RuntimeException("Redis update failed"));
+            lenient().when(mockRedisTemplate.executePipelined(any(SessionCallback.class))).thenThrow(new RuntimeException("Redis update failed"));
 
             // When & Then - 验证不会抛出异常（方法捕获异常但不重新抛出）
             assertThatCode(() -> redisService.updateDeviceStatus(status))
@@ -241,19 +241,18 @@ class DeviceOnlineStatusRedisServiceTest {
     }
 
         @Test
-        @DisplayName("更新状态时 SessionCallback 应刷新 TTL")
+        @DisplayName("更新状态时 Pipeline SessionCallback 应刷新 TTL")
         @SuppressWarnings({"unchecked", "rawtypes"})
         void should_execute_session_callback_when_updating_status() {
             DeviceOnlineStatus status = InfrastructureTestDataFactory.createDeviceOnlineStatus(1007L, OnlineStatus.ONLINE);
 
-            when(mockRedisTemplate.execute(any(SessionCallback.class))).thenAnswer(invocation -> {
+            lenient().when(mockRedisTemplate.executePipelined(any(SessionCallback.class))).thenAnswer(invocation -> {
                 SessionCallback callback = invocation.getArgument(0);
                 RedisOperations<String, Object> operations = mock(RedisOperations.class);
                 HashOperations<String, Object, Object> hashOps = mock(HashOperations.class);
                 when(operations.opsForHash()).thenReturn(hashOps);
-                when(operations.exec()).thenReturn(List.of("OK"));
                 callback.execute(operations);
-                verify(operations).multi();
+                // Pipeline 不使用 multi()/exec()，直接执行
                 verify(hashOps).putAll(argThat(key -> key.startsWith("device:status:")), anyMap());
                 verify(operations).expire(argThat(key -> key.startsWith("device:status:")), any());
                 return List.of("OK");
