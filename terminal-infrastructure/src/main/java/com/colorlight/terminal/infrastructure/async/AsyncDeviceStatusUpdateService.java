@@ -20,12 +20,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
-/**
- * 异步设备状态更新服务
- * <p>缓冲池机制，提供异步状态更新处理</p>
- * 
- * @author Nan
- */
 @Slf4j
 @Service
 @ConditionalOnProperty(name = "terminal.device.status-update.async-enabled", havingValue = "true", matchIfMissing = true)
@@ -49,6 +43,8 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
     private final AtomicLong totalFlushed = new AtomicLong(0);
     private volatile long lastFlushTime = 0;
     
+    // 对象池复用：批处理ArrayList容器，由flushLock保护
+    private List<DeviceOnlineStatus> batchContainer;
     
     // 构造器初始化有界队列
     public AsyncDeviceStatusUpdateService(DeviceOnlineStatusPort deviceOnlineStatusPort,
@@ -65,6 +61,8 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
     public void init() {
         isRunning.set(true);
         lastFlushTime = System.currentTimeMillis();
+        // 预初始化批处理容器，避免首次创建延迟
+        batchContainer = new ArrayList<>(deviceConfigPort.getBufferPoolBatchSize());
 
         log.info("AsyncDeviceStatusUpdate - 异步状态更新服务启动: windowMs={}, maxSize={}, batchSize={}, emergencyFlushThreshold={}",
                 deviceConfigPort.getBufferPoolWindowMs(),
@@ -144,20 +142,19 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
             int batchSize = deviceConfigPort.getBufferPoolBatchSize();
             int processedCount = 0;
 
-            // 分批处理缓冲池中的状态更新
-            List<DeviceOnlineStatus> batch = new ArrayList<>(batchSize);
-            
+            // 使用复用的批处理容器，由flushLock保护，无需额外同步
             while (!bufferPool.isEmpty()) {
                 DeviceOnlineStatus status = bufferPool.poll();
                 if (status != null) {
-                    batch.add(status);
-                    
+                    batchContainer.add(status);
+
                     // 达到批处理大小或缓冲池已空，执行批量更新
-                    if (batch.size() >= batchSize || bufferPool.isEmpty()) {
-                        processedCount += batch.size();
-                        processBatch(batch);
-                        // 重新创建batch容器，避免clear()操作
-                        batch = new ArrayList<>(batchSize);
+                    if (batchContainer.size() >= batchSize || bufferPool.isEmpty()) {
+                        processedCount += batchContainer.size();
+                        // 传递批次副本，避免因列表清空导致引用失效
+                        processBatch(new ArrayList<>(batchContainer));
+                        // 清空容器供下一批使用
+                        batchContainer.clear();
                     }
                 }
             }
@@ -241,20 +238,19 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
     
     /**
      * 处理一批状态更新
+     * 
+     * @param batch 设备状态批次列表
      */
     private void processBatch(List<DeviceOnlineStatus> batch) {
         if (batch.isEmpty()) {
             return;
         }
 
-        for (DeviceOnlineStatus status : batch) {
-            try {
-                // 使用现有的Redis服务批量更新状态
-                deviceOnlineStatusPort.smartDetermined(status);
-            } catch (Exception e) {
-                log.error("AsyncDeviceStatusUpdate - 批处理失败: batchSize={}", batch.size(), e);
-                // 这里可以考虑重试机制或者降级处理
-            }
+        try {
+            deviceOnlineStatusPort.batchSmartDetermined(batch);
+        } catch (Exception e) {
+            log.error("AsyncDeviceStatusUpdate - 批处理失败: batchSize={}", batch.size(), e);
+            // 这里可以考虑重试机制或者降级处理
         }
     }
     

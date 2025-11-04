@@ -134,6 +134,78 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     }
 
     /**
+     * 批量智能判定设备状态
+     *
+     * <p>使用Redis Pipeline优化，将多个状态操作打包成一个网络往返</p>
+     *
+     * <p>执行逻辑：只处理异步缓冲接收的状态（ONLINE/null），跳过其他状态
+     * <ul>
+     *   <li>ONLINE/null状态：执行更新操作（心跳更新）</li>
+     *   <li>GO_LIVE/RECONNECT/OFFLINE状态：跳过处理（不进入异步缓冲）</li>
+     * </ul>
+     *
+     * <p>注：GO_LIVE和RECONNECT状态在应用层被强制同步处理，不会进入异步批处理。
+     * 参见 DeviceOnlineStatusApplicationService#updateDeviceStatusWithMode
+     *
+     * @param statusList 设备状态列表
+     */
+    @Override
+    public void batchSmartDetermined(List<DeviceOnlineStatus> statusList) {
+        if (statusList == null || statusList.isEmpty()) {
+            return;
+        }
+
+        try {
+            // 使用单一Pipeline执行所有操作，最大化网络往返优化
+            redisTemplate.executePipelined(new SessionCallback<Object>() {
+                @Override
+                public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
+                    for (DeviceOnlineStatus status : statusList) {
+                        if (status == null) {
+                            continue;
+                        }
+
+                        // 只处理ONLINE和null状态（异步缓冲接收的状态）
+                        OnlineStatus currentStatus = status.getStatus();
+                        if (currentStatus == null || currentStatus == OnlineStatus.ONLINE) {
+                            performUpdateInPipeline(operations, getStatusKey(status.getDeviceId()), status);
+                        }
+                        // GO_LIVE/RECONNECT不进入异步缓冲，OFFLINE不处理
+                    }
+
+                    return null;
+                }
+            });
+
+        } catch (Exception e) {
+            log.error("DeviceOnlineStatus - 批量智能判定设备状态失败: statusList.size={}", statusList.size(), e);
+        }
+    }
+
+    /**
+     * 在Pipeline中执行更新操作（对应updateDeviceStatus的逻辑）
+     *
+     * <p>操作序列：
+     * <ol>
+     *   <li>HSET: 更新设备状态字段</li>
+     *   <li>EXPIRE: 重新设置TTL</li>
+     * </ol>
+     *
+     * @param operations Redis操作对象
+     * @param statusKey 设备状态key
+     * @param status 设备在线状态
+     */
+    @SuppressWarnings("unchecked")
+    private void performUpdateInPipeline(RedisOperations operations, String statusKey, DeviceOnlineStatus status) {
+        // 更新状态字段
+        Map<String, Object> updateFields = convertToRedisMap(status);
+        operations.opsForHash().putAll(statusKey, updateFields);
+
+        // 重新设置TTL
+        operations.expire(statusKey, getStatusTtl());
+    }
+
+    /**
      * 上线和重连两个状态使用这个方法
      * <p>全量保存+同步处理</p>
      *
