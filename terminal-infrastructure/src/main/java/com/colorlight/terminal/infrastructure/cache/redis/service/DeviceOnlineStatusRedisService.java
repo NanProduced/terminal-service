@@ -310,7 +310,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             });
 
             // 验证事务结果（exec失败返回空列表）
-            if (results == null || results.isEmpty()) {
+            if (results.isEmpty()) {
                 log.warn("DeviceOnlineStatus - 删除设备状态事务失败: deviceId={}", deviceId);
                 return;
             }

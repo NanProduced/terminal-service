@@ -482,7 +482,7 @@ class DeviceOnlineStatusApplicationServiceTest {
             when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
             when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.of(offlineStatus));
 
-            // When - HTTP �豸�ϱ��л�
+            // When - HTTP �豸����л�
             service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
 
             // Then - ��֤תΪ RECONNECT ʱ�汾ֵ����

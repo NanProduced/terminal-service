@@ -39,72 +39,101 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
     // 可选的异步状态更新服务 - 当配置启用时注入
     @Autowired(required = false)
     private AsyncDeviceStatusUpdatePort asyncDeviceStatusUpdatePort;
-    
+
+    /**
+     * 更新设备最后上报时间
+     *
+     * @param deviceId 设备ID
+     * @param source   上报源
+     * @param clientIp 终端IP
+     */
     @Override
     @Async("deviceStatusExecutor")
     public void updateLastReportTime(Long deviceId, ReportSource source, String clientIp) {
-        // 使用基础设施层的分布式锁防止并发竞态
         boolean acquired = false;
-        
         try {
-            // 尝试获取分布式锁，超时5秒
             acquired = deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(deviceId, 5000L);
-            
             if (!acquired) {
-                log.warn("ApplicationService - 获取设备更新锁失败，跳过此次更新: deviceId={}, source={}", 
-                        deviceId, source);
+                log.warn("获取设备更新锁失败，跳过更新: deviceId={}, source={}", deviceId, source);
                 return;
             }
-            
-            
-            // 获取当前状态（在锁保护下）
-            Optional<DeviceOnlineStatus> currentStatusOpt = deviceOnlineStatusPort.getDeviceStatus(deviceId);
 
-            /*
-              终端状态缓存还存在，两种情况：
-              1.终端持续在线，仅刷新最后上报时间
-              2.终端被定时任务标记为离线，但是状态缓存还未过期，重新上报（短时间内重连）
-             */
-            if (currentStatusOpt.isPresent()) {
-                // 当前状态
-                DeviceOnlineStatus currentStatus = currentStatusOpt.get();
-
-                DeviceOnlineStatus updateStatus = determinedUpdateStatus(currentStatus, source, clientIp);
-
-                updateDeviceStatusWithMode(updateStatus);
-
-                // 如果从离线变为在线，发布上线事件（这里应该是短暂的掉线后重连）
-                if (updateStatus.getStatus() == OnlineStatus.RECONNECT) {
-                    // 创建“重连”事件
-                    DeviceStatusEvent event = DeviceStatusEvent.createReconnectEvent(deviceId, source, clientIp, updateStatus.getOnlineStartTime(), updateStatus.getLastReportTime());
-                    deviceStatusEventPort.publishStatusEvent(event);
-                    log.info("ApplicationService - 设备上线（网络波动、超时重连）: deviceId={}, source={}", deviceId, source);
-                } else {
-                    // 发布维持在线状态事件
-                    DeviceStatusEvent event = DeviceStatusEvent.createHeartbeatEvent(deviceId, source, clientIp);
-                    deviceStatusEventPort.publishStatusEvent(event);
-                }
-            } else {
-                // 创建新状态
-                String version = getProtocolVersionForDevice(deviceId, source);
-                DeviceOnlineStatus newStatus = DeviceOnlineStatus.createGoLive(deviceId, source, clientIp, version);
-
-                updateDeviceStatusWithMode(newStatus);
-                
-                // 发布上线事件
-                DeviceStatusEvent event = DeviceStatusEvent.createGoLiveEvent(deviceId, source, clientIp);
-                deviceStatusEventPort.publishStatusEvent(event);
-                log.info("ApplicationService - 设备上线: deviceId={}, source={}", deviceId, source);
-            }
-            
+            processDeviceStatusUpdate(deviceId, source, clientIp);
         } catch (Exception e) {
-            log.error("ApplicationService - 更新设备上报时间失败: deviceId={}, source={}", deviceId, source, e);
+            log.error("更新设备上报时间失败: deviceId={}, source={}", deviceId, source, e);
         } finally {
-            // 释放分布式锁
             if (acquired) {
                 deviceOnlineStatusPort.releaseDeviceUpdateLock(deviceId);
             }
         }
+    }
+
+    /**
+     * 处理设备状态更新逻辑
+     *
+     * @param deviceId 设备ID
+     * @param source   上报源
+     * @param clientIp 客户端IP
+     */
+    private void processDeviceStatusUpdate(Long deviceId, ReportSource source, String clientIp) {
+        Optional<DeviceOnlineStatus> currentStatusOpt = deviceOnlineStatusPort.getDeviceStatus(deviceId);
+
+        if (currentStatusOpt.isPresent()) {
+            handleExistingDevice(deviceId, currentStatusOpt.get(), source, clientIp);
+        } else {
+            handleNewDevice(deviceId, source, clientIp);
+        }
+    }
+
+    /**
+     * 处理已存在的设备状态（更新/重连）
+     * @param deviceId 设备ID
+     * @param currentStatus 当前设备状态
+     * @param source   上报源
+     * @param clientIp 客户端IP
+     */
+    private void handleExistingDevice(Long deviceId, DeviceOnlineStatus currentStatus,
+                                     ReportSource source, String clientIp) {
+        DeviceOnlineStatus updatedStatus = determinedUpdateStatus(currentStatus, source, clientIp);
+        updateDeviceStatusWithMode(updatedStatus);
+        publishStatusEvent(deviceId, updatedStatus);
+    }
+
+    /**
+     * 处理新上线的设备
+     * @param deviceId 设备ID
+     * @param source   上报源
+     * @param clientIp 客户端IP
+     */
+    private void handleNewDevice(Long deviceId, ReportSource source, String clientIp) {
+        String version = getProtocolVersionForDevice(deviceId, source);
+        DeviceOnlineStatus newStatus = DeviceOnlineStatus.createGoLive(deviceId, source, clientIp, version);
+        updateDeviceStatusWithMode(newStatus);
+
+        DeviceStatusEvent event = DeviceStatusEvent.createGoLiveEvent(deviceId, source, clientIp);
+        deviceStatusEventPort.publishStatusEvent(event);
+        log.info("设备上线: deviceId={}, source={}", deviceId, source);
+    }
+
+    /**
+     * 根据状态转换发布相应的事件
+     * @param deviceId 设备ID
+     * @param updatedStatus 更新后的设备状态
+     */
+    private void publishStatusEvent(Long deviceId, DeviceOnlineStatus updatedStatus) {
+        DeviceStatusEvent event;
+
+        if (updatedStatus.getStatus() == OnlineStatus.RECONNECT) {
+            event = DeviceStatusEvent.createReconnectEvent(deviceId, updatedStatus.getLastReportSource(),
+                    updatedStatus.getClientIp(), updatedStatus.getOnlineStartTime(),
+                    updatedStatus.getLastReportTime());
+            log.info("设备重连: deviceId={}, source={}", deviceId, updatedStatus.getLastReportSource());
+        } else {
+            event = DeviceStatusEvent.createHeartbeatEvent(deviceId, updatedStatus.getLastReportSource(),
+                    updatedStatus.getClientIp());
+        }
+
+        deviceStatusEventPort.publishStatusEvent(event);
     }
     
     /**
@@ -140,48 +169,89 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
     }
 
     /**
-     * 推断状态更新类型（智能优化版本）
-     * @param currentStatus 当前的状态缓存
-     * @param source 上报来源
-     * @param clientIp 客户端Ip
-     * @return
+     * 决策设备状态转换
+     * <p>
+     * 状态转换流程：
+     *  <li> OFFLINE → RECONNECT（设备重新连接）</li>
+     *  <li> GO_LIVE/RECONNECT → ONLINE（状态稳定）</li>
+     *  <li> ONLINE → ONLINE（心跳维持，仅刷新时间）</li>
+     * </p>
+     *
+     * @param currentStatus 当前设备状态
+     * @param source 上报数据源
+     * @param clientIp 上报客户端IP
      */
-    private DeviceOnlineStatus determinedUpdateStatus(DeviceOnlineStatus currentStatus, ReportSource source, String clientIp) {
+    private DeviceOnlineStatus determinedUpdateStatus(DeviceOnlineStatus currentStatus,
+                                                      ReportSource source, String clientIp) {
         OnlineStatus currentState = currentStatus.getStatus();
-        long currentTime = System.currentTimeMillis();
-        
-        // 离线 → 重连
-        if (currentState == OnlineStatus.OFFLINE) {
-            String version = getProtocolVersionForReconnect(currentStatus, source, currentStatus.getDeviceId());
-            return DeviceOnlineStatus.createReconnect(currentStatus, source, clientIp, version);
-        }
-        
-        // GO_LIVE/RECONNECT → ONLINE (第一次转为稳定在线状态)
-        if (currentState == OnlineStatus.GO_LIVE || currentState == OnlineStatus.RECONNECT) {
-            return DeviceOnlineStatus.builder()
-                .deviceId(currentStatus.getDeviceId())
-                .lastReportTime(currentTime)
-                .lastReportSource(source)
-                .status(OnlineStatus.ONLINE)  // ✅ 状态转换
-                .statusChangeTime(currentTime)
-                .onlineStartTime(currentStatus.getOnlineStartTime()) // 保持原有上线时间
-                .clientIp(clientIp)
-                .version(currentStatus.getVersion()) // 保持协议版本
-                .build();
-        }
-        
-        // ONLINE → 心跳维持 (只更新时间，不更新状态)
-        else {
-            String version = source == ReportSource.WEBSOCKET ? getProtocolVersionFromConnection(currentStatus.getDeviceId()) : null;
-            DeviceOnlineStatus refreshStatus = DeviceOnlineStatus.refreshOnline(
-                    currentStatus.getDeviceId(), source, clientIp, version);
 
-            // 版本字段合并（如果是http刷新没有更新version则使用之前的version）
-            if (refreshStatus.getVersion() == null) {
-                refreshStatus.setVersion(currentStatus.getVersion());
-            }
-            return refreshStatus;
+        // 离线状态 → 重连
+        if (currentState == OnlineStatus.OFFLINE) {
+            return handleOfflineReconnect(currentStatus, source, clientIp);
         }
+
+        // 初始状态 → 在线稳定
+        if (currentState == OnlineStatus.GO_LIVE || currentState == OnlineStatus.RECONNECT) {
+            return transitionToOnline(currentStatus, source, clientIp);
+        }
+
+        // 在线状态 → 心跳维持
+        return refreshOnlineStatus(currentStatus, source, clientIp);
+    }
+
+    /**
+     * 处理离线状态下的设备重连
+     * @param currentStatus 当前设备状态
+     * @param source 上报数据源
+     * @param clientIp 上报客户端IP
+     */
+    private DeviceOnlineStatus handleOfflineReconnect(DeviceOnlineStatus currentStatus,
+                                                      ReportSource source, String clientIp) {
+        String version = getProtocolVersionForReconnect(currentStatus, source, currentStatus.getDeviceId());
+        return DeviceOnlineStatus.createReconnect(currentStatus, source, clientIp, version);
+    }
+
+    /**
+     * 从初始状态转换为在线稳定状态
+     * @param currentStatus 当前设备状态
+     * @param source 上报数据源
+     * @param clientIp 上报客户端IP
+     */
+    private DeviceOnlineStatus transitionToOnline(DeviceOnlineStatus currentStatus,
+                                                   ReportSource source, String clientIp) {
+        long currentTime = System.currentTimeMillis();
+        return DeviceOnlineStatus.builder()
+            .deviceId(currentStatus.getDeviceId())
+            .lastReportTime(currentTime)
+            .lastReportSource(source)
+            .status(OnlineStatus.ONLINE)
+            .statusChangeTime(currentTime)
+            .onlineStartTime(currentStatus.getOnlineStartTime())
+            .clientIp(clientIp)
+            .version(currentStatus.getVersion())
+            .build();
+    }
+
+    /**
+     * 刷新在线状态（仅更新心跳时间）
+     * @param currentStatus 当前设备状态
+     * @param source 上报数据源
+     * @param clientIp 上报客户端IP
+     */
+    private DeviceOnlineStatus refreshOnlineStatus(DeviceOnlineStatus currentStatus,
+                                                    ReportSource source, String clientIp) {
+        String version = source == ReportSource.WEBSOCKET
+            ? getProtocolVersionFromConnection(currentStatus.getDeviceId())
+            : null;
+
+        DeviceOnlineStatus refreshStatus = DeviceOnlineStatus.refreshOnline(
+            currentStatus.getDeviceId(), source, clientIp, version);
+
+        // 如果WebSocket获取版本失败，保持原有版本
+        if (refreshStatus.getVersion() == null) {
+            refreshStatus.setVersion(currentStatus.getVersion());
+        }
+        return refreshStatus;
     }
     
     @Override
@@ -287,6 +357,10 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
         }
     }
 
+    /**
+     * 批量处理离线设备
+     * @return 处理的离线设备数量
+     */
     @Override
     public int processOfflineDevices() {
         try {
@@ -350,39 +424,37 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
     }
     
     /**
-     * 获取设备协议版本（新建状态时使用）
+     * 获取新建设备的协议版本
+     * WebSocket: 从连接获取版本; HTTP: 返回null（首次上报无版本）
+     *
      * @param deviceId 设备ID
-     * @param source 上报来源
-     * @return 协议版本字符串，HTTP来源返回null
+     * @param source 上报数据源
      */
     private String getProtocolVersionForDevice(Long deviceId, ReportSource source) {
-        if (source == ReportSource.WEBSOCKET) {
-            return getProtocolVersionFromConnection(deviceId);
-        }
-        // HTTP来源新建状态时无协议版本信息
-        return null;
+        return source == ReportSource.WEBSOCKET
+            ? getProtocolVersionFromConnection(deviceId)
+            : null;
     }
-    
+
     /**
-     * 获取设备协议版本（重连状态时使用）
-     * @param currentStatus 当前状态
-     * @param source 上报来源
+     * 获取重连设备的协议版本
+     * WebSocket: 从连接获取最新版本; HTTP: 保持原有版本
+     *
+     * @param currentStatus 当前设备状态
+     * @param source 上报数据源
      * @param deviceId 设备ID
-     * @return 协议版本字符串
      */
-    private String getProtocolVersionForReconnect(DeviceOnlineStatus currentStatus, ReportSource source, Long deviceId) {
-        if (source == ReportSource.WEBSOCKET) {
-            // WebSocket: 获取权威版本
-            return getProtocolVersionFromConnection(deviceId);
-        }
-        // HTTP: 保持原版本
-        return currentStatus.getVersion();
+    private String getProtocolVersionForReconnect(DeviceOnlineStatus currentStatus,
+                                                   ReportSource source, Long deviceId) {
+        return source == ReportSource.WEBSOCKET
+            ? getProtocolVersionFromConnection(deviceId)
+            : currentStatus.getVersion();
     }
-    
+
     /**
-     * 从连接管理器获取协议版本
+     * 从连接获取设备的协议版本
+     * 连接不存在时返回默认版本 V1.0
      * @param deviceId 设备ID
-     * @return 协议版本字符串，连接不存在时返回默认版本
      */
     private String getProtocolVersionFromConnection(Long deviceId) {
         return connectionManagerPort.getConnection(deviceId)
