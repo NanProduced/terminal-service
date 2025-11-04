@@ -7,6 +7,7 @@ import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort
 import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineStatusPort;
 import com.colorlight.terminal.commons.exception.technical.RedisTransactionFailedException;
 import com.colorlight.terminal.infrastructure.cache.redis.constant.RedisKeyConstant;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -76,12 +77,20 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         return Duration.ofSeconds(deviceConfigPort.getReconnectTtl());
     }
 
+    /**
+     * 获取设备状态Redis Key
+     */
+    private String getStatusKey(Long deviceId) {
+        return String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
+    }
+
     @Override
     public void smartDetermined(DeviceOnlineStatus status) {
         // 检查 status.getStatus() 是否为 null
         if (status.getStatus() == null) {
             updateDeviceStatus(status);
-        } else {
+        }
+        else {
             switch (status.getStatus()) {
                 case GO_LIVE, RECONNECT:
                     saveDeviceStatus(status);
@@ -114,11 +123,10 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     @Override
     @SuppressWarnings("unchecked")
     public void saveDeviceStatus(DeviceOnlineStatus status) {
-        String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, status.getDeviceId());
+        String statusKey = getStatusKey(status.getDeviceId());
 
         try {
             // 在应用层分布式锁保护下，直接执行保存操作
-            // 使用Redis事务保证原子性
             List<Object> results = (List<Object>) redisTemplate.execute(new SessionCallback<Object>() {
                 @Override
                 public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
@@ -139,7 +147,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 }
             });
 
-            // 验证事务是否执行成功
             // Redis EXEC 失败时返回空列表，成功时返回非空列表
             if (results.isEmpty()) {
                 log.error("DeviceOnlineStatus - 设备上线事务失败: deviceId={}, statusKey={}",
@@ -147,10 +154,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
                 throw new RedisTransactionFailedException(
                     String.format("设备上线事务失败: deviceId=%d", status.getDeviceId()));
             }
-
-            // 事务成功，记录日志
-            log.debug("DeviceOnlineStatus - 设备上线成功: deviceId={}, operations=4",
-                status.getDeviceId());
 
         } catch (RedisTransactionFailedException e) {
             throw e;
@@ -175,7 +178,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     @Override
     @SuppressWarnings("unchecked")
     public void updateDeviceStatus(DeviceOnlineStatus status) {
-        String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, status.getDeviceId());
+        String statusKey = getStatusKey(status.getDeviceId());
 
         try {
             // 1. 构建更新字段映射
@@ -289,51 +292,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public void removeDeviceStatus(Long deviceId) {
-        String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
-
-        try {
-            List<Object> results = (List<Object>) redisTemplate.execute(new SessionCallback<Object>() {
-                @Override
-                public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
-                    operations.multi();
-
-                    // 删除状态详情
-                    operations.delete(statusKey);
-
-                    // 从索引中移除（返回移除的成员数）
-                    operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
-
-                    return operations.exec();
-                }
-            });
-
-            // 验证事务结果（exec失败返回空列表）
-            if (results.isEmpty()) {
-                log.warn("DeviceOnlineStatus - 删除设备状态事务失败: deviceId={}", deviceId);
-                return;
-            }
-
-            // 验证结果集大小（应该有2个操作的结果: 1个DELETE + 1个SREM）
-            if (results.size() >= 2) {
-                // 第2个操作是 SREM，检查是否实际移除了设备
-                Object sremResult = results.get(1);
-                if (sremResult != null && sremResult.equals(1L)) {
-                    // 仅当实际移除时才减少计数器
-                    decrementOnlineCountSafely(1);
-                } else {
-                    log.debug("DeviceOnlineStatus - 设备不在索引中: deviceId={}, sremResult={}",
-                        deviceId, sremResult);
-                }
-            }
-
-        } catch (Exception e) {
-            log.error("DeviceOnlineStatus - 删除设备状态失败: deviceId={}", deviceId, e);
-        }
-    }
-
-    @Override
     public void removeDeviceIndex(Long deviceId) {
         try {
             redisTemplate.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
@@ -397,10 +355,10 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     /**
      * 流式迭代所有设备ID
      * 使用SCAN命令分页获取SET成员，避免阻塞Redis
-     * 
+     *
      * @param consumer 设备ID消费者
      */
-    public void streamAllDeviceIds(LongConsumer consumer) {
+    private void streamAllDeviceIds(LongConsumer consumer) {
         if (consumer == null) {
             return;
         }
@@ -468,7 +426,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
      * 使用流式查询和分批Pipeline的方式查找过期设备
      * 替代Lua脚本，避免序列化问题，更好的可调试性
      */
-    public List<Long> findExpiredDevicesWithStream(long expireThreshold) {
+    private List<Long> findExpiredDevicesWithStream(long expireThreshold) {
         try {
             List<Long> expiredDevices = new ArrayList<>();
             List<Long> batchDeviceIds = new ArrayList<>();
@@ -537,7 +495,7 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     @Override
     @SuppressWarnings("unchecked")
     public void removeDeviceStatusForStartupCleanup(Long deviceId) {
-        String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
+        String statusKey = getStatusKey(deviceId);
 
         try {
             redisTemplate.execute(new SessionCallback<Object>() {
@@ -562,100 +520,24 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         }
     }
 
-    @Override
-    @SuppressWarnings("unchecked")
-    public DeviceOnlineStatus markOfflineAndResetTtl(Long deviceId) {
-        String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
-
-        try {
-            // 先获取当前状态信息
-            Optional<DeviceOnlineStatus> currentStatusOpt = getDeviceStatus(deviceId);
-            if (currentStatusOpt.isEmpty()) {
-                return null;
-            }
-
-            DeviceOnlineStatus currentStatus = currentStatusOpt.get();
-            OnlineStatus status = currentStatus.getStatus();
-
-            // 检查是否为在线相关状态
-            if (status != OnlineStatus.ONLINE && status != OnlineStatus.GO_LIVE && status != OnlineStatus.RECONNECT) {
-                return null;
-            }
-
-            // 验证时间信息完整性
-            if (currentStatus.getOnlineStartTime() == null || currentStatus.getLastReportTime() == null) {
-                log.warn("DeviceOnlineStatus -single- 设备时间信息不完整，跳过离线处理: deviceId={}, onlineStartTime={}, lastReportTime={}",
-                        deviceId, currentStatus.getOnlineStartTime(), currentStatus.getLastReportTime());
-                return null;
-            }
-
-            // 使用Redis事务原子化执行离线操作
-            List<Object> results = (List<Object>) redisTemplate.execute(new SessionCallback<Object>() {
-                @Override
-                public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
-                    operations.multi();
-
-                    // 更新状态为离线
-                    operations.opsForHash().put(statusKey, STATUS, OnlineStatus.OFFLINE.name());
-                    operations.opsForHash().put(statusKey, STATUS_CHANGE_TIME, System.currentTimeMillis());
-
-                    // 重置TTL为重连窗口时间
-                    operations.expire(statusKey, getReconnectTtl());
-
-                    // 从在线设备索引中移除（返回移除的成员数）
-                    operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
-
-                    return operations.exec();
-                }
-            });
-
-            // 验证事务结果
-            if (results.isEmpty()) {
-                log.error("DeviceOnlineStatus - 离线标记事务失败(exec返回null): deviceId={}, statusKey={}",
-                    deviceId, statusKey);
-                // 事务失败时返回null，防止发布离线事件导致数据不一致
-                return null;
-            }
-
-            // 验证结果集大小（应该有4个操作的结果: 2个HSET + 1个EXPIRE + 1个SREM）
-            if (results.size() != 4) {
-                log.error("DeviceOnlineStatus - 离线标记事务结果不完整: deviceId={}, expected=4, actual={}",
-                    deviceId, results.size());
-                // 结果不完整，返回null防止数据不一致
-                return null;
-            }
-
-            // 验证索引移除结果（第4个操作，SREM应该返回1表示成功移除）
-            Object sremResult = results.get(3);
-            if (sremResult != null && sremResult.equals(1L)) {
-                // 仅当实际移除时才减少计数器
-                decrementOnlineCountSafely(1);
-            } else {
-                log.warn("DeviceOnlineStatus - 设备索引移除失败或设备不在索引中: deviceId={}, sremResult={}",
-                    deviceId, sremResult);
-            }
-
-            // 标记当前状态对象为离线（返回给调用方用于保存在线时长记录）
-            currentStatus.markOffline();
-
-            log.info("DeviceOnlineStatus - 设备标记离线并重置TTL成功: deviceId={}, reconnectTtl={}s",
-                    deviceId, getReconnectTtl().getSeconds());
-
-            return currentStatus;
-
-        } catch (Exception e) {
-            log.error("DeviceOnlineStatus - 标记设备离线失败: deviceId={}", deviceId, e);
-            return null;
-        }
+    /**
+     * 离线处理结果 - 包含统计信息和成功的设备状态
+     */
+    @Getter
+    private static class OfflineProcessResult {
+        int actualRemovedCount = 0;  // 实际从索引中移除的设备数
+        int notFoundCount = 0;       // 设备不在索引中的数量
+        int failedCount = 0;         // 处理失败的设备数
+        List<DeviceOnlineStatus> successfulStatuses = new ArrayList<>();  // 成功标记离线的设备状态
     }
-    
+
     /**
      * 批量标记设备离线并重置TTL
      *
      * <p>Spring Data Redis Pipeline 返回值行为说明：
      * <ul>
-     *   <li>Pipeline 中 put/expire 等操作返回 null，但不代表失败</li>
-     *   <li>只有部分操作（如 SREM）返回有意义的值</li>
+     *   <li>Pipeline 执行4个操作/设备：2x HSET(STATUS + STATUS_CHANGE_TIME) + EXPIRE + SREM</li>
+     *   <li>HSET/EXPIRE 返回 null，SREM 返回 Long(移除成员数)</li>
      *   <li>保守校验策略：验证 SREM 操作，用于统计和监控</li>
      * </ul>
      *
@@ -663,7 +545,6 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
      * @return 成功标记离线的设备状态列表
      */
     @Override
-    @SuppressWarnings("unchecked")
     public List<DeviceOnlineStatus> batchMarkOfflineAndResetTtl(List<Long> deviceIds) {
         if (deviceIds == null || deviceIds.isEmpty()) {
             return new ArrayList<>();
@@ -672,22 +553,10 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
         try {
             long startTime = System.currentTimeMillis();
 
-            // 第一步：批量获取当前状态
-            Map<Long, DeviceOnlineStatus> currentStatuses = batchGetDeviceStatus(deviceIds);
+            // 第一步：批量获取当前状态并过滤
+            List<DeviceOnlineStatus> offlineDevices = filterValidDevicesForOffline(deviceIds);
 
-            // 过滤出需要处理的设备（在线状态且时间信息完整）
-            List<Long> validDeviceIds = new ArrayList<>();
-            List<DeviceOnlineStatus> validStatuses = new ArrayList<>();
-
-            for (Long deviceId : deviceIds) {
-                DeviceOnlineStatus status = currentStatuses.get(deviceId);
-                if (isValidForOfflineProcessing(deviceId, status)) {
-                    validDeviceIds.add(deviceId);
-                    validStatuses.add(status);
-                }
-            }
-
-            if (validDeviceIds.isEmpty()) {
+            if (offlineDevices.isEmpty()) {
                 return new ArrayList<>();
             }
 
@@ -695,75 +564,20 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             long currentTime = System.currentTimeMillis();
             Duration reconnectTtl = getReconnectTtl();
 
-            List<Object> pipelineResults = redisTemplate.executePipelined(new SessionCallback<Object>() {
-                @Override
-                public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
-                    for (Long deviceId : validDeviceIds) {
-                        String statusKey = String.format(RedisKeyConstant.DEVICE_STATUS_KEY, deviceId);
+            List<Object> pipelineResults = executeBatchOfflineOperations(offlineDevices, currentTime, reconnectTtl);
 
-                        // 更新状态为离线
-                        operations.opsForHash().put(statusKey, STATUS, OnlineStatus.OFFLINE.name());
-                        operations.opsForHash().put(statusKey, STATUS_CHANGE_TIME, currentTime);
-
-                        // 重置TTL为重连窗口时间
-                        operations.expire(statusKey, reconnectTtl);
-
-                        // 从在线设备索引中移除（返回移除的成员数）
-                        operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, deviceId);
-                    }
-
-                    return null;
-                }
-            });
-
-            // 统计 SREM 操作的实际移除情况
-            int actualRemovedCount = 0;  // 实际移除的设备数（SREM 返回1）
-            int notFoundCount = 0;       // 设备不在索引中的数量（SREM 返回0）
-            int failedCount = 0;         // SREM 操作返回异常的数量
-
-            List<DeviceOnlineStatus> successfulStatuses = new ArrayList<>();
-            for (int i = 0; i < validDeviceIds.size(); i++) {
-                Long deviceId = validDeviceIds.get(i);
-                int baseIndex = i * 4;
-
-                // 只检查 SREM 的返回值（第4个操作，索引 baseIndex + 3）
-                // put 和 expire 在 Pipeline 中返回 null 是正常行为
-                Object sremResult = pipelineResults.get(baseIndex + 3);
-
-                if (sremResult != null) {
-                    // SREM 返回移除的成员数：1 表示成功移除，0 表示成员不存在
-                    if (sremResult.equals(1L)) {
-                        actualRemovedCount++;  // 实际移除计数
-                    } else if (sremResult.equals(0L)) {
-                        notFoundCount++;
-                    }
-
-                    // SREM 返回 1 或 0 都视为成功（设备可能已不在索引中）
-                    DeviceOnlineStatus status = validStatuses.get(i);
-                    status.markOffline();
-                    successfulStatuses.add(status);
-                } else {
-                    // SREM 返回 null 表示操作异常
-                    failedCount++;
-                    log.warn("DeviceOnlineStatus - 设备索引移除异常: deviceId={}, sremResult=null", deviceId);
-                }
-            }
+            // 第三步：处理Pipeline结果并统计
+            OfflineProcessResult processResult = processBatchOfflineResults(offlineDevices, pipelineResults);
 
             // 根据实际移除的设备数递减计数器
-            if (actualRemovedCount > 0) {
-                decrementOnlineCountSafely(actualRemovedCount);
+            if (processResult.actualRemovedCount > 0) {
+                decrementOnlineCountSafely(processResult.actualRemovedCount);
             }
 
-            long duration = System.currentTimeMillis() - startTime;
-            double successRate = validDeviceIds.isEmpty() ? 0.0 :
-                (double) successfulStatuses.size() / validDeviceIds.size() * 100;
+            logBatchOfflineCompletion(deviceIds.size(), offlineDevices.size(), processResult,
+                                     System.currentTimeMillis() - startTime, reconnectTtl);
 
-            log.info("DeviceOnlineStatus - 批量标记设备离线完成: total={}, valid={}, successful={}, " +
-                    "actualRemoved={}, notFound={}, failed={}, successRate={}%, duration={}ms, reconnectTtl={}s",
-                    deviceIds.size(), validDeviceIds.size(), successfulStatuses.size(),
-                    actualRemovedCount, notFoundCount, failedCount, successRate, duration, reconnectTtl.getSeconds());
-
-            return successfulStatuses;
+            return processResult.successfulStatuses;
 
         } catch (Exception e) {
             log.error("DeviceOnlineStatus - 批量标记设备离线失败: deviceCount={}", deviceIds.size(), e);
@@ -772,27 +586,120 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     }
 
     /**
-     * 检查设备状态是否适合离线处理
+     * 过滤出需要离线处理的设备
      */
-    private boolean isValidForOfflineProcessing(Long deviceId, DeviceOnlineStatus status) {
+    private List<DeviceOnlineStatus> filterValidDevicesForOffline(List<Long> deviceIds) {
+        Map<Long, DeviceOnlineStatus> currentStatuses = batchGetDeviceStatus(deviceIds);
+
+        List<DeviceOnlineStatus> offlineDevices = new ArrayList<>();
+        for (Long deviceId : deviceIds) {
+            DeviceOnlineStatus status = currentStatuses.get(deviceId);
+            if (isValidForOfflineProcessing(status)) {
+                offlineDevices.add(status);
+            }
+        }
+
+        return offlineDevices;
+    }
+
+    /**
+     * 执行批量离线操作（Pipeline）
+     * @param offlineDevices 需要离线的设备状态列表
+     * @param currentTime 当前时间戳
+     * @param reconnectTtl 重连窗口时间
+     */
+    private List<Object> executeBatchOfflineOperations(List<DeviceOnlineStatus> offlineDevices,
+                                                        long currentTime, Duration reconnectTtl) {
+        return redisTemplate.executePipelined(new SessionCallback<Object>() {
+            @Override
+            @SuppressWarnings("unchecked")
+            public Object execute(@NotNull RedisOperations operations) throws DataAccessException {
+                for (DeviceOnlineStatus status : offlineDevices) {
+                    String statusKey = getStatusKey(status.getDeviceId());
+
+                    // 操作1: 更新状态为离线
+                    operations.opsForHash().put(statusKey, STATUS, OnlineStatus.OFFLINE.name());
+                    // 操作2: 更新状态变更时间
+                    operations.opsForHash().put(statusKey, STATUS_CHANGE_TIME, currentTime);
+                    // 操作3: 重置TTL为重连窗口时间
+                    operations.expire(statusKey, reconnectTtl);
+                    // 操作4: 从在线设备索引中移除
+                    operations.opsForSet().remove(DEVICE_STATUS_INDEX_KEY, status.getDeviceId());
+                }
+
+                return null;
+            }
+        });
+    }
+
+    /**
+     * 处理Pipeline批量离线操作的结果
+     */
+    private OfflineProcessResult processBatchOfflineResults(List<DeviceOnlineStatus> offlineDevices,
+                                                            List<Object> pipelineResults) {
+        OfflineProcessResult result = new OfflineProcessResult();
+
+        for (int i = 0; i < offlineDevices.size(); i++) {
+            DeviceOnlineStatus status = offlineDevices.get(i);
+            int baseIndex = i * 4;  // 每个设备4个操作
+
+            // 只检查 SREM 的返回值（第4个操作，索引 baseIndex + 3）
+            Object sremResult = pipelineResults.get(baseIndex + 3);
+
+            if (sremResult != null) {
+                // SREM 返回移除的成员数：1 表示成功移除，0 表示成员不存在
+                if (sremResult.equals(1L)) {
+                    result.actualRemovedCount++;
+                } else if (sremResult.equals(0L)) {
+                    result.notFoundCount++;
+                }
+
+                // SREM 返回 1 或 0 都视为成功（设备可能已不在索引中）
+                status.markOffline();
+                result.successfulStatuses.add(status);
+            } else {
+                result.failedCount++;
+                log.warn("DeviceOnlineStatus - 设备索引移除异常: deviceId={}, sremResult=null", status.getDeviceId());
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 记录批量离线操作完成日志
+     */
+    private void logBatchOfflineCompletion(int totalCount, int validCount, OfflineProcessResult result,
+                                          long duration, Duration reconnectTtl) {
+        double successRate = validCount == 0 ? 0.0 :
+            (double) result.successfulStatuses.size() / validCount * 100;
+
+        log.info("DeviceOnlineStatus - 批量标记设备离线完成: total={}, valid={}, successful={}, " +
+                "actualRemoved={}, notFound={}, failed={}, successRate={}%, duration={}ms, reconnectTtl={}s",
+                totalCount, validCount, result.successfulStatuses.size(),
+                result.actualRemovedCount, result.notFoundCount, result.failedCount,
+                successRate, duration, reconnectTtl.getSeconds());
+    }
+
+    /**
+     * 检查设备状态是否适合离线处理
+     *
+     * <p>校验策略说明：
+     * <ul>
+     *   <li>只验证设备是否为在线相关状态（ONLINE/GO_LIVE/RECONNECT）</li>
+     *   <li>不检查时间字段的完整性，脏数据在监听器处理时会被验证并跳过记录</li>
+     *   <li>这样做确保过期设备能被正常标记为离线，避免永久孤立</li>
+     * </ul>
+     */
+    private boolean isValidForOfflineProcessing(DeviceOnlineStatus status) {
         if (status == null) {
             return false;
         }
 
         OnlineStatus currentStatus = status.getStatus();
-        if (currentStatus != OnlineStatus.ONLINE &&
-            currentStatus != OnlineStatus.GO_LIVE &&
-            currentStatus != OnlineStatus.RECONNECT) {
-            return false;
-        }
-
-        if (status.getOnlineStartTime() == null || status.getLastReportTime() == null) {
-            log.warn("DeviceOnlineStatus -batch- 设备时间信息不完整，跳过离线处理: deviceId={}, onlineStartTime={}, lastReportTime={}",
-                    deviceId, status.getOnlineStartTime(), status.getLastReportTime());
-            return false;
-        }
-
-        return true;
+        return currentStatus == OnlineStatus.ONLINE ||
+            currentStatus == OnlineStatus.GO_LIVE ||
+            currentStatus == OnlineStatus.RECONNECT;
     }
 
     @Override
@@ -849,6 +756,8 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
 
     /**
      * 将DeviceOnlineStatus转换为Redis存储格式
+     * @param status 设备在线状态
+     * @return Redis存储格式
      */
     private Map<String, Object> convertToRedisMap(DeviceOnlineStatus status) {
         Map<String, Object> map = new HashMap<>();
@@ -880,6 +789,9 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
     
     /**
      * 从Redis存储格式转换为DeviceOnlineStatus
+     * @param deviceId 设备ID
+     * @param map Redis存储格式
+     * @return DeviceOnlineStatus
      */
     private DeviceOnlineStatus convertFromRedisMap(Long deviceId, Map<Object, Object> map) {
         DeviceOnlineStatus status = new DeviceOnlineStatus();

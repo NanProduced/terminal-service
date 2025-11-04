@@ -199,7 +199,7 @@ class DeviceOnlineStatusRedisServiceTest {
                 verify(operations).multi();
                 verify(hashOps).putAll(argThat(key -> key.startsWith("device:status:")), anyMap());
                 verify(operations).expire(argThat(key -> key.startsWith("device:status:")), any());
-                verify(setOps).add(eq(RedisKeyConstant.DEVICE_STATUS_INDEX_KEY), eq(status.getDeviceId()));
+                verify(setOps).add(RedisKeyConstant.DEVICE_STATUS_INDEX_KEY, status.getDeviceId());
                 verify(valueOps).increment(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
                 return List.of("OK", true, 1L, 1L);
             });
@@ -382,39 +382,6 @@ class DeviceOnlineStatusRedisServiceTest {
 
             // Then - 验证返回空Map
             assertThat(result).isEmpty();
-        }
-    }
-
-    @Nested
-    @DisplayName("设备状态删除测试")
-    class RemoveDeviceStatusTests {
-
-        @Test
-        @DisplayName("应该成功删除设备状态")
-        @SuppressWarnings("unchecked")
-        void should_remove_device_status_successfully() {
-            // Given - 准备设备ID
-            Long deviceId = 1001L;
-
-            // When - 删除设备状态
-            assertThatCode(() -> redisService.removeDeviceStatus(deviceId))
-                .doesNotThrowAnyException();
-
-            // Then - 验证Redis事务操作被调用
-            verify(mockRedisTemplate).execute(any(SessionCallback.class));
-        }
-
-        @Test
-        @DisplayName("删除异常时不应该抛出异常")
-        @SuppressWarnings("unchecked")
-        void should_not_throw_exception_when_remove_fails() {
-            // Given - 准备设备ID和模拟异常
-            Long deviceId = 1002L;
-            when(mockRedisTemplate.execute(any(SessionCallback.class))).thenThrow(new RuntimeException("Redis delete failed"));
-
-            // When & Then - 验证不抛出异常
-            assertThatCode(() -> redisService.removeDeviceStatus(deviceId))
-                .doesNotThrowAnyException();
         }
     }
 
