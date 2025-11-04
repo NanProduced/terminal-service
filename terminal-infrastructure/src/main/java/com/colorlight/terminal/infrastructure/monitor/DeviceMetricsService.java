@@ -30,7 +30,7 @@ import java.util.stream.Stream;
 
 @Component
 @ConditionalOnProperty(
-    name = "terminal.metrics.enabled",
+    name = "device.metrics.enabled",
     havingValue = "true",
     matchIfMissing = false
 )
