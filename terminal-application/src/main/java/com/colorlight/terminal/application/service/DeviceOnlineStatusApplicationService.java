@@ -13,7 +13,7 @@ import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineStat
 import com.colorlight.terminal.application.port.outbound.status.DeviceStatusEventPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.Nullable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -23,22 +23,22 @@ import java.util.stream.Collectors;
 /**
  * 设备在线状态管理应用服务
  * 支持同步/异步配置切换
- * 
+ *
  * @author Nan
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusUseCase {
-    
+
     private final DeviceOnlineStatusPort deviceOnlineStatusPort;
     private final DeviceStatusEventPort deviceStatusEventPort;
     private final DeviceConfigPort deviceConfigPort;
     private final ConnectionManagerPort connectionManagerPort;
-    
+
     // 可选的异步状态更新服务 - 当配置启用时注入
-    @Autowired(required = false)
-    private AsyncDeviceStatusUpdatePort asyncDeviceStatusUpdatePort;
+    @Nullable
+    private final AsyncDeviceStatusUpdatePort asyncDeviceStatusUpdatePort;
 
     /**
      * 更新设备最后上报时间
