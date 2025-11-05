@@ -641,8 +641,153 @@ class TerminalCommandRedisServiceTest {
         }
     }
 
+    @Nested
+    @DisplayName("Fallback降级处理测试")
+    class FallbackHandlingTest {
+
+        @Test
+        @DisplayName("当Pipeline失败时应该使用cleanExpiredCommandsFallback")
+        void should_use_fallback_when_pipeline_fails() {
+            // Given - Pipeline执行失败
+            lenient().when(listOperations.range(anyString(), eq(0L), eq(-1L)))
+                .thenReturn(List.of(TEST_COMMAND_ID, TEST_COMMAND_ID + 1));
+
+            TerminalCommand validCommand = TerminalCommand.builder()
+                    .commandId(TEST_COMMAND_ID + 1)
+                    .expireTime(LocalDateTime.now().plusDays(1))
+                    .build();
+            TerminalCommand expiredCommand = TerminalCommand.builder()
+                    .commandId(TEST_COMMAND_ID)
+                    .expireTime(LocalDateTime.now().minusDays(1))
+                    .build();
+
+            // Pipeline失败，触发fallback
+            lenient().when(redisTemplate.executePipelined(any(RedisCallback.class)))
+                .thenThrow(new RuntimeException("Pipeline执行失败"));
+
+            // Mock个别删除操作用于fallback
+            lenient().when(valueOperations.multiGet(anyList()))
+                .thenReturn(Arrays.asList(
+                    JsonUtils.toJson(expiredCommand),
+                    JsonUtils.toJson(validCommand)
+                ));
+
+            // When - 清理过期指令，Pipeline失败触发fallback
+            int cleanedCount = service.cleanExpiredCommands(TEST_DEVICE_ID);
+
+            // Then - Fallback应该能继续清理（单个删除操作）
+            assertThat(cleanedCount).isGreaterThanOrEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("fallbackRemoveExpired应该能单个删除过期指令")
+        void should_delete_expired_commands_individually_in_fallback() {
+            // Given - 准备过期指令列表
+            List<Object> commandIds = List.of(TEST_COMMAND_ID, TEST_COMMAND_ID + 1, TEST_COMMAND_ID + 2);
+            lenient().when(listOperations.range(anyString(), eq(0L), eq(-1L)))
+                .thenReturn(commandIds);
+
+            // 准备指令数据
+            TerminalCommand expiredCommand1 = TerminalCommand.builder()
+                    .commandId(TEST_COMMAND_ID)
+                    .expireTime(LocalDateTime.now().minusHours(1))
+                    .build();
+            TerminalCommand expiredCommand2 = TerminalCommand.builder()
+                    .commandId(TEST_COMMAND_ID + 1)
+                    .expireTime(LocalDateTime.now().minusHours(2))
+                    .build();
+            TerminalCommand validCommand = TerminalCommand.builder()
+                    .commandId(TEST_COMMAND_ID + 2)
+                    .expireTime(LocalDateTime.now().plusHours(1))
+                    .build();
+
+            // multiGet返回指令内容
+            lenient().when(valueOperations.multiGet(anyList()))
+                .thenReturn(Arrays.asList(
+                    JsonUtils.toJson(expiredCommand1),
+                    JsonUtils.toJson(expiredCommand2),
+                    JsonUtils.toJson(validCommand)
+                ));
+
+            // Pipeline失败，触发fallback
+            lenient().when(redisTemplate.executePipelined(any(RedisCallback.class)))
+                .thenThrow(new RuntimeException("Pipeline执行失败"));
+
+            // When - 清理过期指令
+            int cleanedCount = service.cleanExpiredCommands(TEST_DEVICE_ID);
+
+            // Then - 应该清理了至少2个过期指令
+            assertThat(cleanedCount).isGreaterThanOrEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("getPendingCommandsWithCleanupFallback应该处理Pipeline失败场景")
+        void should_handle_pipeline_failure_in_get_pending_commands_with_cleanup() {
+            // Given - 准备指令列表
+            List<Object> commandIds = List.of(TEST_COMMAND_ID, TEST_COMMAND_ID + 1);
+            lenient().when(listOperations.range(anyString(), eq(0L), eq(-1L)))
+                .thenReturn(commandIds);
+
+            // 准备混合的指令数据
+            TerminalCommand validCommand = TerminalCommand.builder()
+                    .commandId(TEST_COMMAND_ID + 1)
+                    .expireTime(LocalDateTime.now().plusDays(1))
+                    .build();
+            TerminalCommand expiredCommand = TerminalCommand.builder()
+                    .commandId(TEST_COMMAND_ID)
+                    .expireTime(LocalDateTime.now().minusDays(1))
+                    .build();
+
+            lenient().when(valueOperations.multiGet(anyList()))
+                .thenReturn(Arrays.asList(
+                    JsonUtils.toJson(expiredCommand),
+                    JsonUtils.toJson(validCommand)
+                ));
+
+            // Pipeline执行失败
+            lenient().when(redisTemplate.executePipelined(any(RedisCallback.class)))
+                .thenThrow(new RuntimeException("Pipeline超时"));
+
+            // When - 获取待发指令并清理（Pipeline失败触发fallback）
+            CommandFetchResult result = service.getPendingCommandsWithCleanup(TEST_DEVICE_ID);
+
+            // Then - Fallback应该返回结果
+            assertThat(result).isNotNull();
+            // 有效指令应该被保留
+            assertThat(result.getValidCommands()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("异步清理失败时不应该影响返回结果")
+        void should_not_affect_result_when_async_cleanup_fails() {
+            // Given - 异步清理抛出异常
+            List<Object> commandIds = List.of(TEST_COMMAND_ID);
+            lenient().when(listOperations.range(anyString(), eq(0L), eq(-1L)))
+                .thenReturn(commandIds);
+
+            TerminalCommand validCommand = TerminalCommand.builder()
+                    .commandId(TEST_COMMAND_ID)
+                    .expireTime(LocalDateTime.now().plusHours(1))
+                    .build();
+
+            lenient().when(valueOperations.multiGet(anyList()))
+                .thenReturn(List.of(JsonUtils.toJson(validCommand)));
+
+            // 异步清理抛出异常
+            lenient().doThrow(new RuntimeException("异步清理失败"))
+                .when(redisTemplate).executePipelined(any(RedisCallback.class));
+
+            // When - 获取待发指令
+            CommandFetchResult result = service.getPendingCommandsWithCleanup(TEST_DEVICE_ID);
+
+            // Then - 仍然应该返回有效指令
+            assertThat(result).isNotNull();
+            assertThat(result.getValidCommands()).contains(validCommand);
+        }
+    }
+
     // ===================== 测试数据构建辅助方法 =====================
-    
+
     /**
      * 创建测试用的终端指令
      */

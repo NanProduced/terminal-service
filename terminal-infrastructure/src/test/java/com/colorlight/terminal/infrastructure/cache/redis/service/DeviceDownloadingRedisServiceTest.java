@@ -176,7 +176,7 @@ class DeviceDownloadingRedisServiceTest {
     @Nested
     @DisplayName("业务逻辑验证测试")
     class BusinessLogicTest {
-        
+
         @Test
         @DisplayName("应该为不同设备ID使用不同的Redis键")
         void should_use_different_redis_keys_for_different_devices() {
@@ -184,34 +184,180 @@ class DeviceDownloadingRedisServiceTest {
             Long deviceId1 = 111L;
             Long deviceId2 = 222L;
             ProgramDownloadingReport report = new ProgramDownloadingReport();
-            
+
             // Mock Redis事务执行成功
             lenient().when(redisTemplate.execute(any(SessionCallback.class))).thenReturn(List.of("OK"));
-            
+
             // When - 为不同设备保存下载状态
             service.saveDownloadingStatus(deviceId1, report);
             service.saveDownloadingStatus(deviceId2, report);
-            
+
             // Then - 验证Redis事务被执行了两次（每个设备一次）
             verify(redisTemplate, times(2)).execute(any(SessionCallback.class));
         }
-        
+
         @Test
         @DisplayName("应该支持连续保存同一设备的下载状态")
         void should_support_continuous_saving_for_same_device() {
             // Given - 同一设备的多个下载报告
             ProgramDownloadingReport report1 = new ProgramDownloadingReport();
             UpgradePackageDownloadingReport report2 = new UpgradePackageDownloadingReport();
-            
+
             // Mock Redis事务执行成功
             lenient().when(redisTemplate.execute(any(SessionCallback.class))).thenReturn(List.of("OK"));
-            
+
             // When - 连续保存下载状态
             service.saveDownloadingStatus(TEST_DEVICE_ID, report1);
             service.saveDownloadingStatus(TEST_DEVICE_ID, report2);
-            
+
             // Then - 验证Redis事务被执行了两次
             verify(redisTemplate, times(2)).execute(any(SessionCallback.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("字段映射测试")
+    class FieldMappingTest {
+
+        @Test
+        @DisplayName("应该正确映射节目下载报告的所有字段")
+        void should_map_all_program_downloading_fields() {
+            // Given - 带有具体值的节目下载报告
+            ProgramDownloadingReport report = new ProgramDownloadingReport();
+            ProgramDownloadingReport.Downloading downloading = new ProgramDownloadingReport.Downloading();
+            downloading.setDownloadStatusTime(System.currentTimeMillis());
+            report.setDownloading(downloading);
+
+            // Mock Redis事务执行成功
+            lenient().when(redisTemplate.execute(any(SessionCallback.class))).thenReturn(List.of("OK"));
+
+            // When - 保存下载状态
+            service.saveDownloadingStatus(TEST_DEVICE_ID, report);
+
+            // Then - 验证Redis事务被执行
+            verify(redisTemplate).execute(any(SessionCallback.class));
+        }
+
+        @Test
+        @DisplayName("应该正确映射升级包下载报告的所有字段")
+        void should_map_all_upgrade_package_downloading_fields() {
+            // Given - 带有具体值的升级包下载报告
+            UpgradePackageDownloadingReport report = new UpgradePackageDownloadingReport();
+            UpgradePackageDownloadingReport.Downloading downloading = new UpgradePackageDownloadingReport.Downloading();
+            UpgradePackageDownloadingReport.UpdateZip updateZip = new UpgradePackageDownloadingReport.UpdateZip();
+            updateZip.setStatus("downloading");
+            updateZip.setDesVersion("2.0.0");
+            downloading.setUpdateZip(updateZip);
+            downloading.setUpdateStatusTimes(System.currentTimeMillis());
+            report.setDownloading(downloading);
+
+            // Mock Redis事务执行成功
+            lenient().when(redisTemplate.execute(any(SessionCallback.class))).thenReturn(List.of("OK"));
+
+            // When - 保存下载状态
+            service.saveDownloadingStatus(TEST_DEVICE_ID, report);
+
+            // Then - 验证Redis事务被执行
+            verify(redisTemplate).execute(any(SessionCallback.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("边界值测试")
+    class BoundaryValueTest {
+
+        @Test
+        @DisplayName("应该处理空下载报告")
+        void should_handle_empty_downloading_report() {
+            // Given - 没有downloading对象的节目下载报告
+            ProgramDownloadingReport report = new ProgramDownloadingReport();
+
+            // Mock Redis事务执行成功
+            lenient().when(redisTemplate.execute(any(SessionCallback.class))).thenReturn(List.of("OK"));
+
+            // When - 保存下载状态
+            assertThatNoException().isThrownBy(() -> service.saveDownloadingStatus(TEST_DEVICE_ID, report));
+
+            // Then - 验证Redis事务被执行
+            verify(redisTemplate).execute(any(SessionCallback.class));
+        }
+
+        @Test
+        @DisplayName("应该处理升级包为空的升级报告")
+        void should_handle_empty_update_zip_downloading_report() {
+            // Given - 没有updateZip的升级包下载报告
+            UpgradePackageDownloadingReport report = new UpgradePackageDownloadingReport();
+            UpgradePackageDownloadingReport.Downloading downloading = new UpgradePackageDownloadingReport.Downloading();
+            report.setDownloading(downloading);
+
+            // Mock Redis事务执行成功
+            lenient().when(redisTemplate.execute(any(SessionCallback.class))).thenReturn(List.of("OK"));
+
+            // When - 保存下载状态
+            assertThatNoException().isThrownBy(() -> service.saveDownloadingStatus(TEST_DEVICE_ID, report));
+
+            // Then - 验证Redis事务被执行
+            verify(redisTemplate).execute(any(SessionCallback.class));
+        }
+
+        @Test
+        @DisplayName("应该处理Long型最大值的设备ID")
+        void should_handle_max_long_device_id() {
+            // Given - 最大Long值作为设备ID
+            ProgramDownloadingReport report = new ProgramDownloadingReport();
+
+            // Mock Redis事务执行成功
+            lenient().when(redisTemplate.execute(any(SessionCallback.class))).thenReturn(List.of("OK"));
+
+            // When - 保存下载状态
+            assertThatNoException().isThrownBy(() -> service.saveDownloadingStatus(Long.MAX_VALUE, report));
+
+            // Then - 验证Redis事务被执行
+            verify(redisTemplate).execute(any(SessionCallback.class));
+        }
+
+        @Test
+        @DisplayName("应该处理null报告对象时不抛出NPE")
+        void should_handle_null_report_gracefully() {
+            // Given - null报告对象
+            // Mock Redis事务执行成功
+            lenient().when(redisTemplate.execute(any(SessionCallback.class))).thenReturn(List.of("OK"));
+
+            // When & Then - 应该处理null报告（具体行为取决于实现）
+            assertThatNoException().isThrownBy(() -> service.saveDownloadingStatus(TEST_DEVICE_ID, null));
+        }
+    }
+
+    @Nested
+    @DisplayName("异常处理测试")
+    class ExceptionHandlingTest {
+
+        @Test
+        @DisplayName("应该处理Redis连接超时异常")
+        void should_handle_redis_connection_timeout() {
+            // Given - 准备节目下载报告
+            ProgramDownloadingReport report = new ProgramDownloadingReport();
+
+            // Mock Redis连接超时
+            lenient().when(redisTemplate.execute(any(SessionCallback.class)))
+                .thenThrow(new RuntimeException("连接超时"));
+
+            // When & Then - 异步方法不应该直接抛出异常（由异步线程处理）
+            assertThatNoException().isThrownBy(() -> service.saveDownloadingStatus(TEST_DEVICE_ID, report));
+        }
+
+        @Test
+        @DisplayName("应该处理Redis命令执行失败异常")
+        void should_handle_redis_command_failure() {
+            // Given - 准备升级包下载报告
+            UpgradePackageDownloadingReport report = new UpgradePackageDownloadingReport();
+
+            // Mock Redis命令执行失败
+            lenient().when(redisTemplate.execute(any(SessionCallback.class)))
+                .thenThrow(new RuntimeException("命令执行失败"));
+
+            // When & Then - 异步方法不应该直接抛出异常
+            assertThatNoException().isThrownBy(() -> service.saveDownloadingStatus(TEST_DEVICE_ID, report));
         }
     }
 }

@@ -821,4 +821,285 @@ class WebsocketTerminalCommandTest {
             assertThat(terminalCommand.getLedId()).isEqualTo(-1);
         }
     }
+
+    @Nested
+    @DisplayName("WebsocketCommand equals和hashCode分支覆盖测试")
+    class WebsocketCommandEqualsHashCodeTests {
+
+        @Test
+        @DisplayName("应该正确比较相同的WebsocketCommand对象")
+        void should_equal_same_websocket_commands() {
+            // Given - 创建两个相同的 WebsocketCommand 对象
+            WebsocketTerminalCommand.WebsocketContent content1 =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketCommand cmd1 =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 50, content1);
+
+            WebsocketTerminalCommand.WebsocketContent content2 =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketCommand cmd2 =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 50, content2);
+
+            // Then - 应该相等
+            assertThat(cmd1).isEqualTo(cmd2);
+            assertThat(cmd1.hashCode()).isEqualTo(cmd2.hashCode());
+        }
+
+        @Test
+        @DisplayName("应该正确处理id字段不相等的情况")
+        void should_not_equal_when_id_different() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketCommand cmd1 =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 50, content);
+            WebsocketTerminalCommand.WebsocketCommand cmd2 =
+                new WebsocketTerminalCommand.WebsocketCommand(2, 100, "http://example.com", 50, content);
+
+            // Then
+            assertThat(cmd1).isNotEqualTo(cmd2);
+        }
+
+        @Test
+        @DisplayName("应该正确处理post字段不相等的情况")
+        void should_not_equal_when_post_different() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketCommand cmd1 =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 50, content);
+            WebsocketTerminalCommand.WebsocketCommand cmd2 =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 200, "http://example.com", 50, content);
+
+            // Then
+            assertThat(cmd1).isNotEqualTo(cmd2);
+        }
+
+        @Test
+        @DisplayName("应该正确处理authorUrl字段不相等的情况")
+        void should_not_equal_when_author_url_different() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketCommand cmd1 =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 50, content);
+            WebsocketTerminalCommand.WebsocketCommand cmd2 =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://other.com", 50, content);
+
+            // Then
+            assertThat(cmd1).isNotEqualTo(cmd2);
+        }
+
+        @Test
+        @DisplayName("应该正确处理karma字段不相等的情况")
+        void should_not_equal_when_karma_different() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketCommand cmd1 =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 50, content);
+            WebsocketTerminalCommand.WebsocketCommand cmd2 =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 100, content);
+
+            // Then
+            assertThat(cmd1).isNotEqualTo(cmd2);
+        }
+
+        @Test
+        @DisplayName("应该正确处理content字段不相等的情况")
+        void should_not_equal_when_content_different() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content1 =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketContent content2 =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"stop\"}");
+            WebsocketTerminalCommand.WebsocketCommand cmd1 =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 50, content1);
+            WebsocketTerminalCommand.WebsocketCommand cmd2 =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 50, content2);
+
+            // Then
+            assertThat(cmd1).isNotEqualTo(cmd2);
+        }
+
+        @Test
+        @DisplayName("应该正确处理与null的比较")
+        void should_not_equal_null() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketCommand cmd =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 50, content);
+
+            // Then
+            assertThat(cmd).isNotEqualTo(null);
+        }
+
+        @Test
+        @DisplayName("应该正确处理与不同类型对象的比较")
+        void should_not_equal_different_type() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketCommand cmd =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 50, content);
+
+            // Then
+            assertThat(cmd).isNotEqualTo("not a WebsocketCommand");
+        }
+
+        @Test
+        @DisplayName("应该在equals中正确处理null字段")
+        void should_handle_null_fields_in_equals() {
+            // Given
+            WebsocketTerminalCommand.WebsocketCommand cmd1 =
+                new WebsocketTerminalCommand.WebsocketCommand(null, null, null, null, null);
+            WebsocketTerminalCommand.WebsocketCommand cmd2 =
+                new WebsocketTerminalCommand.WebsocketCommand(null, null, null, null, null);
+
+            // Then
+            assertThat(cmd1).isEqualTo(cmd2);
+        }
+
+        @Test
+        @DisplayName("应该在hashCode中处理null字段")
+        void should_handle_null_fields_in_hash_code() {
+            // Given
+            WebsocketTerminalCommand.WebsocketCommand cmd1 =
+                new WebsocketTerminalCommand.WebsocketCommand(null, null, null, null, null);
+            WebsocketTerminalCommand.WebsocketCommand cmd2 =
+                new WebsocketTerminalCommand.WebsocketCommand(null, null, null, null, null);
+
+            // Then
+            assertThat(cmd1.hashCode()).isEqualTo(cmd2.hashCode());
+        }
+
+        @Test
+        @DisplayName("应该正确转换为字符串")
+        void should_convert_to_string() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketCommand cmd =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 50, content);
+
+            // When & Then - 字符串表示应该包含类名
+            assertThat(cmd.toString()).contains("WebsocketCommand");
+        }
+
+        @Test
+        @DisplayName("应该与自己相等")
+        void should_equal_itself() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketCommand cmd =
+                new WebsocketTerminalCommand.WebsocketCommand(1, 100, "http://example.com", 50, content);
+
+            // Then
+            assertThat(cmd).isEqualTo(cmd);
+        }
+    }
+
+    @Nested
+    @DisplayName("WebsocketContent equals和hashCode分支覆盖测试")
+    class WebsocketContentEqualsHashCodeTests {
+
+        @Test
+        @DisplayName("应该正确比较相同的WebsocketContent对象")
+        void should_equal_same_websocket_contents() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content1 =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketContent content2 =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+
+            // Then
+            assertThat(content1).isEqualTo(content2);
+            assertThat(content1.hashCode()).isEqualTo(content2.hashCode());
+        }
+
+        @Test
+        @DisplayName("应该正确处理raw字段不相等的情况")
+        void should_not_equal_when_raw_different() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content1 =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+            WebsocketTerminalCommand.WebsocketContent content2 =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"stop\"}");
+
+            // Then
+            assertThat(content1).isNotEqualTo(content2);
+        }
+
+        @Test
+        @DisplayName("应该正确处理与null的比较")
+        void should_not_equal_null() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+
+            // Then
+            assertThat(content).isNotEqualTo(null);
+        }
+
+        @Test
+        @DisplayName("应该正确处理与不同类型对象的比较")
+        void should_not_equal_different_type() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+
+            // Then
+            assertThat(content).isNotEqualTo("not a WebsocketContent");
+        }
+
+        @Test
+        @DisplayName("应该在equals中处理null raw字段")
+        void should_handle_null_raw_in_equals() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content1 =
+                new WebsocketTerminalCommand.WebsocketContent(null);
+            WebsocketTerminalCommand.WebsocketContent content2 =
+                new WebsocketTerminalCommand.WebsocketContent(null);
+
+            // Then
+            assertThat(content1).isEqualTo(content2);
+        }
+
+        @Test
+        @DisplayName("应该在hashCode中处理null raw字段")
+        void should_handle_null_raw_in_hash_code() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content1 =
+                new WebsocketTerminalCommand.WebsocketContent(null);
+            WebsocketTerminalCommand.WebsocketContent content2 =
+                new WebsocketTerminalCommand.WebsocketContent(null);
+
+            // Then
+            assertThat(content1.hashCode()).isEqualTo(content2.hashCode());
+        }
+
+        @Test
+        @DisplayName("应该正确转换为字符串")
+        void should_convert_to_string() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+
+            // When & Then
+            assertThat(content.toString()).contains("WebsocketContent");
+        }
+
+        @Test
+        @DisplayName("应该与自己相等")
+        void should_equal_itself() {
+            // Given
+            WebsocketTerminalCommand.WebsocketContent content =
+                new WebsocketTerminalCommand.WebsocketContent("{\"action\":\"play\"}");
+
+            // Then
+            assertThat(content).isEqualTo(content);
+        }
+    }
 }
