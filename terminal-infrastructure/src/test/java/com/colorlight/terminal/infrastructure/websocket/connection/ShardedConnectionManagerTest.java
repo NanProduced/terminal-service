@@ -553,7 +553,7 @@ class ShardedConnectionManagerTest {
             Long deviceId = 10002L;
             TerminalConnection connection = InfrastructureTestDataFactory.createTerminalConnection(deviceId, ProtocolVersion.V1_1);
             connection.setSession(faultySession);
-            
+
             // 强制添加连接（绕过验证）
             connectionManager.addConnection(deviceId, connection);
 
@@ -561,6 +561,189 @@ class ShardedConnectionManagerTest {
             assertThatCode(() -> connectionManager.cleanupInvalidConnections())
                     .doesNotThrowAnyException();
 
+        }
+    }
+
+
+    @Nested
+    @DisplayName("连接计数器安全检查测试")
+    class ConnectionCounterSafetyTests {
+
+        @Test
+        @DisplayName("移除连接时应防止计数器为负")
+        void should_prevent_connection_count_from_going_negative() {
+            // Given - 连接管理器中没有连接，尝试移除不存在的连接
+            Long nonExistentDeviceId = 99999L;
+            
+            // 记录初始连接数
+            int initialCount = connectionManager.getConnectionCount();
+            assertThat(initialCount).isZero();
+
+            // When - 尝试移除不存在的连接
+            TerminalConnection removed = connectionManager.removeConnection(nonExistentDeviceId);
+
+            // Then - 验证连接数不会低于0
+            assertThat(removed).isNull();
+            assertThat(connectionManager.getConnectionCount()).isGreaterThanOrEqualTo(0);
+            assertThat(connectionManager.getConnectionCount()).isEqualTo(initialCount);
+        }
+
+        @Test
+        @DisplayName("多次移除同一连接应防止计数器负增长")
+        void should_handle_multiple_removals_of_same_connection() {
+            // Given - 添加一个连接
+            Long deviceId = 10001L;
+            TerminalConnection connection = InfrastructureTestDataFactory.createTerminalConnection(deviceId, ProtocolVersion.V1_1);
+            connectionManager.addConnection(deviceId, connection);
+            
+            int countAfterAdd = connectionManager.getConnectionCount();
+            assertThat(countAfterAdd).isEqualTo(1);
+
+            // When - 首次移除
+            TerminalConnection firstRemoval = connectionManager.removeConnection(deviceId);
+            assertThat(firstRemoval).isNotNull();
+
+            int countAfterRemoval = connectionManager.getConnectionCount();
+            assertThat(countAfterRemoval).isZero();
+
+            // When - 再次尝试移除（应该返回null，不改变计数）
+            TerminalConnection secondRemoval = connectionManager.removeConnection(deviceId);
+            assertThat(secondRemoval).isNull();
+
+            // Then - 验证计数保持在0
+            assertThat(connectionManager.getConnectionCount()).isZero();
+        }
+
+        @Test
+        @DisplayName("应该保护协议版本计数器不为负")
+        void should_protect_protocol_version_counter_from_going_negative() {
+            // Given - 协议版本计数器为0
+            int v10Count = connectionManager.getProtocolVersionConnectionCount(ProtocolVersion.V1_0);
+            int v11Count = connectionManager.getProtocolVersionConnectionCount(ProtocolVersion.V1_1);
+            
+            // 初始应该都是0
+            assertThat(v10Count).isZero();
+            assertThat(v11Count).isZero();
+
+            // When - 添加一个V1_0连接
+            Long deviceId = 10001L;
+            TerminalConnection v10Connection = InfrastructureTestDataFactory.createTerminalConnection(deviceId, ProtocolVersion.V1_0);
+            connectionManager.addConnection(deviceId, v10Connection);
+
+            // Then - 验证V1_0计数正确
+            assertThat(connectionManager.getProtocolVersionConnectionCount(ProtocolVersion.V1_0)).isEqualTo(1);
+            assertThat(connectionManager.getProtocolVersionConnectionCount(ProtocolVersion.V1_1)).isZero();
+
+            // When - 移除连接
+            connectionManager.removeConnection(deviceId);
+
+            // Then - 验证计数不会低于0
+            assertThat(connectionManager.getProtocolVersionConnectionCount(ProtocolVersion.V1_0)).isGreaterThanOrEqualTo(0);
+            assertThat(connectionManager.getProtocolVersionConnectionCount(ProtocolVersion.V1_1)).isGreaterThanOrEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("并发添加和移除时应保持计数正确性")
+        void should_maintain_correct_count_under_concurrent_operations() {
+            // Given - 多个连接操作
+            List<Long> deviceIds = Arrays.asList(10001L, 10002L, 10003L);
+
+            // When - 添加多个连接
+            for (Long deviceId : deviceIds) {
+                TerminalConnection conn = InfrastructureTestDataFactory.createTerminalConnection(deviceId, ProtocolVersion.V1_0);
+                connectionManager.addConnection(deviceId, conn);
+            }
+
+            // Then - 验证计数
+            assertThat(connectionManager.getConnectionCount()).isEqualTo(3);
+
+            // When - 移除部分连接
+            for (Long deviceId : deviceIds.subList(0, 2)) {
+                connectionManager.removeConnection(deviceId);
+            }
+
+            // Then - 验证计数正确减少
+            assertThat(connectionManager.getConnectionCount()).isEqualTo(1);
+
+            // When - 再次移除剩余连接
+            connectionManager.removeConnection(deviceIds.get(2));
+
+            // Then - 验证计数回到0且不会为负
+            assertThat(connectionManager.getConnectionCount()).isZero();
+        }
+
+        @Test
+        @DisplayName("异常情况下也应保护计数器不为负")
+        void should_protect_counter_even_in_exception_cases() {
+            // Given - 模拟在移除时可能发生异常
+            Long deviceId = 10001L;
+            TerminalConnection connection = InfrastructureTestDataFactory.createTerminalConnection(deviceId, ProtocolVersion.V1_1);
+            connectionManager.addConnection(deviceId, connection);
+
+            int countBeforeRemoval = connectionManager.getConnectionCount();
+
+            // When - 移除连接
+            connectionManager.removeConnection(deviceId);
+
+            // Then - 即使发生异常，计数也不应为负
+            assertThat(connectionManager.getConnectionCount()).isLessThanOrEqualTo(countBeforeRemoval);
+            assertThat(connectionManager.getConnectionCount()).isGreaterThanOrEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("统计信息应正确反映计数器的安全状态")
+        void should_reflect_safe_counter_state_in_statistics() {
+            // Given - 执行各种操作
+            Long deviceId1 = 10001L;
+            Long deviceId2 = 10002L;
+            
+            TerminalConnection conn1 = InfrastructureTestDataFactory.createTerminalConnection(deviceId1, ProtocolVersion.V1_0);
+            TerminalConnection conn2 = InfrastructureTestDataFactory.createTerminalConnection(deviceId2, ProtocolVersion.V1_1);
+            
+            connectionManager.addConnection(deviceId1, conn1);
+            connectionManager.addConnection(deviceId2, conn2);
+
+            // When - 获取统计信息
+            Map<String, Object> statsAfterAdd = connectionManager.getShardStatistics();
+
+            // Then - 验证统计信息正确
+            assertThat(statsAfterAdd).containsEntry("totalConnections", 2);
+
+            // When - 移除连接
+            connectionManager.removeConnection(deviceId1);
+            connectionManager.removeConnection(deviceId2);
+
+            // Then - 统计信息应该反映更新后的状态
+            Map<String, Object> statsAfterRemove = connectionManager.getShardStatistics();
+            assertThat(statsAfterRemove).containsEntry("totalConnections", 0);
+            
+            // 验证协议版本统计也正确
+            assertThat(connectionManager.getProtocolVersionConnectionCount(ProtocolVersion.V1_0)).isZero();
+            assertThat(connectionManager.getProtocolVersionConnectionCount(ProtocolVersion.V1_1)).isZero();
+        }
+
+        @Test
+        @DisplayName("极端情况下大量移除操作应保持计数安全")
+        void should_maintain_safe_counts_under_high_removal_load() {
+            // Given - 添加大量连接
+            List<Long> deviceIds = new ArrayList<>();
+            for (int i = 0; i < 100; i++) {
+                Long deviceId = 10000L + i;
+                deviceIds.add(deviceId);
+                TerminalConnection conn = InfrastructureTestDataFactory.createTerminalConnection(deviceId, ProtocolVersion.V1_0);
+                connectionManager.addConnection(deviceId, conn);
+            }
+
+            assertThat(connectionManager.getConnectionCount()).isGreaterThan(0);
+
+            // When - 快速移除所有连接
+            for (Long deviceId : deviceIds) {
+                connectionManager.removeConnection(deviceId);
+            }
+
+            // Then - 验证计数回到0且不为负
+            assertThat(connectionManager.getConnectionCount()).isZero();
+            assertThat(connectionManager.getProtocolVersionConnectionCount(ProtocolVersion.V1_0)).isZero();
         }
     }
 }

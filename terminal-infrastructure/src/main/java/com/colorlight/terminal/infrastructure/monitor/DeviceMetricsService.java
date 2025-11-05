@@ -14,6 +14,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
@@ -28,6 +29,11 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.stream.Stream;
 
 @Component
+@ConditionalOnProperty(
+    name = "device.metrics.enabled",
+    havingValue = "true",
+    matchIfMissing = false
+)
 @Slf4j
 public class DeviceMetricsService {
 

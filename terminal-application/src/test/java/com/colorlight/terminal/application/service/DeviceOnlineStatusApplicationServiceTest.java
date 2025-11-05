@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -28,12 +27,13 @@ import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatCode;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
  * 设备在线状态管理应用服务单元测试
- * 
+ * <p>
  * 测试策略：
  * 1. 覆盖所有状态转换场景（GO_LIVE → ONLINE → OFFLINE → RECONNECT）
  * 2. 验证分布式锁机制的正确性
@@ -61,27 +61,35 @@ class DeviceOnlineStatusApplicationServiceTest {
     
     @Mock
     private AsyncDeviceStatusUpdatePort asyncDeviceStatusUpdatePort;
-    
-    @InjectMocks
+
     private DeviceOnlineStatusApplicationService service;
-    
+
     @Captor
     private ArgumentCaptor<DeviceOnlineStatus> statusCaptor;
-    
+
     @Captor
     private ArgumentCaptor<DeviceStatusEvent> eventCaptor;
-    
+
     @Captor
     private ArgumentCaptor<List<DeviceStatusEvent>> eventListCaptor;
-    
+
     // 测试常量
     private static final Long DEVICE_ID = 10001L;
     private static final String CLIENT_IP = "192.168.1.100";
     private static final Long TIMEOUT_THRESHOLD = 70_000L; // 70秒超时阈值
     private static final String PROTOCOL_VERSION = "1.1"; // 使用支持的协议版本
-    
+
     @BeforeEach
     void setUp() {
+        // 使用构造函数注入创建服务实例（不使用异步服务）
+        service = new DeviceOnlineStatusApplicationService(
+                deviceOnlineStatusPort,
+                deviceStatusEventPort,
+                deviceConfigPort,
+                connectionManagerPort,
+                null  // asyncDeviceStatusUpdatePort 为 null
+        );
+
         // 配置默认行为
         lenient().when(deviceConfigPort.getOfflineTimeoutThreshold()).thenReturn(TIMEOUT_THRESHOLD);
         lenient().when(deviceConfigPort.isAsyncStatusUpdateEnabled()).thenReturn(false); // 默认同步模式
@@ -95,10 +103,10 @@ class DeviceOnlineStatusApplicationServiceTest {
         /**
          * 创建上线状态
          */
-        static DeviceOnlineStatus createGoLiveStatus(Long deviceId) {
+        static DeviceOnlineStatus createGoLiveStatus() {
             long currentTime = System.currentTimeMillis();
             return DeviceOnlineStatus.builder()
-                    .deviceId(deviceId)
+                    .deviceId(DeviceOnlineStatusApplicationServiceTest.DEVICE_ID)
                     .lastReportTime(currentTime)
                     .lastReportSource(ReportSource.HTTP)
                     .status(OnlineStatus.GO_LIVE)
@@ -146,7 +154,7 @@ class DeviceOnlineStatusApplicationServiceTest {
         /**
          * 创建WebSocket连接信息
          */
-        static TerminalConnection createTerminalConnection(Long deviceId, String version) {
+        static TerminalConnection createTerminalConnection() {
             // 创建简单的WebSocketSession实现
             WebSocketSession session = new WebSocketSession() {
                 @Override
@@ -171,19 +179,18 @@ class DeviceOnlineStatusApplicationServiceTest {
                 
                 @Override
                 public String getSessionId() {
-                    return "test-session-" + deviceId;
+                    return "test-session-" + DeviceOnlineStatusApplicationServiceTest.DEVICE_ID;
                 }
                 
                 @Override
                 public Long getDeviceId() {
-                    return deviceId;
+                    return DeviceOnlineStatusApplicationServiceTest.DEVICE_ID;
                 }
             };
             
             // 创建TerminalConnection
-            ProtocolVersion protocolVersion = version != null ? 
-                    ProtocolVersion.fromVersion(version) : ProtocolVersion.V1_0;
-            return TerminalConnection.create(deviceId, session, protocolVersion);
+            ProtocolVersion protocolVersion = ProtocolVersion.fromVersion(DeviceOnlineStatusApplicationServiceTest.PROTOCOL_VERSION);
+            return TerminalConnection.create(DeviceOnlineStatusApplicationServiceTest.DEVICE_ID, session, protocolVersion);
         }
     }
     
@@ -283,7 +290,7 @@ class DeviceOnlineStatusApplicationServiceTest {
         @DisplayName("应该在设备从GO_LIVE转为ONLINE状态")
         void should_transition_from_go_live_to_online() {
             // Given - 设备刚上线（GO_LIVE状态）
-            DeviceOnlineStatus goLiveStatus = TestDataBuilder.createGoLiveStatus(DEVICE_ID);
+            DeviceOnlineStatus goLiveStatus = TestDataBuilder.createGoLiveStatus();
             when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
             when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.of(goLiveStatus));
             
@@ -310,7 +317,7 @@ class DeviceOnlineStatusApplicationServiceTest {
             when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
             when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.of(offlineStatus));
             when(connectionManagerPort.getConnection(DEVICE_ID))
-                    .thenReturn(Optional.of(TestDataBuilder.createTerminalConnection(DEVICE_ID, PROTOCOL_VERSION)));
+                    .thenReturn(Optional.of(TestDataBuilder.createTerminalConnection()));
             
             // When - 设备重新连接（WebSocket）
             service.updateLastReportTime(DEVICE_ID, ReportSource.WEBSOCKET, CLIENT_IP);
@@ -363,24 +370,17 @@ class DeviceOnlineStatusApplicationServiceTest {
     @Nested
     @DisplayName("同步/异步模式测试")
     class SyncAsyncModeTests {
-        
+
         @BeforeEach
         void setUp() {
-            // 为异步测试注入异步服务
+            // 为异步测试注入异步服务（使用构造函数注入）
             service = new DeviceOnlineStatusApplicationService(
                     deviceOnlineStatusPort,
                     deviceStatusEventPort,
                     deviceConfigPort,
-                    connectionManagerPort
+                    connectionManagerPort,
+                    asyncDeviceStatusUpdatePort  // 注入异步服务
             );
-            // 手动注入异步服务（模拟Spring的@Autowired(required=false)）
-            try {
-                var field = DeviceOnlineStatusApplicationService.class.getDeclaredField("asyncDeviceStatusUpdatePort");
-                field.setAccessible(true);
-                field.set(service, asyncDeviceStatusUpdatePort);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
         }
         
         @Test
@@ -447,7 +447,7 @@ class DeviceOnlineStatusApplicationServiceTest {
             when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
             when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.empty());
             when(connectionManagerPort.getConnection(DEVICE_ID))
-                    .thenReturn(Optional.of(TestDataBuilder.createTerminalConnection(DEVICE_ID, PROTOCOL_VERSION)));
+                    .thenReturn(Optional.of(TestDataBuilder.createTerminalConnection()));
             
             // When - WebSocket上报
             service.updateLastReportTime(DEVICE_ID, ReportSource.WEBSOCKET, CLIENT_IP);
@@ -482,7 +482,7 @@ class DeviceOnlineStatusApplicationServiceTest {
             when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
             when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.of(offlineStatus));
 
-            // When - HTTP �豸�ϱ��л�
+            // When - HTTP �豸����л�
             service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
 
             // Then - ��֤תΪ RECONNECT ʱ�汾ֵ����
@@ -797,7 +797,7 @@ class DeviceOnlineStatusApplicationServiceTest {
             when(deviceOnlineStatusPort.findExpiredDevices(anyLong())).thenReturn(expiredDeviceIds);
             
             // 模拟批量处理部分成功
-            List<DeviceOnlineStatus> batchResult = Arrays.asList(TestDataBuilder.createOfflineStatus(10001L));
+            List<DeviceOnlineStatus> batchResult = Collections.singletonList(TestDataBuilder.createOfflineStatus(10001L));
             when(deviceOnlineStatusPort.batchMarkOfflineAndResetTtl(expiredDeviceIds)).thenReturn(batchResult);
             
             // When - 处理离线设备
@@ -898,6 +898,115 @@ class DeviceOnlineStatusApplicationServiceTest {
             DeviceOnlineStatus updatedStatus = statusCaptor.getValue();
             assertThat(updatedStatus.getStatus()).isEqualTo(OnlineStatus.ONLINE);
             assertThat(updatedStatus.getOnlineStartTime()).isEqualTo(reconnectStatus.getOnlineStartTime());
+        }
+    }
+
+
+    @Nested
+    @DisplayName("设备状态更新逻辑重构验证")
+    class RefactoredStatusUpdateLogicTests {
+
+        @Test
+        @DisplayName("应该正确处理已有设备的状态更新")
+        void should_handle_existing_device_status_update() {
+            // Given - 设备已存在，处于ONLINE状态
+            DeviceOnlineStatus existingStatus = TestDataBuilder.createOnlineStatus(DEVICE_ID);
+            existingStatus.setStatus(OnlineStatus.ONLINE);
+            
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
+            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.of(existingStatus));
+
+            // When - 执行状态更新
+            service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
+
+            // Then - 验证更新正确进行
+            verify(deviceOnlineStatusPort).smartDetermined(statusCaptor.capture());
+            DeviceOnlineStatus updatedStatus = statusCaptor.getValue();
+            assertThat(updatedStatus.getStatus()).isEqualTo(OnlineStatus.ONLINE);
+            assertThat(updatedStatus.getLastReportTime()).isNotNull();
+            assertThat(updatedStatus.getClientIp()).isEqualTo(CLIENT_IP);
+        }
+
+        @Test
+        @DisplayName("应该正确处理新设备的初始化")
+        void should_handle_new_device_initialization() {
+            // Given - 设备不存在
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
+            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.empty());
+
+            // When - 执行状态更新
+            service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
+
+            // Then - 验证新设备被正确初始化
+            verify(deviceOnlineStatusPort).smartDetermined(statusCaptor.capture());
+            DeviceOnlineStatus newStatus = statusCaptor.getValue();
+            assertThat(newStatus.getDeviceId()).isEqualTo(DEVICE_ID);
+            assertThat(newStatus.getStatus()).isNotNull();
+            assertThat(newStatus.getOnlineStartTime()).isNotNull();
+            assertThat(newStatus.getClientIp()).isEqualTo(CLIENT_IP);
+        }
+
+        @Test
+        @DisplayName("应该在设备更新时正确保护分布式锁")
+        void should_properly_protect_with_distributed_lock() {
+            // Given - 获取锁成功
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
+            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.empty());
+
+            // When - 执行状态更新
+            service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
+
+            // Then - 验证锁被正确获取和释放
+            verify(deviceOnlineStatusPort).tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L);
+            verify(deviceOnlineStatusPort).releaseDeviceUpdateLock(DEVICE_ID);
+        }
+
+        @Test
+        @DisplayName("应该在无法获取锁时正确处理")
+        void should_handle_lock_acquisition_failure() {
+            // Given - 获取锁失败
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(false);
+
+            // When - 执行状态更新
+            service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
+
+            // Then - 验证操作被跳过
+            verify(deviceOnlineStatusPort, never()).smartDetermined(any());
+            verify(deviceOnlineStatusPort, never()).releaseDeviceUpdateLock(DEVICE_ID);
+        }
+
+        @Test
+        @DisplayName("应该正确处理协议版本逻辑")
+        void should_handle_refactored_protocol_version_logic() {
+            // Given - 设备已存在，有协议版本
+            DeviceOnlineStatus existingStatus = TestDataBuilder.createOnlineStatus(DEVICE_ID);
+            
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
+            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.of(existingStatus));
+
+            // When - 执行状态更新
+            service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
+
+            // Then - 验证协议版本被正确处理
+            verify(deviceOnlineStatusPort).smartDetermined(statusCaptor.capture());
+            DeviceOnlineStatus updatedStatus = statusCaptor.getValue();
+            assertThat(updatedStatus.getVersion()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("应该在Redis事务失败时正确处理")
+        void should_handle_redis_transaction_failure() {
+            // Given - Redis事务失败
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
+            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.empty());
+            doThrow(new RuntimeException("Redis transaction failed")).when(deviceOnlineStatusPort).smartDetermined(any());
+
+            // When & Then - 应该捕获异常并继续释放锁
+            assertThatCode(() -> service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP))
+                .doesNotThrowAnyException();
+            
+            // 验证锁仍被释放
+            verify(deviceOnlineStatusPort).releaseDeviceUpdateLock(DEVICE_ID);
         }
     }
 }

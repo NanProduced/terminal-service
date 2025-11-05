@@ -64,6 +64,47 @@ class TerminalConnectionTest {
         }
 
         @Test
+        @DisplayName("使用Builder构造后计数器应该正确初始化")
+        void should_initialize_counters_correctly_when_using_builder() {
+            // Given & When
+            TerminalConnection builtConnection = TerminalConnection.builder()
+                    .deviceId(TEST_DEVICE_ID)
+                    .session(mockSession)
+                    .protocolVersion(ProtocolVersion.V1_0)
+                    .status(TerminalConnection.ConnectionStatus.CONNECTED)
+                    .build();
+
+            // Then - 验证计数器不为null且初始值为0
+            assertThat(builtConnection.getSentMessageCount()).isZero();
+            assertThat(builtConnection.getReceivedMessageCount()).isZero();
+            assertThat(builtConnection.getErrorCount()).isZero();
+        }
+
+        @Test
+        @DisplayName("使用Builder构造后应该能正常递增计数器")
+        void should_increment_counters_correctly_when_using_builder() {
+            // Given
+            TerminalConnection builtConnection = TerminalConnection.builder()
+                    .deviceId(TEST_DEVICE_ID)
+                    .session(mockSession)
+                    .protocolVersion(ProtocolVersion.V1_0)
+                    .status(TerminalConnection.ConnectionStatus.CONNECTED)
+                    .connectTime(LocalDateTime.now())
+                    .lastActiveTime(LocalDateTime.now())
+                    .build();
+
+            // When
+            builtConnection.incrementSentMessageCount();
+            builtConnection.incrementReceivedMessageCount();
+            builtConnection.incrementErrorCount();
+
+            // Then
+            assertThat(builtConnection.getSentMessageCount()).isEqualTo(1);
+            assertThat(builtConnection.getReceivedMessageCount()).isEqualTo(1);
+            assertThat(builtConnection.getErrorCount()).isEqualTo(1);
+        }
+
+        @Test
         @DisplayName("应该正确增加发送消息计数")
         void should_increment_sent_message_count_correctly() {
             // Given

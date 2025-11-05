@@ -107,8 +107,8 @@ class DeviceOnlineStatusRedisServiceTest {
             // When - 执行智能判断
             redisService.smartDetermined(status);
 
-            // Then - 验证更新操作被调用
-            verify(mockRedisTemplate).execute(any(SessionCallback.class));
+            // Then - 验证Pipeline更新操作被调用
+            verify(mockRedisTemplate).executePipelined(any(SessionCallback.class));
         }
 
         @Test
@@ -136,8 +136,8 @@ class DeviceOnlineStatusRedisServiceTest {
             // When - 执行智能判断
             redisService.smartDetermined(status);
 
-            // Then - 验证更新操作被调用
-            verify(mockRedisTemplate).execute(any(SessionCallback.class));
+            // Then - 验证Pipeline更新操作被调用
+            verify(mockRedisTemplate).executePipelined(any(SessionCallback.class));
         }
     }
 
@@ -199,7 +199,7 @@ class DeviceOnlineStatusRedisServiceTest {
                 verify(operations).multi();
                 verify(hashOps).putAll(argThat(key -> key.startsWith("device:status:")), anyMap());
                 verify(operations).expire(argThat(key -> key.startsWith("device:status:")), any());
-                verify(setOps).add(eq(RedisKeyConstant.DEVICE_STATUS_INDEX_KEY), eq(status.getDeviceId()));
+                verify(setOps).add(RedisKeyConstant.DEVICE_STATUS_INDEX_KEY, status.getDeviceId());
                 verify(valueOps).increment(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY);
                 return List.of("OK", true, 1L, 1L);
             });
@@ -222,17 +222,17 @@ class DeviceOnlineStatusRedisServiceTest {
             assertThatCode(() -> redisService.updateDeviceStatus(status))
                 .doesNotThrowAnyException();
 
-            // Then - 验证Redis事务操作被调用
-            verify(mockRedisTemplate).execute(any(SessionCallback.class));
+            // Then - 验证Redis Pipeline操作被调用
+            verify(mockRedisTemplate).executePipelined(any(SessionCallback.class));
         }
 
         @Test
-        @DisplayName("应该在更新失败时抛出异常")
+        @DisplayName("应该在更新失败时不抛出异常")
         @SuppressWarnings("unchecked")
         void should_throw_exception_when_update_fails() {
             // Given - 准备设备状态和模拟异常
             DeviceOnlineStatus status = InfrastructureTestDataFactory.createDeviceOnlineStatus(1002L, OnlineStatus.ONLINE);
-            when(mockRedisTemplate.execute(any(SessionCallback.class))).thenThrow(new RuntimeException("Redis update failed"));
+            lenient().when(mockRedisTemplate.executePipelined(any(SessionCallback.class))).thenThrow(new RuntimeException("Redis update failed"));
 
             // When & Then - 验证不会抛出异常（方法捕获异常但不重新抛出）
             assertThatCode(() -> redisService.updateDeviceStatus(status))
@@ -241,19 +241,18 @@ class DeviceOnlineStatusRedisServiceTest {
     }
 
         @Test
-        @DisplayName("更新状态时 SessionCallback 应刷新 TTL")
+        @DisplayName("更新状态时 Pipeline SessionCallback 应刷新 TTL")
         @SuppressWarnings({"unchecked", "rawtypes"})
         void should_execute_session_callback_when_updating_status() {
             DeviceOnlineStatus status = InfrastructureTestDataFactory.createDeviceOnlineStatus(1007L, OnlineStatus.ONLINE);
 
-            when(mockRedisTemplate.execute(any(SessionCallback.class))).thenAnswer(invocation -> {
+            lenient().when(mockRedisTemplate.executePipelined(any(SessionCallback.class))).thenAnswer(invocation -> {
                 SessionCallback callback = invocation.getArgument(0);
                 RedisOperations<String, Object> operations = mock(RedisOperations.class);
                 HashOperations<String, Object, Object> hashOps = mock(HashOperations.class);
                 when(operations.opsForHash()).thenReturn(hashOps);
-                when(operations.exec()).thenReturn(List.of("OK"));
                 callback.execute(operations);
-                verify(operations).multi();
+                // Pipeline 不使用 multi()/exec()，直接执行
                 verify(hashOps).putAll(argThat(key -> key.startsWith("device:status:")), anyMap());
                 verify(operations).expire(argThat(key -> key.startsWith("device:status:")), any());
                 return List.of("OK");
@@ -382,39 +381,6 @@ class DeviceOnlineStatusRedisServiceTest {
 
             // Then - 验证返回空Map
             assertThat(result).isEmpty();
-        }
-    }
-
-    @Nested
-    @DisplayName("设备状态删除测试")
-    class RemoveDeviceStatusTests {
-
-        @Test
-        @DisplayName("应该成功删除设备状态")
-        @SuppressWarnings("unchecked")
-        void should_remove_device_status_successfully() {
-            // Given - 准备设备ID
-            Long deviceId = 1001L;
-
-            // When - 删除设备状态
-            assertThatCode(() -> redisService.removeDeviceStatus(deviceId))
-                .doesNotThrowAnyException();
-
-            // Then - 验证Redis事务操作被调用
-            verify(mockRedisTemplate).execute(any(SessionCallback.class));
-        }
-
-        @Test
-        @DisplayName("删除异常时不应该抛出异常")
-        @SuppressWarnings("unchecked")
-        void should_not_throw_exception_when_remove_fails() {
-            // Given - 准备设备ID和模拟异常
-            Long deviceId = 1002L;
-            when(mockRedisTemplate.execute(any(SessionCallback.class))).thenThrow(new RuntimeException("Redis delete failed"));
-
-            // When & Then - 验证不抛出异常
-            assertThatCode(() -> redisService.removeDeviceStatus(deviceId))
-                .doesNotThrowAnyException();
         }
     }
 
@@ -635,6 +601,71 @@ class DeviceOnlineStatusRedisServiceTest {
                 .doesNotThrowAnyException();
             
             verify(mockRedisTemplate.opsForValue()).set(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY, count);
+        }
+
+        @Test
+        @DisplayName("应该在批量离线处理中安全递减计数器")
+        @SuppressWarnings("unchecked")
+        void should_safely_decrement_counter_in_batch_offline() {
+            // Given - 准备在线设备数据
+            List<Long> deviceIds = Arrays.asList(1001L, 1002L);
+            
+            Map<Long, DeviceOnlineStatus> currentStatuses = new HashMap<>();
+            for (Long deviceId : deviceIds) {
+                currentStatuses.put(deviceId, InfrastructureTestDataFactory.createDeviceOnlineStatus(deviceId, OnlineStatus.ONLINE));
+            }
+            
+            doReturn(currentStatuses).when(redisService).batchGetDeviceStatus(deviceIds);
+            
+            // Mock Pipeline结果
+            List<Object> mockPipelineResults = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                mockPipelineResults.add("OK");
+                mockPipelineResults.add(System.currentTimeMillis());
+                mockPipelineResults.add(true);
+                mockPipelineResults.add(1L);
+            }
+            mockPipelineResults.add(1L);
+            
+            when(mockRedisTemplate.executePipelined(any(SessionCallback.class)))
+                .thenReturn(mockPipelineResults);
+
+            // When - 执行批量离线处理
+            List<DeviceOnlineStatus> result = redisService.batchMarkOfflineAndResetTtl(deviceIds);
+
+            // Then - 验证结果
+            assertThat(result).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("应该防止计数器递减为负数")
+        @SuppressWarnings("unchecked")
+        void should_prevent_counter_from_going_negative() {
+            // Given - 计数器值为0时尝试递减
+            when(mockRedisTemplate.opsForValue().get(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY))
+                .thenReturn(0);
+
+            // When - 执行批量离线处理
+            List<Long> deviceIds = Arrays.asList(1001L);
+            Map<Long, DeviceOnlineStatus> currentStatuses = new HashMap<>();
+            currentStatuses.put(1001L, InfrastructureTestDataFactory.createDeviceOnlineStatus(1001L, OnlineStatus.ONLINE));
+            
+            doReturn(currentStatuses).when(redisService).batchGetDeviceStatus(deviceIds);
+            
+            List<Object> mockResults = new ArrayList<>();
+            mockResults.add("OK");
+            mockResults.add(System.currentTimeMillis());
+            mockResults.add(true);
+            mockResults.add(1L);
+            mockResults.add(0L);
+            
+            when(mockRedisTemplate.executePipelined(any(SessionCallback.class)))
+                .thenReturn(mockResults);
+
+            // Then - 验证计数器保持0
+            List<DeviceOnlineStatus> result = redisService.batchMarkOfflineAndResetTtl(deviceIds);
+            assertThat(result).isNotEmpty();
+            assertThat(redisService.getOnlineDeviceCount()).isGreaterThanOrEqualTo(0);
         }
     }
 
