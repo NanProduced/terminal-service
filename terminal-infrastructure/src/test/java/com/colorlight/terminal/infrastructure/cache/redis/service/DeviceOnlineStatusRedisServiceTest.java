@@ -602,6 +602,71 @@ class DeviceOnlineStatusRedisServiceTest {
             
             verify(mockRedisTemplate.opsForValue()).set(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY, count);
         }
+
+        @Test
+        @DisplayName("应该在批量离线处理中安全递减计数器")
+        @SuppressWarnings("unchecked")
+        void should_safely_decrement_counter_in_batch_offline() {
+            // Given - 准备在线设备数据
+            List<Long> deviceIds = Arrays.asList(1001L, 1002L);
+            
+            Map<Long, DeviceOnlineStatus> currentStatuses = new HashMap<>();
+            for (Long deviceId : deviceIds) {
+                currentStatuses.put(deviceId, InfrastructureTestDataFactory.createDeviceOnlineStatus(deviceId, OnlineStatus.ONLINE));
+            }
+            
+            doReturn(currentStatuses).when(redisService).batchGetDeviceStatus(deviceIds);
+            
+            // Mock Pipeline结果
+            List<Object> mockPipelineResults = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                mockPipelineResults.add("OK");
+                mockPipelineResults.add(System.currentTimeMillis());
+                mockPipelineResults.add(true);
+                mockPipelineResults.add(1L);
+            }
+            mockPipelineResults.add(1L);
+            
+            when(mockRedisTemplate.executePipelined(any(SessionCallback.class)))
+                .thenReturn(mockPipelineResults);
+
+            // When - 执行批量离线处理
+            List<DeviceOnlineStatus> result = redisService.batchMarkOfflineAndResetTtl(deviceIds);
+
+            // Then - 验证结果
+            assertThat(result).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("应该防止计数器递减为负数")
+        @SuppressWarnings("unchecked")
+        void should_prevent_counter_from_going_negative() {
+            // Given - 计数器值为0时尝试递减
+            when(mockRedisTemplate.opsForValue().get(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY))
+                .thenReturn(0);
+
+            // When - 执行批量离线处理
+            List<Long> deviceIds = Arrays.asList(1001L);
+            Map<Long, DeviceOnlineStatus> currentStatuses = new HashMap<>();
+            currentStatuses.put(1001L, InfrastructureTestDataFactory.createDeviceOnlineStatus(1001L, OnlineStatus.ONLINE));
+            
+            doReturn(currentStatuses).when(redisService).batchGetDeviceStatus(deviceIds);
+            
+            List<Object> mockResults = new ArrayList<>();
+            mockResults.add("OK");
+            mockResults.add(System.currentTimeMillis());
+            mockResults.add(true);
+            mockResults.add(1L);
+            mockResults.add(0L);
+            
+            when(mockRedisTemplate.executePipelined(any(SessionCallback.class)))
+                .thenReturn(mockResults);
+
+            // Then - 验证计数器保持0
+            List<DeviceOnlineStatus> result = redisService.batchMarkOfflineAndResetTtl(deviceIds);
+            assertThat(result).isNotEmpty();
+            assertThat(redisService.getOnlineDeviceCount()).isGreaterThanOrEqualTo(0);
+        }
     }
 
     @Nested

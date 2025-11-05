@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatCode;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -897,6 +898,115 @@ class DeviceOnlineStatusApplicationServiceTest {
             DeviceOnlineStatus updatedStatus = statusCaptor.getValue();
             assertThat(updatedStatus.getStatus()).isEqualTo(OnlineStatus.ONLINE);
             assertThat(updatedStatus.getOnlineStartTime()).isEqualTo(reconnectStatus.getOnlineStartTime());
+        }
+    }
+
+
+    @Nested
+    @DisplayName("设备状态更新逻辑重构验证")
+    class RefactoredStatusUpdateLogicTests {
+
+        @Test
+        @DisplayName("应该正确处理已有设备的状态更新")
+        void should_handle_existing_device_status_update() {
+            // Given - 设备已存在，处于ONLINE状态
+            DeviceOnlineStatus existingStatus = TestDataBuilder.createOnlineStatus(DEVICE_ID);
+            existingStatus.setStatus(OnlineStatus.ONLINE);
+            
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
+            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.of(existingStatus));
+
+            // When - 执行状态更新
+            service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
+
+            // Then - 验证更新正确进行
+            verify(deviceOnlineStatusPort).smartDetermined(statusCaptor.capture());
+            DeviceOnlineStatus updatedStatus = statusCaptor.getValue();
+            assertThat(updatedStatus.getStatus()).isEqualTo(OnlineStatus.ONLINE);
+            assertThat(updatedStatus.getLastReportTime()).isNotNull();
+            assertThat(updatedStatus.getClientIp()).isEqualTo(CLIENT_IP);
+        }
+
+        @Test
+        @DisplayName("应该正确处理新设备的初始化")
+        void should_handle_new_device_initialization() {
+            // Given - 设备不存在
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
+            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.empty());
+
+            // When - 执行状态更新
+            service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
+
+            // Then - 验证新设备被正确初始化
+            verify(deviceOnlineStatusPort).smartDetermined(statusCaptor.capture());
+            DeviceOnlineStatus newStatus = statusCaptor.getValue();
+            assertThat(newStatus.getDeviceId()).isEqualTo(DEVICE_ID);
+            assertThat(newStatus.getStatus()).isNotNull();
+            assertThat(newStatus.getOnlineStartTime()).isNotNull();
+            assertThat(newStatus.getClientIp()).isEqualTo(CLIENT_IP);
+        }
+
+        @Test
+        @DisplayName("应该在设备更新时正确保护分布式锁")
+        void should_properly_protect_with_distributed_lock() {
+            // Given - 获取锁成功
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
+            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.empty());
+
+            // When - 执行状态更新
+            service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
+
+            // Then - 验证锁被正确获取和释放
+            verify(deviceOnlineStatusPort).tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L);
+            verify(deviceOnlineStatusPort).releaseDeviceUpdateLock(DEVICE_ID);
+        }
+
+        @Test
+        @DisplayName("应该在无法获取锁时正确处理")
+        void should_handle_lock_acquisition_failure() {
+            // Given - 获取锁失败
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(false);
+
+            // When - 执行状态更新
+            service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
+
+            // Then - 验证操作被跳过
+            verify(deviceOnlineStatusPort, never()).smartDetermined(any());
+            verify(deviceOnlineStatusPort, never()).releaseDeviceUpdateLock(DEVICE_ID);
+        }
+
+        @Test
+        @DisplayName("应该正确处理协议版本逻辑")
+        void should_handle_refactored_protocol_version_logic() {
+            // Given - 设备已存在，有协议版本
+            DeviceOnlineStatus existingStatus = TestDataBuilder.createOnlineStatus(DEVICE_ID);
+            
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
+            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.of(existingStatus));
+
+            // When - 执行状态更新
+            service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP);
+
+            // Then - 验证协议版本被正确处理
+            verify(deviceOnlineStatusPort).smartDetermined(statusCaptor.capture());
+            DeviceOnlineStatus updatedStatus = statusCaptor.getValue();
+            assertThat(updatedStatus.getVersion()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("应该在Redis事务失败时正确处理")
+        void should_handle_redis_transaction_failure() {
+            // Given - Redis事务失败
+            when(deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(DEVICE_ID, 5000L)).thenReturn(true);
+            when(deviceOnlineStatusPort.getDeviceStatus(DEVICE_ID)).thenReturn(Optional.empty());
+            doThrow(new RuntimeException("Redis transaction failed")).when(deviceOnlineStatusPort).smartDetermined(any());
+
+            // When & Then - 应该捕获异常并继续释放锁
+            assertThatCode(() -> service.updateLastReportTime(DEVICE_ID, ReportSource.HTTP, CLIENT_IP))
+                .doesNotThrowAnyException();
+            
+            // 验证锁仍被释放
+            verify(deviceOnlineStatusPort).releaseDeviceUpdateLock(DEVICE_ID);
         }
     }
 }
