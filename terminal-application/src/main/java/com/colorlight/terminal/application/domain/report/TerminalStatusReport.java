@@ -157,13 +157,6 @@ public class TerminalStatusReport {
     private Map<String, Object> _4ginfo;
 
     /**
-     * wifi接点信息
-     */
-    @JsonProperty("accessPoints")
-    private List<AccessPoint> accessPoints;
-
-
-    /**
      * 终端基本信息
      */
     @Data
@@ -1299,21 +1292,4 @@ public class TerminalStatusReport {
         private Integer status;
     }
 
-    /**
-     * wifi接入点信息
-     */
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class AccessPoint {
-        private String ssid;
-        private String pass;
-        private String bssid;
-        private Integer rssi;
-        private Integer security;
-        private Integer networkId;
-        private String pskType;
-    }
 }
