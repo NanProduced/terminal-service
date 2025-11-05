@@ -251,6 +251,17 @@ class TerminalConnectionTest {
             // Then
             assertThat(active).isFalse();
         }
+
+        
+        @Test
+        @DisplayName("当session为空时应填充默认客户端IP")
+        void should_use_default_client_ip_when_session_is_null_in_factory_method() {
+            TerminalConnection connectionWithoutSession = TerminalConnection.create(TEST_DEVICE_ID, null, ProtocolVersion.V1_1);
+
+            assertThat(connectionWithoutSession.getClientIp()).isEqualTo("unknown");
+            assertThat(connectionWithoutSession.getWebSocketSession()).isNull();
+            assertThat(connectionWithoutSession.getStatus()).isEqualTo(TerminalConnection.ConnectionStatus.CONNECTED);
+        }
     }
 
     @Nested
@@ -318,6 +329,74 @@ class TerminalConnectionTest {
                             TerminalConnection.ConnectionStatus.DISCONNECTED,
                             TerminalConnection.ConnectionStatus.ERROR
                     );
+        }
+    }
+
+    @Nested
+    @DisplayName("对象等价性契约")
+    class EqualityContractTests {
+
+        @Test
+        @DisplayName("应满足自反性并保持哈希稳定")
+        void should_satisfy_reflexive_equals_and_stable_hash_code() {
+            LocalDateTime connectTime = LocalDateTime.of(2024, 1, 1, 8, 0);
+            LocalDateTime lastActive = connectTime.plusMinutes(5);
+
+            TerminalConnection self = TerminalConnection.builder()
+                    .deviceId(TEST_DEVICE_ID)
+                    .protocolVersion(ProtocolVersion.V1_0)
+                    .session(mockSession)
+                    .clientIp(TEST_CLIENT_IP)
+                    .connectTime(connectTime)
+                    .lastActiveTime(lastActive)
+                    .status(TerminalConnection.ConnectionStatus.CONNECTED)
+                    .build();
+
+            int initialHash = self.hashCode();
+
+            assertThat(self).isEqualTo(self);
+            assertThat(self.hashCode()).isEqualTo(initialHash);
+        }
+
+        @Test
+        @DisplayName("应在同类型的差异数据下判定不相等")
+        void should_recognize_non_equal_objects() {
+            LocalDateTime connectTime = LocalDateTime.of(2024, 1, 1, 8, 0);
+            LocalDateTime lastActive = connectTime.plusMinutes(5);
+
+            TerminalConnection base = TerminalConnection.builder()
+                    .deviceId(TEST_DEVICE_ID)
+                    .protocolVersion(ProtocolVersion.V1_0)
+                    .session(mockSession)
+                    .clientIp(TEST_CLIENT_IP)
+                    .connectTime(connectTime)
+                    .lastActiveTime(lastActive)
+                    .status(TerminalConnection.ConnectionStatus.CONNECTED)
+                    .build();
+
+            TerminalConnection sameValues = TerminalConnection.builder()
+                    .deviceId(TEST_DEVICE_ID)
+                    .protocolVersion(ProtocolVersion.V1_0)
+                    .session(mockSession)
+                    .clientIp(TEST_CLIENT_IP)
+                    .connectTime(connectTime)
+                    .lastActiveTime(lastActive)
+                    .status(TerminalConnection.ConnectionStatus.CONNECTED)
+                    .build();
+
+            TerminalConnection differentDevice = TerminalConnection.builder()
+                    .deviceId(TEST_DEVICE_ID + 1)
+                    .protocolVersion(ProtocolVersion.V1_0)
+                    .session(mockSession)
+                    .clientIp(TEST_CLIENT_IP)
+                    .connectTime(connectTime)
+                    .lastActiveTime(lastActive)
+                    .status(TerminalConnection.ConnectionStatus.CONNECTED)
+                    .build();
+
+            assertThat(base).isNotEqualTo(differentDevice);
+            assertThat(base).isNotEqualTo(sameValues);
+            assertThat(base.equals("string")).isFalse();
         }
     }
 }

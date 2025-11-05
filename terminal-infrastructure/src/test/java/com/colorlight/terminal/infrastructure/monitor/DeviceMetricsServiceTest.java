@@ -184,4 +184,215 @@ class DeviceMetricsServiceTest {
         assertThat(summary.eventLoopWarnings()).isZero();
         assertThat(summary.eventLoopCriticals()).isZero();
     }
+
+    @Test
+    @DisplayName("应处理线程池利用率为100%的边界情况")
+    void should_handle_thread_pool_utilization_at_100_percent() {
+        // Given - 活跃线程等于最大线程数
+        when(threadPoolExecutor.getActiveCount()).thenReturn(8);
+        when(threadPoolExecutor.getMaximumPoolSize()).thenReturn(8);
+
+        // When
+        DeviceMetricsService.MetricsSummary summary = service.getMetricsSummary();
+
+        // Then
+        assertThat(summary.threadPoolUtilization()).isEqualTo(100.0);
+    }
+
+    @Test
+    @DisplayName("应处理线程池利用率为0%的边界情况")
+    void should_handle_thread_pool_utilization_at_0_percent() {
+        // Given - 活跃线程为0
+        when(threadPoolExecutor.getActiveCount()).thenReturn(0);
+
+        // When
+        DeviceMetricsService.MetricsSummary summary = service.getMetricsSummary();
+
+        // Then
+        assertThat(summary.threadPoolUtilization()).isZero();
+    }
+
+    @Test
+    @DisplayName("应处理WebSocket连接率为1.0的情况")
+    void should_handle_websocket_connection_ratio_at_1_dot_0() {
+        // Given - WebSocket连接数等于在线设备数
+        when(connectionManager.getConnectionCount()).thenReturn(24);
+        when(deviceOnlineStatusPort.getOnlineDeviceCount()).thenReturn(24);
+
+        // When
+        DeviceMetricsService.MetricsSummary summary = service.getMetricsSummary();
+
+        // Then
+        assertThat(summary.websocketConnectionRatio()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("应处理WebSocket连接率为0.0的情况")
+    void should_handle_websocket_connection_ratio_at_0_dot_0() {
+        // Given - 没有WebSocket连接
+        when(connectionManager.getConnectionCount()).thenReturn(0);
+
+        // When
+        DeviceMetricsService.MetricsSummary summary = service.getMetricsSummary();
+
+        // Then
+        assertThat(summary.websocketConnectionRatio()).isZero();
+    }
+
+    @Test
+    @DisplayName("应处理零在线设备的情况")
+    void should_handle_zero_online_devices() {
+        // Given - 重新配置所有依赖以确保零设备和零连接
+        when(deviceOnlineStatusPort.getOnlineDeviceCount()).thenReturn(0);
+        when(connectionManager.getConnectionCount()).thenReturn(0);
+
+        // When
+        DeviceMetricsService.MetricsSummary summary = service.getMetricsSummary();
+
+        // Then
+        assertThat(summary.onlineDeviceCount()).isZero();
+        assertThat(summary.websocketConnectionRatio()).isZero();
+    }
+
+    @Test
+    @DisplayName("应正确处理多个告警事件并累计")
+    void should_correctly_handle_multiple_alert_events_and_accumulate() {
+        // When - 发送多个告警事件
+        service.handleEventLoopAlert(EventLoopAlertEvent.warning(1000, "loop-1", 500));
+        service.handleEventLoopAlert(EventLoopAlertEvent.warning(1200, "loop-2", 600));
+        service.handleEventLoopAlert(EventLoopAlertEvent.critical(5000, "loop-1", 4000));
+        service.handleEventLoopAlert(EventLoopAlertEvent.critical(6000, "loop-2", 5000));
+
+        // Then - 验证计数器累计
+        DeviceMetricsService.MetricsSummary summary = service.getMetricsSummary();
+        assertThat(summary.eventLoopWarnings()).isEqualTo(2);
+        assertThat(summary.eventLoopCriticals()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("应处理分片配置为空的情况")
+    void should_handle_empty_shard_configuration() {
+        // Given - 空的分片统计，但总连接数还是从setUp()的12
+        Map<Integer, Integer> shardSizes = new HashMap<>();
+        Map<String, Object> shardStats = new HashMap<>();
+        shardStats.put("shardSizes", shardSizes);
+        when(connectionManager.getShardStatistics()).thenReturn(shardStats);
+
+        // When & Then - 应该不抛出异常，能够处理空分片配置
+        service.initOptimizedMetrics();
+
+        DeviceMetricsService.MetricsSummary summary = service.getMetricsSummary();
+        // 总连接数仍然是12（从setUp()），即使分片为空
+        assertThat(summary.connectionCount()).isEqualTo(12);
+    }
+
+    @Test
+    @DisplayName("应处理协议版本没有连接的情况")
+    void should_handle_protocol_versions_with_no_connections() {
+        // Given - 两个协议版本都没有连接，同时设置总连接数为0
+        when(connectionManager.getProtocolVersionConnectionCount(ProtocolVersion.V1_0)).thenReturn(0);
+        when(connectionManager.getProtocolVersionConnectionCount(ProtocolVersion.V1_1)).thenReturn(0);
+        when(connectionManager.getConnectionCount()).thenReturn(0);
+
+        // When
+        DeviceMetricsService.MetricsSummary summary = service.getMetricsSummary();
+
+        // Then
+        assertThat(summary.connectionCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("应正确报告v1.0协议版本的连接数")
+    void should_correctly_report_v1_0_protocol_connections() {
+        // Given - setUp()配置中v1.0有7个连接
+        // When
+        service.initOptimizedMetrics();
+
+        // Then
+        double v10Count = meterRegistry.get(MetricsConstant.TERMINAL_PROTOCOL_METRICS)
+                .tag(MetricsConstant.TagKey.VERSION, MetricsConstant.ProtocolVersions.V1_0)
+                .tag(MetricsConstant.TagKey.TYPE, MetricsConstant.ProtocolType.CONNECTIONS)
+                .gauge().value();
+        assertThat(v10Count).isEqualTo(7);
+    }
+
+    @Test
+    @DisplayName("应处理最大线程数为0的极端情况")
+    void should_handle_maximum_pool_size_of_zero() {
+        // Given - 设置最大线程数为0
+        when(threadPoolExecutor.getMaximumPoolSize()).thenReturn(0);
+        when(threadPoolExecutor.getActiveCount()).thenReturn(0);
+
+        // When & Then - 应该不抛出异常
+        DeviceMetricsService.MetricsSummary summary = service.getMetricsSummary();
+        assertThat(summary.threadPoolUtilization()).isZero();
+    }
+
+    @Test
+    @DisplayName("应处理队列大小与容量的关系")
+    void should_correctly_report_queue_utilization() {
+        // When - 获取当前队列大小（从setUp()返回的是3）
+        DeviceMetricsService.MetricsSummary summary = service.getMetricsSummary();
+
+        // Then - 验证队列大小正确反映（队列中有3个任务）
+        assertThat(summary.threadPoolQueueSize()).isEqualTo(3.0);
+    }
+
+    @Test
+    @DisplayName("应正确处理多个分片的连接数分布")
+    void should_correctly_handle_multiple_shards_connection_distribution() {
+        // Given - 配置多个分片的连接数
+        Map<Integer, Integer> shardSizes = new HashMap<>();
+        shardSizes.put(0, 10);
+        shardSizes.put(1, 8);
+        shardSizes.put(2, 6);
+        shardSizes.put(3, 0);  // 空分片
+        Map<String, Object> shardStats = new HashMap<>();
+        shardStats.put("shardSizes", shardSizes);
+        when(connectionManager.getShardStatistics()).thenReturn(shardStats);
+
+        // When
+        service.initOptimizedMetrics();
+
+        // Then
+        double shard0 = meterRegistry.get(MetricsConstant.TERMINAL_SHARD_METRICS)
+                .tag(MetricsConstant.TagKey.SHARD_ID, "0")
+                .tag(MetricsConstant.TagKey.TYPE, MetricsConstant.ShardType.CONNECTIONS)
+                .gauge().value();
+        double shard3 = meterRegistry.get(MetricsConstant.TERMINAL_SHARD_METRICS)
+                .tag(MetricsConstant.TagKey.SHARD_ID, "3")
+                .tag(MetricsConstant.TagKey.TYPE, MetricsConstant.ShardType.CONNECTIONS)
+                .gauge().value();
+
+        assertThat(shard0).isEqualTo(10);
+        assertThat(shard3).isZero();
+    }
+
+    @Test
+    @DisplayName("应处理连续告警事件的计数器准确性")
+    void should_accurately_count_consecutive_alert_events() {
+        // When - 发送相同类型的连续告警
+        for (int i = 0; i < 5; i++) {
+            service.handleEventLoopAlert(EventLoopAlertEvent.warning(1000 + i * 100, "loop-" + i, 500));
+        }
+
+        // Then
+        DeviceMetricsService.MetricsSummary summary = service.getMetricsSummary();
+        assertThat(summary.eventLoopWarnings()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("应分别计数警告和严重告警事件")
+    void should_separately_count_warning_and_critical_alerts() {
+        // When - 交替发送警告和严重告警
+        service.handleEventLoopAlert(EventLoopAlertEvent.warning(1000, "loop-1", 500));
+        service.handleEventLoopAlert(EventLoopAlertEvent.critical(5000, "loop-1", 4000));
+        service.handleEventLoopAlert(EventLoopAlertEvent.warning(1100, "loop-2", 600));
+        service.handleEventLoopAlert(EventLoopAlertEvent.critical(5100, "loop-2", 4100));
+
+        // Then
+        DeviceMetricsService.MetricsSummary summary = service.getMetricsSummary();
+        assertThat(summary.eventLoopWarnings()).isEqualTo(2);
+        assertThat(summary.eventLoopCriticals()).isEqualTo(2);
+    }
 }
