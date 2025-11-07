@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationContext;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
@@ -27,6 +28,10 @@ import java.util.concurrent.ThreadPoolExecutor;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(
+        name = "terminal.metrics.enabled",
+        havingValue = "true"
+)
 @Endpoint(id = "threadpools")
 @RequiredArgsConstructor
 public class ThreadPoolEndpoint {

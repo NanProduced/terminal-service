@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import static com.colorlight.terminal.boot.config.actuator.ActuatorConstant.*;
@@ -24,6 +25,10 @@ import java.util.Map;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(
+        name = "terminal.metrics.enabled",
+        havingValue = "true"
+)
 @Endpoint(id = "websocket")
 @RequiredArgsConstructor
 public class WebSocketConnectionEndpoint {

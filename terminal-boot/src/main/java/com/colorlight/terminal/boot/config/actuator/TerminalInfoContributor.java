@@ -22,6 +22,7 @@ import java.util.Map;
  * @author Nan
  */
 @Component
+
 public class TerminalInfoContributor implements InfoContributor {
 
     private final Environment environment;
