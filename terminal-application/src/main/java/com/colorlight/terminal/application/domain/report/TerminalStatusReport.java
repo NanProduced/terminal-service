@@ -511,6 +511,11 @@ public class TerminalStatusReport {
     @Builder
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class InputMode {
+
+        String inputmode;
+
+        String inputmodeactive;
+
         /**
          * 上报时间戳
          */
