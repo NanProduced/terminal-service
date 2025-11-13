@@ -223,37 +223,90 @@ public class V11OperationHandleRouter {
     }
 
     /**
-     * 处理获取排程的命令。
+     * 处理获取排程指令
+     * 异步化处理：避免RPC调用阻塞EventLoop线程
      *
      * @param context 消息处理上下文，包含设备ID等信息
-     * @param messageId 消息ID，用于响应时关联请求
+     * @param messageId   消息ID，用于响应时关联请求
      */
     private void handleGetSchedule(MessageProcessingContext context, Integer messageId) {
-        String schedule = terminalProgramUseCase.getSchedule(context.getDeviceId());
-        JsonNode schedulePayload = StringUtils.isBlank(schedule)
-                ? JsonUtils.fromJson(EMPTY_JSON)
-                : JsonUtils.fromJson(schedule);
-        // 下发排程
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.SCHEDULE.getId(), messageId, schedulePayload));
-        log.info("V11Router -ws- #GET_SCHEDULE#【获取排程】deviceId:{}", context.getDeviceId());
+        Long deviceId = context.getDeviceId();
+        CompletableFuture
+                .supplyAsync(() -> {
+                    try {
+                        String schedule = terminalProgramUseCase.getSchedule(deviceId);
+                        return StringUtils.isBlank(schedule)
+                                ? JsonUtils.fromJson(EMPTY_JSON)
+                                : JsonUtils.fromJson(schedule);
+                    } catch (Exception e) {
+                        log.error("V11Router -ws- #GET_SCHEDULE#【获取排程异常】deviceId:{}", deviceId, e);
+                        throw e;
+                    }
+                }, websocketBusinessExecutor)
+                .whenComplete((schedulePayload, throwable) -> {
+                    TerminalWebsocketSession session = (TerminalWebsocketSession) context.getConnection().getSession();
+                    Channel channel = session.getNettyChannel();
+                    channel.eventLoop().execute(() -> {
+                        try {
+                            if (throwable == null) {
+                                context.sendMessage(new V11WebsocketMessage(
+                                        V11WebsocketMessageTypeEnum.SCHEDULE.getId(), messageId, schedulePayload));
+                                log.info("V11Router -ws- #GET_SCHEDULE#【获取排程成功】deviceId:{}", deviceId);
+                            } else {
+                                log.error("V11Router -ws- #GET_SCHEDULE#【获取排程失败】deviceId:{}", deviceId, throwable);
+                                context.sendMessage(V11WebsocketMessage.generateErrorContent(
+                                        V11WebsocketErrorEnum.SERVER_ERROR, messageId, "获取排程失败"));
+                            }
+                        } catch (Exception e) {
+                            log.error("V11Router -ws- #GET_SCHEDULE#【发送排程响应异常】deviceId:{}", deviceId, e);
+                        }
+                    });
+                });
     }
+
     /**
-     * 处理获取节目的命令。
+     * 处理获取节目指令
+     * 异步化处理：避免RPC调用阻塞EventLoop线程
      *
      * @param context 消息处理上下文，包含设备ID等信息
-     * @param messageId 消息ID，用于响应时关联请求
+     * @param messageId   消息ID，用于响应时关联请求
      */
     private void handleGetProgram(MessageProcessingContext context, Integer messageId) {
-        String programStr = terminalProgramUseCase.getProgram(context.getDeviceId());
-        if (StringUtils.isBlank(programStr)) {
-            // 节目为空，发送空列表
-            context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.PROGRAMS.getId(), messageId, List.of()));
-            return;
-        }
-        List<RpcTerminalProgramVO> programs = JsonUtils.fromJson(programStr, new TypeReference<List<RpcTerminalProgramVO>>(){});
-        // 下发节目
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.PROGRAMS.getId(), messageId, programs));
-        log.info("V11Router -ws- #GET_PROGRAMS#【获取节目】deviceId:{}", context.getDeviceId());
+        Long deviceId = context.getDeviceId();
+        CompletableFuture
+                .supplyAsync(() -> {
+                    try {
+                        String programStr = terminalProgramUseCase.getProgram(deviceId);
+                        if (StringUtils.isBlank(programStr)) {
+                            return List.<RpcTerminalProgramVO>of();
+                        }
+                        List<RpcTerminalProgramVO> programs = JsonUtils.fromJson(
+                                programStr, new TypeReference<List<RpcTerminalProgramVO>>() {});
+                        return programs == null ? List.of() : programs;
+                    } catch (Exception e) {
+                        log.error("V11Router -ws- #GET_PROGRAMS#【获取节目异常】deviceId:{}", deviceId, e);
+                        throw e;
+                    }
+                }, websocketBusinessExecutor)
+                .whenComplete((programs, throwable) -> {
+                    TerminalWebsocketSession session = (TerminalWebsocketSession) context.getConnection().getSession();
+                    Channel channel = session.getNettyChannel();
+                    channel.eventLoop().execute(() -> {
+                        try {
+                            if (throwable == null) {
+                                context.sendMessage(new V11WebsocketMessage(
+                                        V11WebsocketMessageTypeEnum.PROGRAMS.getId(), messageId, programs));
+                                log.info("V11Router -ws- #GET_PROGRAMS#【获取节目成功】deviceId:{}", deviceId);
+                            } else {
+                                log.error("V11Router -ws- #GET_PROGRAMS#【获取节目失败】deviceId:{}", deviceId, throwable);
+                                context.sendMessage(V11WebsocketMessage.generateErrorContent(
+                                        V11WebsocketErrorEnum.SERVER_ERROR, messageId, "获取节目失败"));
+                            }
+                        } catch (Exception e) {
+                            log.error("V11Router -ws- #GET_PROGRAMS#【发送节目响应异常】deviceId:{}", deviceId, e);
+                        }
+                    });
+                });
     }
 
     /**
