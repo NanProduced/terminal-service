@@ -14,6 +14,8 @@ import org.jetbrains.annotations.NotNull;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.*;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.serializer.GenericToStringSerializer;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -78,14 +80,21 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
      */
     private static final DefaultRedisScript<Long> DECREMENT_ONLINE_COUNT_SCRIPT;
 
+    private static final StringRedisSerializer STRING_SERIALIZER = new StringRedisSerializer();
+    private static final GenericToStringSerializer<Long> LONG_SERIALIZER =
+            new GenericToStringSerializer<>(Long.class);
+
     static {
         DECREMENT_ONLINE_COUNT_SCRIPT = new DefaultRedisScript<>();
-        DECREMENT_ONLINE_COUNT_SCRIPT.setScriptText(
-            "local current = redis.call('GET', KEYS[1]) or '0' " +
-            "local newVal = math.max(0, tonumber(current) - tonumber(ARGV[1])) " +
-            "redis.call('SET', KEYS[1], newVal) " +
-            "return newVal"
-        );
+        DECREMENT_ONLINE_COUNT_SCRIPT.setScriptText("""
+        local current = tonumber(redis.call('GET', KEYS[1])) or 0
+        local decrement = tonumber(ARGV[1]) or 0
+        if decrement <= 0 then return current end
+        local newVal = current - decrement
+        if newVal < 0 then newVal = 0 end
+        redis.call('SET', KEYS[1], newVal)
+        return newVal
+        """);
         DECREMENT_ONLINE_COUNT_SCRIPT.setResultType(Long.class);
     }
 
@@ -825,6 +834,8 @@ public class DeviceOnlineStatusRedisService implements DeviceOnlineStatusPort {
             // Spring Data Redis 3.3.x 推荐方式：使用 RedisScript + redisTemplate.execute()
             redisTemplate.execute(
                 DECREMENT_ONLINE_COUNT_SCRIPT,
+                STRING_SERIALIZER,
+                LONG_SERIALIZER,
                 List.of(RedisKeyConstant.ONLINE_DEVICE_COUNT_KEY),
                 String.valueOf(amount)
             );
