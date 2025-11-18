@@ -87,6 +87,11 @@ public final class MetricsConstant {
      */
     public static final String EVENTLOOP_CRITICALS_DESC = "EventLoop严重告警总数";
 
+    /**
+     * WebSocket消息统计描述
+     */
+    public static final String WEBSOCKET_MSG_DESC = "Websocket消息统计";
+
     // ============== 标签类型常量 ==============
 
     /**

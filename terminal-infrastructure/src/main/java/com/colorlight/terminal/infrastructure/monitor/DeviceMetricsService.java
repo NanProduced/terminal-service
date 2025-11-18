@@ -336,7 +336,7 @@ public class DeviceMetricsService {
         FunctionCounter.builder(MetricsConstant.WEBSOCKET_MSG_COUNT_METRICS,
                         WebsocketMsgMetricsHelper.class,
                         helper -> (double) WebsocketMsgMetricsHelper.getTotalSentMessage())
-                .description(MetricsConstant.SYSTEM_METRICS_DESC)
+                .description(MetricsConstant.WEBSOCKET_MSG_DESC)
                 .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.WebsocketMsgCountType.WEBSOCKET_MSG_SENT))
                 .register(meterRegistry);
 
@@ -344,7 +344,7 @@ public class DeviceMetricsService {
         FunctionCounter.builder(MetricsConstant.WEBSOCKET_MSG_COUNT_METRICS,
                         WebsocketMsgMetricsHelper.class,
                         helper -> (double) WebsocketMsgMetricsHelper.getTotalReceivedMessage())
-                .description(MetricsConstant.SYSTEM_METRICS_DESC)
+                .description(MetricsConstant.WEBSOCKET_MSG_DESC)
                 .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.WebsocketMsgCountType.WEBSOCKET_MSG_RECEIVED))
                 .register(meterRegistry);
 
@@ -352,7 +352,7 @@ public class DeviceMetricsService {
         FunctionCounter.builder(MetricsConstant.WEBSOCKET_MSG_COUNT_METRICS,
                         WebsocketMsgMetricsHelper.class,
                         helper -> (double) WebsocketMsgMetricsHelper.getTotalErrorMessage())
-                .description(MetricsConstant.SYSTEM_METRICS_DESC)
+                .description(MetricsConstant.WEBSOCKET_MSG_DESC)
                 .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.WebsocketMsgCountType.WEBSOCKET_MSG_ERROR))
                 .register(meterRegistry);
     }
