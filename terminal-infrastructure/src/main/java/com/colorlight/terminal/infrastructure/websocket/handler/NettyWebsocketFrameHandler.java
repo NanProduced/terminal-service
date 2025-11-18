@@ -111,6 +111,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
                         frame.getClass().getSimpleName(), deviceId);
             }
         } catch (Exception e) {
+            WebsocketMsgMetricsHelper.incrementErrorMessage();
             log.error("NettyWebsocketFrameHandler - 处理WebSocket帧失败: deviceId={}", deviceId, e);
         } finally {
             // 增加接收消息计数

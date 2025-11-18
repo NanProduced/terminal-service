@@ -141,11 +141,13 @@ public class MessageProcessingContext {
                 WebsocketMsgMetricsHelper.incrementSentMessage();
                 updateSentMessageStatistics();
             } else {
+                WebsocketMsgMetricsHelper.incrementErrorMessage();
                 updateErrorStatistics();
             }
             return success;
         } catch (Exception e) {
             log.warn("MessageProcessingContext - 发送消息失败: deviceId={}", getDeviceId(), e);
+            WebsocketMsgMetricsHelper.incrementErrorMessage();
             updateErrorStatistics();
             return false;
         }
