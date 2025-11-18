@@ -1,5 +1,6 @@
 package com.colorlight.terminal.application.domain.connection;
 
+import com.colorlight.terminal.application.handler.WebsocketMsgMetricsHelper;
 import com.colorlight.terminal.commons.utils.JsonUtils;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -137,13 +138,16 @@ public class MessageProcessingContext {
         try {
             boolean success = connection.sendMessage(message);
             if (success) {
+                WebsocketMsgMetricsHelper.incrementSentMessage();
                 updateSentMessageStatistics();
             } else {
+                WebsocketMsgMetricsHelper.incrementErrorMessage();
                 updateErrorStatistics();
             }
             return success;
         } catch (Exception e) {
             log.warn("MessageProcessingContext - 发送消息失败: deviceId={}", getDeviceId(), e);
+            WebsocketMsgMetricsHelper.incrementErrorMessage();
             updateErrorStatistics();
             return false;
         }

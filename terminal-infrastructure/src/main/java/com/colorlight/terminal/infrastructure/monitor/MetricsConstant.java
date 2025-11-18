@@ -91,6 +91,9 @@ public final class MetricsConstant {
         public static final String WEBSOCKET_CONNECTIONS = "websocket_connections";
         public static final String ONLINE_DEVICES = "online_devices";
         public static final String WEBSOCKET_RATIO = "websocket_ratio";
+        public static final String WEBSOCKET_MSG_SENT = "websocket_msg_sent";
+        public static final String WEBSOCKET_MSG_RECEIVED = "websocket_msg_received";
+        public static final String WEBSOCKET_MSG_ERROR = "websocket_msg_error";
 
         private SystemType() {
         }

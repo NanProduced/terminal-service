@@ -8,6 +8,7 @@ import com.colorlight.terminal.application.port.outbound.connection.ConnectionMa
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
 import com.colorlight.terminal.infrastructure.websocket.auth.NettyWebsocketAuthHandler;
 import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebsocketSession;
+import com.colorlight.terminal.application.handler.WebsocketMsgMetricsHelper;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -104,11 +105,17 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
             } else if (frame instanceof CloseWebSocketFrame) {
                 handleCloseFrame(ctx, deviceId);
             } else {
+                // 增加错误消息计数
+                WebsocketMsgMetricsHelper.incrementErrorMessage();
                 log.warn("NettyWebsocketFrameHandler - 不支持的WebSocket帧类型: {}, deviceId: {}",
                         frame.getClass().getSimpleName(), deviceId);
             }
         } catch (Exception e) {
+            WebsocketMsgMetricsHelper.incrementErrorMessage();
             log.error("NettyWebsocketFrameHandler - 处理WebSocket帧失败: deviceId={}", deviceId, e);
+        } finally {
+            // 增加接收消息计数
+            WebsocketMsgMetricsHelper.incrementReceivedMessage();
         }
     }
 

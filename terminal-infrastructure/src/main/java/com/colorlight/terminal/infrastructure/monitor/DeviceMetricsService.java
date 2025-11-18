@@ -6,10 +6,8 @@ import com.colorlight.terminal.application.port.outbound.status.DeviceOnlineStat
 import com.colorlight.terminal.infrastructure.websocket.connection.ShardedConnectionManager;
 import com.colorlight.terminal.infrastructure.websocket.monitor.EventLoopAlertEvent;
 import com.colorlight.terminal.infrastructure.websocket.monitor.EventLoopHealthMonitor;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tags;
+import com.colorlight.terminal.application.handler.WebsocketMsgMetricsHelper;
+import io.micrometer.core.instrument.*;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -110,6 +108,32 @@ public class DeviceMetricsService {
                 .description(MetricsConstant.SYSTEM_METRICS_DESC)
                 .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.SystemType.WEBSOCKET_RATIO))
                 .register(meterRegistry);
+
+        // WebSocket消息发送数
+        FunctionCounter.builder(MetricsConstant.TERMINAL_SYSTEM_METRICS,
+                        WebsocketMsgMetricsHelper.class,
+                        helper -> (double) WebsocketMsgMetricsHelper.getTotalSentMessage())
+                .description(MetricsConstant.SYSTEM_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.SystemType.WEBSOCKET_MSG_SENT))
+                .register(meterRegistry);
+
+        // WebSocket消息接收数
+        FunctionCounter.builder(MetricsConstant.TERMINAL_SYSTEM_METRICS,
+                        WebsocketMsgMetricsHelper.class,
+                        helper -> (double) WebsocketMsgMetricsHelper.getTotalReceivedMessage())
+                .description(MetricsConstant.SYSTEM_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.SystemType.WEBSOCKET_MSG_RECEIVED))
+                .register(meterRegistry);
+
+        // WebSocket错误消息数
+        FunctionCounter.builder(MetricsConstant.TERMINAL_SYSTEM_METRICS,
+                        WebsocketMsgMetricsHelper.class,
+                        helper -> (double) WebsocketMsgMetricsHelper.getTotalErrorMessage())
+                .description(MetricsConstant.SYSTEM_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.SystemType.WEBSOCKET_MSG_ERROR))
+                .register(meterRegistry);
+
+
     }
 
     /**
