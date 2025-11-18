@@ -79,6 +79,9 @@ public class DeviceMetricsService {
             // 5. EventLoop指标合并
             registerEventLoopMetrics();
 
+            // 6. WebSocket消息计数
+            registerWebsocketMsgCount();
+
             log.info("{} {}", MetricsConstant.LogTag.OPTIMIZED, MetricsConstant.SuccessMessage.OPTIMIZED_METRICS_INIT_SUCCESS);
 
         } catch (Exception e) {
@@ -108,32 +111,6 @@ public class DeviceMetricsService {
                 .description(MetricsConstant.SYSTEM_METRICS_DESC)
                 .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.SystemType.WEBSOCKET_RATIO))
                 .register(meterRegistry);
-
-        // WebSocket消息发送数
-        FunctionCounter.builder(MetricsConstant.TERMINAL_SYSTEM_METRICS,
-                        WebsocketMsgMetricsHelper.class,
-                        helper -> (double) WebsocketMsgMetricsHelper.getTotalSentMessage())
-                .description(MetricsConstant.SYSTEM_METRICS_DESC)
-                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.SystemType.WEBSOCKET_MSG_SENT))
-                .register(meterRegistry);
-
-        // WebSocket消息接收数
-        FunctionCounter.builder(MetricsConstant.TERMINAL_SYSTEM_METRICS,
-                        WebsocketMsgMetricsHelper.class,
-                        helper -> (double) WebsocketMsgMetricsHelper.getTotalReceivedMessage())
-                .description(MetricsConstant.SYSTEM_METRICS_DESC)
-                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.SystemType.WEBSOCKET_MSG_RECEIVED))
-                .register(meterRegistry);
-
-        // WebSocket错误消息数
-        FunctionCounter.builder(MetricsConstant.TERMINAL_SYSTEM_METRICS,
-                        WebsocketMsgMetricsHelper.class,
-                        helper -> (double) WebsocketMsgMetricsHelper.getTotalErrorMessage())
-                .description(MetricsConstant.SYSTEM_METRICS_DESC)
-                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.SystemType.WEBSOCKET_MSG_ERROR))
-                .register(meterRegistry);
-
-
     }
 
     /**
@@ -347,6 +324,36 @@ public class DeviceMetricsService {
         eventLoopCriticals = Counter.builder(MetricsConstant.TERMINAL_EVENTLOOP_CRITICALS_TOTAL)
                 .description(MetricsConstant.EVENTLOOP_CRITICALS_DESC)
                 .tags(Tags.of(MetricsConstant.TagKey.LEVEL, MetricsConstant.AlertLevel.CRITICAL))
+                .register(meterRegistry);
+    }
+
+    /**
+     * 6. WebSocket消息数指标
+     */
+    private void registerWebsocketMsgCount() {
+
+        // WebSocket消息发送数
+        FunctionCounter.builder(MetricsConstant.WEBSOCKET_MSG_COUNT_METRICS,
+                        WebsocketMsgMetricsHelper.class,
+                        helper -> (double) WebsocketMsgMetricsHelper.getTotalSentMessage())
+                .description(MetricsConstant.SYSTEM_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.WebsocketMsgCountType.WEBSOCKET_MSG_SENT))
+                .register(meterRegistry);
+
+        // WebSocket消息接收数
+        FunctionCounter.builder(MetricsConstant.WEBSOCKET_MSG_COUNT_METRICS,
+                        WebsocketMsgMetricsHelper.class,
+                        helper -> (double) WebsocketMsgMetricsHelper.getTotalReceivedMessage())
+                .description(MetricsConstant.SYSTEM_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.WebsocketMsgCountType.WEBSOCKET_MSG_RECEIVED))
+                .register(meterRegistry);
+
+        // WebSocket错误消息数
+        FunctionCounter.builder(MetricsConstant.WEBSOCKET_MSG_COUNT_METRICS,
+                        WebsocketMsgMetricsHelper.class,
+                        helper -> (double) WebsocketMsgMetricsHelper.getTotalErrorMessage())
+                .description(MetricsConstant.SYSTEM_METRICS_DESC)
+                .tags(Tags.of(MetricsConstant.TagKey.TYPE, MetricsConstant.WebsocketMsgCountType.WEBSOCKET_MSG_ERROR))
                 .register(meterRegistry);
     }
 

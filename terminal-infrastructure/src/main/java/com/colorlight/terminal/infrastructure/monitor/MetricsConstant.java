@@ -36,6 +36,11 @@ public final class MetricsConstant {
     public static final String TERMINAL_EVENTLOOP_METRICS = "terminal_eventloop_metrics";
 
     /**
+     * WebSocket消息计数器名称
+     */
+    public static final String WEBSOCKET_MSG_COUNT_METRICS = "terminal_websocket_msg_count_metrics";
+
+    /**
      * EventLoop告警计数器名称
      */
     public static final String TERMINAL_EVENTLOOP_WARNINGS_TOTAL = "terminal_eventloop_warnings_total";
@@ -91,9 +96,6 @@ public final class MetricsConstant {
         public static final String WEBSOCKET_CONNECTIONS = "websocket_connections";
         public static final String ONLINE_DEVICES = "online_devices";
         public static final String WEBSOCKET_RATIO = "websocket_ratio";
-        public static final String WEBSOCKET_MSG_SENT = "websocket_msg_sent";
-        public static final String WEBSOCKET_MSG_RECEIVED = "websocket_msg_received";
-        public static final String WEBSOCKET_MSG_ERROR = "websocket_msg_error";
 
         private SystemType() {
         }
@@ -146,6 +148,18 @@ public final class MetricsConstant {
         public static final String PENDING_TASKS = "pending_tasks";
 
         private EventLoopType() {
+        }
+    }
+
+    /**
+     * WebSocket消息计数器类型
+     */
+    public static final class WebsocketMsgCountType {
+        public static final String WEBSOCKET_MSG_SENT = "websocket_msg_sent";
+        public static final String WEBSOCKET_MSG_RECEIVED = "websocket_msg_received";
+        public static final String WEBSOCKET_MSG_ERROR = "websocket_msg_error";
+
+        private WebsocketMsgCountType() {
         }
     }
 
