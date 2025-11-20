@@ -5,7 +5,10 @@ import com.colorlight.terminal.application.domain.status.DeviceOnlineStatus;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
 import com.colorlight.terminal.application.domain.status.OnlineStatus;
 import com.colorlight.terminal.application.domain.status.ReportSource;
+import com.colorlight.terminal.application.dto.cache.DeviceUpdateContext;
 import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
+import com.colorlight.terminal.application.port.outbound.cache.DeviceStatusCachePort;
+import com.colorlight.terminal.application.port.outbound.cache.DeviceStatusFlushCallback;
 import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort;
 import com.colorlight.terminal.application.port.outbound.connection.ConnectionManagerPort;
 import com.colorlight.terminal.application.port.outbound.status.AsyncDeviceStatusUpdatePort;
@@ -23,22 +26,31 @@ import java.util.stream.Collectors;
 /**
  * 设备在线状态管理应用服务
  * 支持同步/异步配置切换
+ * <p>
+ * 使用 DeviceStatusCachePort 实现本地缓存锁，替代 Redis 分布式锁
  *
  * @author Nan
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusUseCase {
+public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusUseCase, DeviceStatusFlushCallback {
 
     private final DeviceOnlineStatusPort deviceOnlineStatusPort;
     private final DeviceStatusEventPort deviceStatusEventPort;
     private final DeviceConfigPort deviceConfigPort;
     private final ConnectionManagerPort connectionManagerPort;
 
+    // 设备状态本地缓存 - 用本地锁替代 Redis 分布式锁
+    private final DeviceStatusCachePort deviceStatusCachePort;
+
     // 可选的异步状态更新服务 - 当配置启用时注入
     @Nullable
     private final AsyncDeviceStatusUpdatePort asyncDeviceStatusUpdatePort;
+
+    private DeviceUpdateContext getDeviceUpdateContext(Long deviceId) {
+        return deviceStatusCachePort.getOrCreateContext(deviceId);
+    }
 
     /**
      * 更新设备最后上报时间
@@ -50,21 +62,24 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
     @Override
     @Async("deviceStatusExecutor")
     public void updateLastReportTime(Long deviceId, ReportSource source, String clientIp) {
-        boolean acquired = false;
-        try {
-            acquired = deviceOnlineStatusPort.tryAcquireDeviceUpdateLock(deviceId, 5000L);
-            if (!acquired) {
-                log.warn("获取设备更新锁失败，跳过更新: deviceId={}, source={}", deviceId, source);
-                return;
-            }
 
-            processDeviceStatusUpdate(deviceId, source, clientIp);
-        } catch (Exception e) {
-            log.error("更新设备上报时间失败: deviceId={}, source={}", deviceId, source, e);
-        } finally {
-            if (acquired) {
-                deviceOnlineStatusPort.releaseDeviceUpdateLock(deviceId);
+        DeviceUpdateContext context = getDeviceUpdateContext(deviceId);
+        boolean shouldFlushPending = false;
+        try {
+            context.lock();
+            Optional<DeviceOnlineStatus> pendingUpdate = processDeviceStatusUpdate(deviceId, source, clientIp);
+            if (pendingUpdate.isPresent()) {
+                context.savePendingStatus(pendingUpdate.get());
+                shouldFlushPending = context.tryScheduleFlush();
             }
+        } catch (Exception e) {
+            log.error("刷新设备上报时间失败: deviceId={}, source={}", deviceId, source, e);
+        } finally {
+            context.unlock();
+        }
+
+        if (shouldFlushPending) {
+            flushPendingStatus(deviceId, context);
         }
     }
 
@@ -75,14 +90,24 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
      * @param source   上报源
      * @param clientIp 客户端IP
      */
-    private void processDeviceStatusUpdate(Long deviceId, ReportSource source, String clientIp) {
+    private Optional<DeviceOnlineStatus> processDeviceStatusUpdate(Long deviceId, ReportSource source, String clientIp) {
         Optional<DeviceOnlineStatus> currentStatusOpt = deviceOnlineStatusPort.getDeviceStatus(deviceId);
 
         if (currentStatusOpt.isPresent()) {
-            handleExistingDevice(deviceId, currentStatusOpt.get(), source, clientIp);
-        } else {
-            handleNewDevice(deviceId, source, clientIp);
+            return handleExistingDevice(deviceId, currentStatusOpt.get(), source, clientIp);
         }
+
+        handleNewDevice(deviceId, source, clientIp);
+        return Optional.empty();
+    }
+
+    /**
+     * ONLINE 心跳可以延迟刷盘，只保留最后一次时间戳即可。
+     */
+    private boolean shouldDelayHeartbeatPersistence(DeviceOnlineStatus status) {
+        return status.getStatus() == OnlineStatus.ONLINE
+                && deviceConfigPort.isAsyncStatusUpdateEnabled()
+                && asyncDeviceStatusUpdatePort != null;
     }
 
     /**
@@ -92,11 +117,17 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
      * @param source   上报源
      * @param clientIp 客户端IP
      */
-    private void handleExistingDevice(Long deviceId, DeviceOnlineStatus currentStatus,
+    private Optional<DeviceOnlineStatus> handleExistingDevice(Long deviceId, DeviceOnlineStatus currentStatus,
                                      ReportSource source, String clientIp) {
         DeviceOnlineStatus updatedStatus = determinedUpdateStatus(currentStatus, source, clientIp);
+
+        if (shouldDelayHeartbeatPersistence(updatedStatus)) {
+            return Optional.of(updatedStatus);
+        }
+
         updateDeviceStatusWithMode(updatedStatus);
         publishStatusEvent(deviceId, updatedStatus);
+        return Optional.empty();
     }
 
     /**
@@ -461,5 +492,65 @@ public class DeviceOnlineStatusApplicationService implements DeviceOnlineStatusU
             .map(conn -> conn.getProtocolVersion().getVersion())
             .orElse(ProtocolVersion.V1_0.getVersion());
     }
-    
+
+    /**
+     * 将最新的心跳批量刷入底层端口，只保留时间戳最大的记录。
+     * 采用循环而非递归，避免在高频心跳场景下的栈溢出风险。
+     * <p>
+     * 注意：updateLastReportTime 已在加锁阶段调用过 tryScheduleFlush()，
+     * 所以此处直接执行第一次 flush，之后才检查是否需要重新调度（处理并发新心跳）。
+     */
+    private void flushPendingStatus(Long deviceId, DeviceUpdateContext context) {
+        // 直接执行第一次 flush（updateLastReportTime 已成功调度）
+        do {
+            flushOnce(deviceId, context);
+        }
+        // 若有新的 pending 产生（并发心跳），继续迭代处理
+        while (context.hasPending() && context.tryScheduleFlush());
+    }
+
+    /**
+     * 单次刷新操作：从上下文 drain 最新心跳，持久化到底层。
+     */
+    private void flushOnce(Long deviceId, DeviceUpdateContext context) {
+        try {
+            DeviceOnlineStatus latest = drainLatestHeartbeat(context);
+            if (latest == null) {
+                return;
+            }
+
+            try {
+                updateDeviceStatusWithMode(latest);
+                publishStatusEvent(deviceId, latest);
+            } catch (Exception flushError) {
+                log.error("ApplicationService - 刷新聚合心跳失败: deviceId={}", deviceId, flushError);
+            }
+        } finally {
+            context.finishFlush();
+        }
+    }
+
+    private DeviceOnlineStatus drainLatestHeartbeat(DeviceUpdateContext context) {
+        DeviceOnlineStatus latest = context.drainLatest();
+        DeviceOnlineStatus candidate;
+        while ((candidate = context.drainLatest()) != null) {
+            latest = candidate;
+        }
+        return latest;
+    }
+
+    /**
+     * 实现 DeviceStatusFlushCallback 接口
+     * 当设备缓存被驱逐时，自动 flush 待处理的设备状态
+     *
+     * @param deviceId 被驱逐的设备ID
+     * @param context 设备的更新上下文
+     */
+    @Override
+    public void onContextEvicted(Long deviceId, DeviceUpdateContext context) {
+        flushPendingStatus(deviceId, context);
+    }
 }
+
+
+

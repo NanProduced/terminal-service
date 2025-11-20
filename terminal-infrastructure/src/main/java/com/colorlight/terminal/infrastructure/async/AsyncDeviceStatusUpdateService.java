@@ -16,10 +16,16 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
+/**
+ * 异步设备状态更新服务
+ *
+ * @author Nan
+ */
 @Slf4j
 @Service
 @ConditionalOnProperty(name = "terminal.device.status-update.async-enabled", havingValue = "true", matchIfMissing = true)
@@ -28,41 +34,36 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
     private final DeviceOnlineStatusPort deviceOnlineStatusPort;
     private final DeviceConfigPort deviceConfigPort;
     private final ApplicationEventPublisher eventPublisher;
-    
-    // 缓冲池 - 使用有界队列，满时丢弃最旧元素
-    private final BoundedDropOldestQueue<DeviceOnlineStatus> bufferPool;
-    
+
+    // 去重缓冲池 - 使用ConcurrentHashMap自动去重，每设备仅保留最新状态
+    private final ConcurrentHashMap<Long, DeviceOnlineStatus> bufferPool = new ConcurrentHashMap<>();
+
     // 刷新锁 - 防止并发刷新
     private final ReentrantLock flushLock = new ReentrantLock();
-    
+
     // 服务状态
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
-    
+
     // 统计指标
     private final AtomicLong totalProcessed = new AtomicLong(0);
     private final AtomicLong totalFlushed = new AtomicLong(0);
     private volatile long lastFlushTime = 0;
-    
-    // 对象池复用：批处理ArrayList容器，由flushLock保护
-    private List<DeviceOnlineStatus> batchContainer;
-    
-    // 构造器初始化有界队列
+    private volatile long peakSize = 0;  // 缓冲池峰值大小
+    private volatile long totalDropped = 0;  // 数据丢弃统计（用于兼容性，ConcurrentHashMap无损失）
+
+    // 构造器
     public AsyncDeviceStatusUpdateService(DeviceOnlineStatusPort deviceOnlineStatusPort,
                                          DeviceConfigPort deviceConfigPort,
                                          ApplicationEventPublisher eventPublisher) {
         this.deviceOnlineStatusPort = deviceOnlineStatusPort;
         this.deviceConfigPort = deviceConfigPort;
         this.eventPublisher = eventPublisher;
-        // 初始化有界队列（带名称，便于日志追踪）
-        this.bufferPool = new BoundedDropOldestQueue<>(deviceConfigPort.getBufferPoolMaxSize(), "DeviceStatusBuffer");
     }
 
     @PostConstruct
     public void init() {
         isRunning.set(true);
         lastFlushTime = System.currentTimeMillis();
-        // 预初始化批处理容器，避免首次创建延迟
-        batchContainer = new ArrayList<>(deviceConfigPort.getBufferPoolBatchSize());
 
         log.info("AsyncDeviceStatusUpdate - 异步状态更新服务启动: windowMs={}, maxSize={}, batchSize={}, emergencyFlushThreshold={}",
                 deviceConfigPort.getBufferPoolWindowMs(),
@@ -88,17 +89,13 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
         if (!isRunning.get() || status == null) {
             return;
         }
-        
-        try {
-            // 添加到缓冲池
-            bufferPool.offer(status);
-            totalProcessed.incrementAndGet();
 
-            // 检查是否需要紧急刷新（暂不需要）
-            // checkEmergencyFlush();
-            
+        try {
+            ensureCapacityAndAdd(status.getDeviceId(), status);
+            checkEmergencyFlush();
+
         } catch (Exception e) {
-            log.error("AsyncDeviceStatusUpdate - 提交状态更新失败: deviceId={}", 
+            log.error("AsyncDeviceStatusUpdate - 提交状态更新失败: deviceId={}",
                     status.getDeviceId(), e);
         }
     }
@@ -108,19 +105,17 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
         if (!isRunning.get() || statusList == null || statusList.isEmpty()) {
             return;
         }
-        
+
         try {
-            // 批量添加到缓冲池
+            // 批量添加到缓冲池（自动去重，并进行容量管理）
             for (DeviceOnlineStatus status : statusList) {
-                if (status != null) {
-                    bufferPool.offer(status);
-                    totalProcessed.incrementAndGet();
+                if (status != null && status.getDeviceId() != null) {
+                    ensureCapacityAndAdd(status.getDeviceId(), status);
                 }
             }
 
-            // 检查是否需要紧急刷新（暂不需要）
-            // checkEmergencyFlush();
-            
+            checkEmergencyFlush();
+
         } catch (Exception e) {
             log.error("AsyncDeviceStatusUpdate - 批量提交状态更新失败: count={}", statusList.size(), e);
         }
@@ -133,8 +128,7 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
         }
 
         try {
-            int bufferSize = bufferPool.size();
-            if (bufferSize == 0) {
+            if (bufferPool.isEmpty()) {
                 return;
             }
 
@@ -142,29 +136,30 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
             int batchSize = deviceConfigPort.getBufferPoolBatchSize();
             int processedCount = 0;
 
-            // 使用复用的批处理容器，由flushLock保护，无需额外同步
-            while (!bufferPool.isEmpty()) {
-                DeviceOnlineStatus status = bufferPool.poll();
-                if (status != null) {
-                    batchContainer.add(status);
+            // 分批处理缓冲池中的状态更新
+            List<DeviceOnlineStatus> batch = new ArrayList<>(batchSize);
 
-                    // 达到批处理大小或缓冲池已空，执行批量更新
-                    if (batchContainer.size() >= batchSize || bufferPool.isEmpty()) {
-                        processedCount += batchContainer.size();
-                        // 传递批次副本，避免因列表清空导致引用失效
-                        processBatch(new ArrayList<>(batchContainer));
-                        // 清空容器供下一批使用
-                        batchContainer.clear();
-                    }
+            // 从ConcurrentHashMap中批量取出记录
+            var iterator = bufferPool.entrySet().iterator();
+            while (iterator.hasNext()) {
+                var entry = iterator.next();
+                batch.add(entry.getValue());
+                iterator.remove();  // 从缓冲池中移除
+
+                // 达到批处理大小或已处理完所有记录，执行批量更新
+                if (batch.size() >= batchSize || !iterator.hasNext()) {
+                    processBatch(new ArrayList<>(batch));
+                    processedCount += batch.size();
+                    batch.clear();
                 }
             }
-            
+
             lastFlushTime = System.currentTimeMillis();
             totalFlushed.addAndGet(processedCount);
-            
-            log.info("AsyncDeviceStatusUpdate - 缓冲池刷新完成: processed={}, duration={}ms, remainingBuffer={}", 
+
+            log.info("AsyncDeviceStatusUpdate - 缓冲池刷新完成: processed={}, duration={}ms, remainingBuffer={}",
                     processedCount, lastFlushTime - startTime, bufferPool.size());
-            
+
         } catch (Exception e) {
             log.error("AsyncDeviceStatusUpdate - 刷新缓冲池失败", e);
         } finally {
@@ -175,8 +170,8 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
     @Override
     public BufferPoolStatus getBufferPoolStatus() {
         int currentSize = bufferPool.size();
-        int maxSize = bufferPool.getMaxCapacity();
-        double utilizationRate = bufferPool.getUtilizationRate();
+        int maxSize = deviceConfigPort.getBufferPoolMaxSize();
+        double utilizationRate = maxSize > 0 ? (double) currentSize / maxSize : 0.0;
 
         return new BufferPoolStatus(
                 currentSize,
@@ -185,7 +180,7 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
                 lastFlushTime,
                 totalProcessed.get(),
                 totalFlushed.get(),
-                bufferPool.getDroppedCount()
+                totalDropped  // ConcurrentHashMap无损失，总是0
         );
     }
     
@@ -222,17 +217,20 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
         }
 
         int currentSize = bufferPool.size();
-        double utilizationRate = bufferPool.getUtilizationRate();
+        int maxSize = deviceConfigPort.getBufferPoolMaxSize();
         double threshold = deviceConfigPort.getEmergencyFlushThreshold();
 
-        if (currentSize > 0 && utilizationRate >= threshold) {
-            log.warn("AsyncDeviceStatusUpdate - 缓冲池使用率达到紧急阈值，触发紧急刷新: " +
-                    "currentSize={}, maxSize={}, utilizationRate={}%, threshold={}%, droppedCount={}",
-                    currentSize, bufferPool.getMaxCapacity(), (int)(utilizationRate * 100),
-                    (int)(threshold * 100), bufferPool.getDroppedCount());
+        if (currentSize > 0 && maxSize > 0) {
+            double utilizationRate = (double) currentSize / maxSize;
 
-            // 发布紧急刷新事件
-            eventPublisher.publishEvent(AsyncBufferFlushEvent.createDeviceStatusFlushEvent(this, currentSize));
+            if (utilizationRate >= threshold) {
+                log.warn("AsyncDeviceStatusUpdate - 缓冲池使用率达到紧急阈值，触发紧急刷新: " +
+                        "currentSize={}, maxSize={}, utilizationRate={}%, threshold={}%",
+                        currentSize, maxSize, (int)(utilizationRate * 100), (int)(threshold * 100));
+
+                // 发布紧急刷新事件
+                eventPublisher.publishEvent(AsyncBufferFlushEvent.createDeviceStatusFlushEvent(this, currentSize));
+            }
         }
     }
     
@@ -255,6 +253,35 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
     }
     
     /**
+     * 容量管理：检查缓冲池是否接近上限，接近则同步触发 flush 以腾出空间
+     * 使用软上限策略，不主动丢弃数据，而是通过同步 flush 来清空缓冲池
+     *
+     * @param deviceId 设备ID
+     * @param status 设备状态
+     */
+    private void ensureCapacityAndAdd(Long deviceId, DeviceOnlineStatus status) {
+        int currentSize = bufferPool.size();
+        int maxSize = deviceConfigPort.getBufferPoolMaxSize();
+
+        // 容量检查：若接近上限，同步触发 flush 以腾出空间（不丢弃数据）
+        if (currentSize >= maxSize) {
+            log.warn("AsyncDeviceStatusUpdate - 缓冲池接近上限，触发同步flush以腾出空间: " +
+                    "currentSize={}, maxSize={}", currentSize, maxSize);
+            flushBuffer();  // 同步刷新，清空缓冲池
+        }
+
+        // 添加新值到缓冲池
+        bufferPool.put(deviceId, status);
+        totalProcessed.incrementAndGet();
+
+        // 更新峰值大小
+        long newSize = bufferPool.size();
+        if (newSize > peakSize) {
+            peakSize = newSize;
+        }
+    }
+
+    /**
      * 定期输出统计信息
      * 配置延迟启动，避免系统启动时资源竞争
      */
@@ -269,10 +296,10 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
 
         log.info("AsyncDeviceStatusUpdate - 统计信息:\n{}", JsonUtils.toJsonPretty(status));
 
-        // 缓冲池使用率告警：超过80%触发警告
+        // 缓冲池使用率告警：超过80%触发警告，表示 flush 可能跟不上写入速度
         if (status.utilizationRate() > 0.8) {
             log.warn("AsyncDeviceStatusUpdate - 缓冲池使用率告警（>80%）: utilizationRate={}%, " +
-                    "currentSize={}/{}, 建议检查处理能力或增加缓冲池大小",
+                    "currentSize={}/{}, 表示 flush 处理速度接近上限，建议检查 Redis 性能或增加缓冲池大小",
                     (int) (status.utilizationRate() * 100),
                     status.currentSize(), status.maxSize());
         } else if (status.utilizationRate() > 0.7) {
@@ -280,15 +307,6 @@ public class AsyncDeviceStatusUpdateService implements AsyncDeviceStatusUpdatePo
             log.info("AsyncDeviceStatusUpdate - 缓冲池使用率较高: utilizationRate={}%, currentSize={}/{}",
                     (int) (status.utilizationRate() * 100),
                     status.currentSize(), status.maxSize());
-        }
-
-        // 如果有元素被丢弃，记录警告（数据丢失需要关注）
-        if (status.totalDropped() > 0) {
-            log.warn("AsyncDeviceStatusUpdate - 检测到数据丢弃: totalDropped={}, " +
-                    "totalProcessed={}, dropRate={}%, 建议调整缓冲池大小或优化处理速度",
-                    status.totalDropped(),
-                    status.totalProcessed(),
-                    String.format("%.2f", (double) status.totalDropped() / status.totalProcessed() * 100));
         }
     }
 }

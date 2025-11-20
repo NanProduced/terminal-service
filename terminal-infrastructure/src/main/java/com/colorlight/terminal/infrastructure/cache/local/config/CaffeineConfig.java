@@ -1,10 +1,16 @@
 package com.colorlight.terminal.infrastructure.cache.local.config;
 
+import com.colorlight.terminal.application.dto.cache.DeviceUpdateContext;
 import com.colorlight.terminal.application.dto.cache.TerminalAuthCache;
+import com.colorlight.terminal.application.port.outbound.cache.DeviceStatusFlushCallback;
+import com.colorlight.terminal.application.port.outbound.config.DeviceConfigPort;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalListener;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -13,7 +19,6 @@ import java.time.Duration;
 
 /**
  * Caffeine本地一级缓存配置类
- * <li>为高性能Netty WebSocket终端服务提供低延迟缓存支持</li>
  *
  * @author Nan
  * @version 1.0.0
@@ -21,7 +26,13 @@ import java.time.Duration;
  */
 @Slf4j
 @Configuration
+@RequiredArgsConstructor
 public class CaffeineConfig {
+
+    private final DeviceConfigPort deviceConfigPort;
+
+    // 设备状态 flush 回调
+    private final ObjectProvider<DeviceStatusFlushCallback> flushCallbackProvider;
 
     // =================== 核心缓存Bean定义 ===================
 
@@ -33,13 +44,44 @@ public class CaffeineConfig {
      */
     @Bean("terminalAuthenticationCache")
     @Primary
-    public Cache<String, TerminalAuthCache> terminalAuthenticationCache() {
+    public Cache<@NotNull String, TerminalAuthCache> terminalAuthenticationCache() {
         return Caffeine.newBuilder()
-                .maximumSize(10_000L)
+                .maximumSize(20_000L)
                 .expireAfterWrite(Duration.ofMinutes(30))
                 .expireAfterAccess(Duration.ofMinutes(15))
                 .recordStats()
                 .removalListener(createRemovalListener("TERMINAL_AUTH_CACHE"))
+                .build();
+    }
+
+    /**
+     * 设备状态更新上下文缓存 - 本地状态机替代 Redis 分布式锁
+     *
+     * @return 设备状态更新上下文缓存实例
+     */
+    @Bean("deviceUpdateContextCache")
+    public Cache<@NotNull Long, DeviceUpdateContext> deviceUpdateContextCache() {
+        long expireAfterMs = Math.max(deviceConfigPort.getOfflineTimeoutThreshold(), 60_000L);
+        long maxEntries = Math.max(deviceConfigPort.getBufferPoolMaxSize() * 4L, 20_000L);
+
+        return Caffeine.newBuilder()
+                .maximumSize(maxEntries)
+                .expireAfterAccess(Duration.ofMillis(expireAfterMs))
+                .recordStats()
+                .removalListener((Long deviceId, DeviceUpdateContext context, com.github.benmanes.caffeine.cache.RemovalCause cause) -> {
+                    // 当缓存条目被驱逐时，尝试 flush 待处理状态
+                    if (context.tryScheduleFlush()) {
+                        // 通过 ObjectProvider 获取回调，避免循环依赖
+                        flushCallbackProvider.ifAvailable(callback -> {
+                            try {
+                                callback.onContextEvicted(deviceId, context);
+                                log.debug("设备状态缓存驱逐成功 flush: deviceId={}", deviceId);
+                            } catch (Exception e) {
+                                log.error("设备状态缓存驱逐时 flush 失败: deviceId={}", deviceId, e);
+                            }
+                        });
+                    }
+                })
                 .build();
     }
 
