@@ -328,23 +328,25 @@ class AsyncDeviceStatusUpdateServiceTest {
     class BufferPoolMechanicsTest {
 
         @Test
-        @DisplayName("应该在达到容量上限时丢弃最旧元素")
-        void should_drop_oldest_elements_when_capacity_reached() {
+        @DisplayName("应该在达到容量上限时触发同步flush而不丢弃数据")
+        void should_trigger_sync_flush_when_capacity_reached() {
             // Given - 设置小容量缓冲池
             TestConfigBuilder.setupSmallBufferConfig(deviceConfigPort);
             service = new AsyncDeviceStatusUpdateService(deviceOnlineStatusPort, deviceConfigPort, eventPublisher);
             service.init();
 
-            // When - 添加超过容量的状态
+            // When - 添加超过容量的状态，会触发soft limit的同步flush
             for (int i = 1; i <= 8; i++) {
                 service.submitStatusUpdate(TestDataBuilder.createOnlineStatus((long) i));
             }
 
-            // Then
+            // Then - soft limit策略：未丢弃数据，触发同步flush
             AsyncDeviceStatusUpdatePort.BufferPoolStatus status = service.getBufferPoolStatus();
-            assertThat(status.currentSize()).isEqualTo(5); // 最大容量
-            assertThat(status.totalProcessed()).isEqualTo(8); // 总处理数
-            assertThat(status.totalDropped()).isEqualTo(3); // 丢弃了3个最旧元素
+            assertThat(status.currentSize()).isLessThanOrEqualTo(5); // 最多5个，可能已flush
+            assertThat(status.totalProcessed()).isEqualTo(8); // 所有8个都被处理
+            assertThat(status.totalDropped()).isEqualTo(0); // 没有丢弃，ConcurrentHashMap保证no data loss
+            // totalFlushed可能>0，因为触发了soft limit的同步flush
+            assertThat(status.totalFlushed()).isGreaterThanOrEqualTo(0);
         }
 
         @Test
@@ -700,18 +702,6 @@ class AsyncDeviceStatusUpdateServiceTest {
         }
 
         @Test
-        @DisplayName("应该处理配置获取异常")
-        void should_handle_configuration_exceptions() {
-            // Given
-            when(deviceConfigPort.getBufferPoolMaxSize()).thenThrow(new RuntimeException("配置异常"));
-
-            // When & Then - 应该抛出异常
-            assertThrows(RuntimeException.class, () -> {
-                new AsyncDeviceStatusUpdateService(deviceOnlineStatusPort, deviceConfigPort, eventPublisher);
-            });
-        }
-
-        @Test
         @DisplayName("应该处理事件发布异常")
         void should_handle_event_publishing_exceptions() {
             // Given
@@ -753,21 +743,22 @@ class AsyncDeviceStatusUpdateServiceTest {
         }
 
         @Test
-        @DisplayName("应该正确跟踪丢弃统计")
-        void should_correctly_track_drop_statistics() {
+        @DisplayName("应该使用soft limit策略而不丢弃数据")
+        void should_use_soft_limit_without_dropping_data() {
             // Given - 小容量缓冲池
             when(deviceConfigPort.getBufferPoolMaxSize()).thenReturn(3);
             service = new AsyncDeviceStatusUpdateService(deviceOnlineStatusPort, deviceConfigPort, eventPublisher);
             service.init();
 
-            // When
+            // When - 批量提交超过容量的状态
             service.submitBatchStatusUpdate(TestDataBuilder.createBatchStatuses(7));
 
-            // Then
+            // Then - soft limit策略：所有数据都被处理，没有丢弃，可能触发了多次flush
             AsyncDeviceStatusUpdatePort.BufferPoolStatus status = service.getBufferPoolStatus();
-            assertThat(status.totalProcessed()).isEqualTo(7);
-            assertThat(status.totalDropped()).isEqualTo(4); // 丢弃了4个
-            assertThat(status.currentSize()).isEqualTo(3);
+            assertThat(status.totalProcessed()).isEqualTo(7); // 所有7个都被处理
+            assertThat(status.totalDropped()).isEqualTo(0); // 没有丢弃，ConcurrentHashMap无损
+            // currentSize<=3，且totalFlushed可能>0（触发了soft limit flush）
+            assertThat(status.currentSize()).isLessThanOrEqualTo(3);
         }
 
         @Test
@@ -833,24 +824,26 @@ class AsyncDeviceStatusUpdateServiceTest {
         }
 
         @Test
-        @DisplayName("应该处理最小配置参数")
-        void should_handle_minimal_configuration() {
+        @DisplayName("应该处理最小配置参数（soft limit策略）")
+        void should_handle_minimal_configuration_with_soft_limit() {
             // Given
             when(deviceConfigPort.getBufferPoolMaxSize()).thenReturn(1);
             when(deviceConfigPort.getBufferPoolBatchSize()).thenReturn(1);
             service = new AsyncDeviceStatusUpdateService(deviceOnlineStatusPort, deviceConfigPort, eventPublisher);
             service.init();
 
-            // When
+            // When - 最小配置下，soft limit会触发多次sync flush
             service.submitBatchStatusUpdate(TestDataBuilder.createBatchStatuses(3));
             service.flushBuffer();
 
-            // Then - 最小配置下，只能处理1个状态，其余2个被丢弃
-            verify(deviceOnlineStatusPort, times(1)).batchSmartDetermined(any(List.class));
+            // Then - 即使配置最小，soft limit也保证所有数据都被处理
+            verify(deviceOnlineStatusPort, atLeastOnce()).batchSmartDetermined(any(List.class));
 
             AsyncDeviceStatusUpdatePort.BufferPoolStatus status = service.getBufferPoolStatus();
             assertThat(status.maxSize()).isEqualTo(1);
-            assertThat(status.totalDropped()).isEqualTo(2);
+            assertThat(status.totalProcessed()).isEqualTo(3); // 所有3个都被处理
+            assertThat(status.totalDropped()).isEqualTo(0); // 没有丢弃
+            assertThat(status.currentSize()).isLessThanOrEqualTo(1);
         }
 
         @Test

@@ -64,7 +64,7 @@ public interface AsyncDeviceStatusUpdatePort {
     record BufferPoolStatus(int currentSize, int maxSize, double utilizationRate, long lastFlushTime,
                             long totalProcessed, long totalFlushed, long totalDropped) {
 
-    @Override
+        @Override
         public String toString() {
             return String.format("BufferPoolStatus{currentSize=%d, maxSize=%d, utilizationRate=%.2f%%, " +
                             "lastFlushTime=%d, totalProcessed=%d, totalFlushed=%d, totalDropped=%d}",
