@@ -3,6 +3,7 @@ package com.colorlight.terminal.application.port.outbound.rpc;
 import com.colorlight.terminal.application.domain.sensor.GpsReport;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
+import com.colorlight.terminal.application.dto.rpc.MediaInfo;
 
 /**
  * 主服务RPC接口适配接口
@@ -67,10 +68,10 @@ public interface MainServerRpcPort {
     String getMediaByProgramId(Integer programId);
 
     /**
-     * 获取素材Id
+     * 获取素材信息（包含素材Id和素材名称）
      * @param mediaMd5 素材MD5
-     * @return 素材Id
+     * @return 素材信息（mediaId和mediaName）
      */
-    Integer getMediaIdByMd5(String mediaMd5);
+    MediaInfo getMediaInfoByMd5(String mediaMd5);
 
 }

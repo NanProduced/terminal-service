@@ -28,7 +28,7 @@
     <dependency>
       <groupId>com.colorlight.ccloud</groupId>
       <artifactId>colorlight-car-rpc-interface</artifactId>
-      <version>master-master-0.0.7</version>
+      <version>master-master-0.0.8</version>
     </dependency>
 
     <!-- Spring框架核心 -->

@@ -5,6 +5,7 @@ import com.colorlight.terminal.infrastructure.persistence.mongodb.document.Media
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
+import com.colorlight.terminal.application.dto.rpc.MediaInfo;
 import org.mapstruct.NullValueCheckStrategy;
 
 import java.util.List;
@@ -19,7 +20,7 @@ import java.util.Map;
 public interface MediaPlayRecordConverter {
 
     @Mapping(target = "deviceId", source = "deviceId")
-    @Mapping(target = "mediaName", source = "report.resOriginName")
+    @Mapping(target = "mediaName", ignore = true)
     @Mapping(target = "mediaMd5", source = "report.resMd5Name")
     @Mapping(target = "type", source = "report.itemType")
     @Mapping(target = "mediaId", ignore = true)
@@ -33,12 +34,13 @@ public interface MediaPlayRecordConverter {
     }
 
     @Named("convertWithDeviceIdAndMediaIdMap")
-    default List<MediaPlayRecordDocument> convertToMediaPlayRecordDocumentList(Long deviceId, List<MediaPlayRecordReport> reports, Map<String, Integer> mediaIdMap) {
+    default List<MediaPlayRecordDocument> convertToMediaPlayRecordDocumentList(Long deviceId, List<MediaPlayRecordReport> reports, Map<String, MediaInfo> mediaIdMap) {
         return reports.stream()
                 .map(report -> {
                     MediaPlayRecordDocument document = convertToMediaPlayRecordDocument(deviceId, report);
                     // 根据素材名称设置素材ID
-                    document.setMediaId(mediaIdMap.get(document.getMediaMd5()));
+                    document.setMediaId(mediaIdMap.get(document.getMediaMd5()).getMediaId());
+                    document.setMediaName(mediaIdMap.get(document.getMediaMd5()).getMediaName());
                     return document;
                 })
                 .toList();

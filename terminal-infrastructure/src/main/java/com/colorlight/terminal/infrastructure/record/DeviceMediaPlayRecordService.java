@@ -4,6 +4,7 @@ import com.colorlight.terminal.application.domain.report.MediaPlayRecordReport;
 import com.colorlight.terminal.application.dto.cache.DeviceTimeZoneCache;
 import com.colorlight.terminal.application.port.outbound.repository.MediaPlayRecordRepository;
 import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
+import com.colorlight.terminal.application.dto.rpc.MediaInfo;
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceMediaPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceTimeZonePort;
 import com.colorlight.terminal.infrastructure.cache.redis.constant.RedisKeyConstant;
@@ -54,9 +55,9 @@ public class DeviceMediaPlayRecordService implements DeviceMediaPlayRecordPort {
         }
 
         // 获取素材ID列表
-        Map<String, Integer> mediaIdMapByMd5 = getMediaIdMapByMd5(reports.stream().map(MediaPlayRecordReport::getResMd5Name).collect(Collectors.toSet()));
+        Map<String, MediaInfo> mediaInfoMap = getMediaInfoMapByMd5(reports.stream().map(MediaPlayRecordReport::getResMd5Name).collect(Collectors.toSet()));
 
-        mediaPlayRecordRepository.saveMediaPlayRecords(deviceId, reports, mediaIdMapByMd5);
+        mediaPlayRecordRepository.saveMediaPlayRecords(deviceId, reports, mediaInfoMap);
         log.info("MediaStats - 存储{}条素材播放记录,deviceId={}", reports.size(), deviceId);
 
     }
@@ -85,16 +86,16 @@ public class DeviceMediaPlayRecordService implements DeviceMediaPlayRecordPort {
     }
 
     /**
-     * 根据素材MD5列表获取素材ID列表
+     * 根据素材MD5列表获取素材信息列表
      * @param md5List 素材MD5列表
-     * @return 素材ID列表
+     * @return 素材信息列表
      */
-    private Map<String, Integer> getMediaIdMapByMd5(Set<String> md5List) {
-        Map<String, Integer> md5Map = Maps.newHashMap();
+    private Map<String, MediaInfo> getMediaInfoMapByMd5(Set<String> md5List) {
+        Map<String, MediaInfo> md5Map = Maps.newHashMap();
         for (String md5 : md5List) {
-            md5Map.put(md5, getMediaIdByMd5(md5));
+            md5Map.put(md5, getMediaInfoByMd5(md5));
         }
-        log.debug("MediaStats - 获取素材ID列表成功: {}", md5Map);
+        log.debug("MediaStats - 获取素材信息列表成功: {}", md5Map);
         return md5Map;
     }
 
@@ -140,7 +141,7 @@ public class DeviceMediaPlayRecordService implements DeviceMediaPlayRecordPort {
     }
 
     /**
-     * 根据素材 resMd5Name 获取素材ID
+     * 根据素材 resMd5Name 获取素材信息（包含ID和名称）
      * <p>
      *     使用Redis缓存，缓存时间为10分钟，每次成功获取素材ID后，缓存时间为10分钟，10分钟后失效，下次获取素材ID时，会重新获取素材ID并更新缓存
      * </p>
@@ -150,30 +151,30 @@ public class DeviceMediaPlayRecordService implements DeviceMediaPlayRecordPort {
      * @param resMd5Name 素材 resMd5Name 格式字符串
      * @return 素材ID
      */
-    private Integer getMediaIdByMd5(String resMd5Name) {
+    private MediaInfo getMediaInfoByMd5(String resMd5Name) {
         // 提取 MD5 值
         String md5 = extractMd5FromResMd5Name(resMd5Name);
 
         String cacheKey = String.format(RedisKeyConstant.MEDIA_MD5_ID_MAP_KEY, md5);
         try {
-            Integer mediaId = (Integer) redisTemplate.opsForValue().get(cacheKey);
-            if (Objects.nonNull(mediaId)) {
+            MediaInfo mediaInfo = (MediaInfo) redisTemplate.opsForValue().get(cacheKey);
+            if (Objects.nonNull(mediaInfo)) {
                 // 刷新缓存过期时间
                 redisTemplate.expire(cacheKey, 10, TimeUnit.MINUTES);
-                return mediaId;
+                return mediaInfo;
             }
 
             // 缓存未命中，调用RPC获取
-            Integer mediaIdByMd5 = mainServerRpcPort.getMediaIdByMd5(md5);
-            if (Objects.nonNull(mediaIdByMd5)) {
-                redisTemplate.opsForValue().set(cacheKey, mediaIdByMd5, 10, TimeUnit.MINUTES);
-                log.debug("MediaStats - 缓存素材={} 的ID成功: {}", md5, mediaIdByMd5);
+            MediaInfo mediaInfoByMd5 = mainServerRpcPort.getMediaInfoByMd5(md5);
+            if (Objects.nonNull(mediaInfoByMd5)) {
+                redisTemplate.opsForValue().set(cacheKey, mediaInfoByMd5, 10, TimeUnit.MINUTES);
+                log.debug("MediaStats - 缓存素材={} 的信息成功: {}", md5, mediaInfoByMd5);
             }
-            return mediaIdByMd5;
+            return mediaInfoByMd5;
         } catch (Exception e) {
             log.warn("MediaStats - Redis缓存操作失败，降级到RPC调用: md5={}, error={}", md5, e.getMessage());
             // Redis异常时降级到直接RPC调用
-            return mainServerRpcPort.getMediaIdByMd5(md5);
+            return mainServerRpcPort.getMediaInfoByMd5(md5);
         }
     }
 }

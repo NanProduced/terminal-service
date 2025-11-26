@@ -10,11 +10,11 @@ import com.colorlight.ccloud.command.interfaces.DeviceReportRpcService;
 import com.colorlight.ccloud.common.command.enums.CommandStatusEnum;
 import com.colorlight.ccloud.program.interfaces.TerminalProgramRpcService;
 import com.colorlight.ccloud.program.vo.RpcTerminalProgramVO;
-import com.colorlight.ccloud.schedule.dto.Schedule;
 import com.colorlight.ccloud.schedule.interfaces.TerminalScheduleRpcService;
 import com.colorlight.terminal.application.domain.sensor.GpsReport;
 import com.colorlight.terminal.application.domain.status.CommandConfirmEvent;
 import com.colorlight.terminal.application.domain.status.DeviceStatusEvent;
+import com.colorlight.terminal.application.dto.rpc.MediaInfo;
 import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
 import com.colorlight.terminal.commons.utils.JsonUtils;
 import com.colorlight.terminal.commons.utils.TimeUtils;
@@ -27,6 +27,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -288,30 +289,37 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
     }
 
     /**
-     * 根据素材MD5获取素材Id
+     * 根据素材MD5获取素材信息（包含素材Id和素材名称）
      * @param mediaMd5 素材MD5
      * @return 素材Id
      */
-    public Integer getMediaIdByMd5(String mediaMd5) {
+    @Override
+    public MediaInfo getMediaInfoByMd5(String mediaMd5) {
         long startTime = System.currentTimeMillis();
         try {
-            Integer attachmentId = attachmentRpcService.getAttachmentId(mediaMd5);
+            Map<Integer, String> mediaInfoMap = attachmentRpcService.getAttachmentId(mediaMd5);
+            final MediaInfo mediaInfo = new MediaInfo();
+            mediaInfoMap.entrySet().stream().findFirst().ifPresent(entry -> {
+                mediaInfo.setMediaId(entry.getKey());
+                mediaInfo.setMediaName(entry.getValue());
+            });
             long duration = System.currentTimeMillis() - startTime;
-            if (Objects.isNull(attachmentId)) {
-                log.warn("RpcAdapter - 获取素材Id失败(素材不存在)，已记录: 素材MD5={}", mediaMd5);
+            if (Objects.isNull(mediaInfo.getMediaId())) {
+                log.warn("RpcAdapter - 获取素材信息失败(素材不存在)，已记录: 素材MD5={}", mediaMd5);
             }
             else {
-                log.debug("RpcAdapter - 获取素材Id成功: 耗时={} ms, {}", duration, attachmentId);
+                log.debug("RpcAdapter - 获取素材信息成功: 耗时={} ms, mediaId={}, mediaName={}", 
+                        duration, mediaInfo.getMediaId(), mediaInfo.getMediaName());
             }
-            return attachmentId;
+            return mediaInfo;
         } catch (RpcException e) {
             long duration = System.currentTimeMillis() - startTime;
-            log.warn("RpcAdapter - RPC调用获取素材Id失败: mediaMd5={}, error={}, duration={}ms",
+            log.warn("RpcAdapter - RPC调用获取素材信息失败: mediaMd5={}, error={}, duration={}ms",
                     mediaMd5, e.getMessage(), duration);
             return null;
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - startTime;
-            log.error("RpcAdapter - 获取素材Id发生未预期异常: mediaMd5={}, error={}, duration={}ms",
+            log.error("RpcAdapter - 获取素材信息发生未预期异常: mediaMd5={}, error={}, duration={}ms",
                     mediaMd5, e.getMessage(), duration, e);
             return null;
         }

@@ -1,6 +1,7 @@
 package com.colorlight.terminal.infrastructure.persistence.mongodb.repository;
 
 import com.colorlight.terminal.application.domain.report.MediaPlayRecordReport;
+import com.colorlight.terminal.application.dto.rpc.MediaInfo;
 import com.colorlight.terminal.application.port.outbound.repository.MediaPlayRecordRepository;
 import com.colorlight.terminal.commons.exception.technical.TechErrorCode;
 import com.colorlight.terminal.commons.exception.technical.TechnicalException;
@@ -42,13 +43,14 @@ public class MongoMediaPlayRecordRepository implements MediaPlayRecordRepository
 
     /**
      * 保存素材播放记录（包含素材ID映射）
-     * @param deviceId 设备Id
-     * @param reports 上报记录
-     * @param mediaIdMap 素材Id映射表
+     *
+     * @param deviceId     设备Id
+     * @param reports      上报记录
+     * @param mediaInfoMap 素材Id映射表
      */
     @Override
-    public void saveMediaPlayRecords(Long deviceId, List<MediaPlayRecordReport> reports, Map<String, Integer> mediaIdMap) {
-        List<MediaPlayRecordDocument> mediaPlayRecordDocuments = mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, reports, mediaIdMap);
+    public void saveMediaPlayRecords(Long deviceId, List<MediaPlayRecordReport> reports, Map<String, MediaInfo> mediaInfoMap) {
+        List<MediaPlayRecordDocument> mediaPlayRecordDocuments = mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, reports, mediaInfoMap);
         try {
             mongoTemplate.insertAll(mediaPlayRecordDocuments);
         } catch (Exception e) {

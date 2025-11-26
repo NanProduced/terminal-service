@@ -1,6 +1,7 @@
 package com.colorlight.terminal.infrastructure.persistence.mongodb.repository;
 
 import com.colorlight.terminal.application.domain.report.MediaPlayRecordReport;
+import com.colorlight.terminal.application.dto.rpc.MediaInfo;
 import com.colorlight.terminal.infrastructure.persistence.mongodb.converter.MediaPlayRecordConverter;
 import com.colorlight.terminal.infrastructure.persistence.mongodb.document.MediaPlayRecordDocument;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,7 +61,7 @@ class MongoMediaPlayRecordRepositoryTest {
     private Long deviceId;
     private List<MediaPlayRecordReport> reports;
     private List<MediaPlayRecordDocument> documents;
-    private Map<String, Integer> mediaIdMap;
+    private Map<String, MediaInfo> mediaInfoMap;
 
     @BeforeEach
     void setUp() {
@@ -113,9 +114,9 @@ class MongoMediaPlayRecordRepositoryTest {
         documents = Arrays.asList(doc1, doc2);
 
         // 创建素材ID映射
-        mediaIdMap = new HashMap<>();
-        mediaIdMap.put("test_video1.mp4", 1001);
-        mediaIdMap.put("test_image2.jpg", 1002);
+        mediaInfoMap = new HashMap<>();
+        mediaInfoMap.put("test_video1.mp4", new MediaInfo(1001, "素材1"));
+        mediaInfoMap.put("test_image2.jpg", new MediaInfo(1002, "素材2"));
     }
 
     @Nested
@@ -141,14 +142,14 @@ class MongoMediaPlayRecordRepositoryTest {
         @DisplayName("应该成功批量保存素材播放记录（包含素材ID映射）")
         void should_save_media_play_records_with_media_id_map_successfully() {
             // Given
-            given(mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, reports, mediaIdMap))
+            given(mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, reports, mediaInfoMap))
                     .willReturn(documents);
 
             // When
-            repository.saveMediaPlayRecords(deviceId, reports, mediaIdMap);
+            repository.saveMediaPlayRecords(deviceId, reports, mediaInfoMap);
 
             // Then
-            then(mediaPlayRecordConverter).should().convertToMediaPlayRecordDocumentList(deviceId, reports, mediaIdMap);
+            then(mediaPlayRecordConverter).should().convertToMediaPlayRecordDocumentList(deviceId, reports, mediaInfoMap);
             then(mongoTemplate).should().insertAll(documents);
         }
 
@@ -176,16 +177,16 @@ class MongoMediaPlayRecordRepositoryTest {
             // Given
             List<MediaPlayRecordReport> singleReport = Collections.singletonList(reports.get(0));
             List<MediaPlayRecordDocument> singleDocument = Collections.singletonList(documents.get(0));
-            Map<String, Integer> singleMediaIdMap = Map.of("test_video1.mp4", 1001);
+            Map<String, MediaInfo> singleMediaInfoMap = Map.of("test_video1.mp4", new MediaInfo(1001, "素材1"));
 
-            given(mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, singleReport, singleMediaIdMap))
+            given(mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, singleReport, singleMediaInfoMap))
                     .willReturn(singleDocument);
 
             // When
-            repository.saveMediaPlayRecords(deviceId, singleReport, singleMediaIdMap);
+            repository.saveMediaPlayRecords(deviceId, singleReport, singleMediaInfoMap);
 
             // Then
-            then(mediaPlayRecordConverter).should().convertToMediaPlayRecordDocumentList(deviceId, singleReport, singleMediaIdMap);
+            then(mediaPlayRecordConverter).should().convertToMediaPlayRecordDocumentList(deviceId, singleReport, singleMediaInfoMap);
             then(mongoTemplate).should().insertAll(singleDocument);
         }
 
@@ -213,16 +214,16 @@ class MongoMediaPlayRecordRepositoryTest {
             // Given
             List<MediaPlayRecordReport> emptyReports = Collections.emptyList();
             List<MediaPlayRecordDocument> emptyDocuments = Collections.emptyList();
-            Map<String, Integer> emptyMediaIdMap = Collections.emptyMap();
+            Map<String, MediaInfo> emptyMediaInfoMap = Collections.emptyMap();
 
-            given(mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, emptyReports, emptyMediaIdMap))
+            given(mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, emptyReports, emptyMediaInfoMap))
                     .willReturn(emptyDocuments);
 
             // When
-            repository.saveMediaPlayRecords(deviceId, emptyReports, emptyMediaIdMap);
+            repository.saveMediaPlayRecords(deviceId, emptyReports, emptyMediaInfoMap);
 
             // Then
-            then(mediaPlayRecordConverter).should().convertToMediaPlayRecordDocumentList(deviceId, emptyReports, emptyMediaIdMap);
+            then(mediaPlayRecordConverter).should().convertToMediaPlayRecordDocumentList(deviceId, emptyReports, emptyMediaInfoMap);
             then(mongoTemplate).should().insertAll(emptyDocuments);
         }
 
@@ -286,16 +287,16 @@ class MongoMediaPlayRecordRepositoryTest {
         void should_propagate_converter_exception_with_media_id_map() {
             // Given
             RuntimeException converterException = new RuntimeException("Converter failed with mediaIdMap");
-            given(mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, reports, mediaIdMap))
+            given(mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, reports, mediaInfoMap))
                     .willThrow(converterException);
 
             // When & Then
             RuntimeException exception = assertThrows(RuntimeException.class, () -> {
-                repository.saveMediaPlayRecords(deviceId, reports, mediaIdMap);
+                repository.saveMediaPlayRecords(deviceId, reports, mediaInfoMap);
             });
 
             assertEquals("Converter failed with mediaIdMap", exception.getMessage());
-            then(mediaPlayRecordConverter).should().convertToMediaPlayRecordDocumentList(deviceId, reports, mediaIdMap);
+            then(mediaPlayRecordConverter).should().convertToMediaPlayRecordDocumentList(deviceId, reports, mediaInfoMap);
             then(mongoTemplate).should(never()).insertAll(anyList());
         }
     }
@@ -324,15 +325,15 @@ class MongoMediaPlayRecordRepositoryTest {
         @DisplayName("应该确保转换器被正确调用并传递设备ID和素材ID映射")
         void should_ensure_converter_is_called_correctly_with_device_id_and_media_id_map() {
             // Given
-            given(mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, reports, mediaIdMap))
+            given(mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, reports, mediaInfoMap))
                     .willReturn(documents);
 
             // When
-            repository.saveMediaPlayRecords(deviceId, reports, mediaIdMap);
+            repository.saveMediaPlayRecords(deviceId, reports, mediaInfoMap);
 
             // Then
             then(mediaPlayRecordConverter).should(times(1))
-                    .convertToMediaPlayRecordDocumentList(eq(deviceId), eq(reports), eq(mediaIdMap));
+                    .convertToMediaPlayRecordDocumentList(eq(deviceId), eq(reports), eq(mediaInfoMap));
             then(mongoTemplate).should(times(1)).insertAll(documents);
         }
 
@@ -380,16 +381,16 @@ class MongoMediaPlayRecordRepositoryTest {
             // Given - 创建大量数据
             List<MediaPlayRecordReport> largeReports = Collections.nCopies(1000, reports.get(0));
             List<MediaPlayRecordDocument> largeDocuments = Collections.nCopies(1000, documents.get(0));
-            Map<String, Integer> largeMediaIdMap = Map.of("test_video1.mp4", 1001);
+            Map<String, MediaInfo> largeMediaInfoMap = Map.of("test_video1.mp4", new MediaInfo(1, "test_video1.mp4"));
 
-            given(mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, largeReports, largeMediaIdMap))
+            given(mediaPlayRecordConverter.convertToMediaPlayRecordDocumentList(deviceId, largeReports, largeMediaInfoMap))
                     .willReturn(largeDocuments);
 
             // When
-            repository.saveMediaPlayRecords(deviceId, largeReports, largeMediaIdMap);
+            repository.saveMediaPlayRecords(deviceId, largeReports, largeMediaInfoMap);
 
             // Then
-            then(mediaPlayRecordConverter).should().convertToMediaPlayRecordDocumentList(deviceId, largeReports, largeMediaIdMap);
+            then(mediaPlayRecordConverter).should().convertToMediaPlayRecordDocumentList(deviceId, largeReports, largeMediaInfoMap);
             then(mongoTemplate).should().insertAll(largeDocuments);
         }
 

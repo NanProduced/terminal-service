@@ -2,6 +2,7 @@ package com.colorlight.terminal.infrastructure.record;
 
 import com.colorlight.terminal.application.domain.report.MediaPlayRecordReport;
 import com.colorlight.terminal.application.dto.cache.DeviceTimeZoneCache;
+import com.colorlight.terminal.application.dto.rpc.MediaInfo;
 import com.colorlight.terminal.application.port.outbound.repository.MediaPlayRecordRepository;
 import com.colorlight.terminal.application.port.outbound.rpc.MainServerRpcPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceTimeZonePort;
@@ -93,9 +94,12 @@ class DeviceMediaPlayRecordServiceTest {
         lenient().when(mediaPlayRecordConfig.isTimeCalibrationEnabled()).thenReturn(true);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
+        MediaInfo info1 = new MediaInfo(1001, "素材1");
+        MediaInfo info2 = new MediaInfo(1002, "素材2");
+
         // 设置RPC调用返回素材ID
-        lenient().when(mainServerRpcPort.getMediaIdByMd5("md5_hash_1")).thenReturn(1001);
-        lenient().when(mainServerRpcPort.getMediaIdByMd5("md5_hash_2")).thenReturn(1002);
+        lenient().when(mainServerRpcPort.getMediaInfoByMd5("md5_hash_1")).thenReturn(info1);
+        lenient().when(mainServerRpcPort.getMediaInfoByMd5("md5_hash_2")).thenReturn(info2);
     }
 
     /**
@@ -106,7 +110,7 @@ class DeviceMediaPlayRecordServiceTest {
         when(valueOperations.get(anyString())).thenReturn(null);
 
         // 默认RPC调用返回
-        when(mainServerRpcPort.getMediaIdByMd5(anyString())).thenReturn(1001);
+        when(mainServerRpcPort.getMediaInfoByMd5(anyString())).thenReturn(new MediaInfo(1001, "素材1"));
     }
 
     @Nested
@@ -132,7 +136,7 @@ class DeviceMediaPlayRecordServiceTest {
             when(valueOperations.get(anyString())).thenReturn(null);
 
             // 设置RPC调用返回素材ID
-            when(mainServerRpcPort.getMediaIdByMd5("abc123def456")).thenReturn(1001);
+            when(mainServerRpcPort.getMediaInfoByMd5("abc123def456")).thenReturn(new MediaInfo(1001, "素材1"));
 
             // When - 执行业务方法
             deviceMediaPlayRecordService.handleMediaPlayRecordReport(deviceId, reports);
@@ -141,10 +145,10 @@ class DeviceMediaPlayRecordServiceTest {
             verify(deviceTimeZonePort).getDeviceTimeZone(deviceId);
 
             // 验证RPC调用获取素材ID，不关心具体md5值
-            verify(mainServerRpcPort).getMediaIdByMd5(anyString());
+            verify(mainServerRpcPort).getMediaInfoByMd5(anyString());
 
             // 验证Redis缓存设置
-            verify(valueOperations).set("media:md5:id:abc123def456", 1001, 10L, TimeUnit.MINUTES);
+            verify(valueOperations).set("media:md5:id:abc123def456", new MediaInfo(1001, "素材1"), 10L, TimeUnit.MINUTES);
 
             // 验证调用了带mediaIdMap的保存方法
             verify(mediaPlayRecordRepository).saveMediaPlayRecords(eq(deviceId), eq(reports), anyMap());
@@ -236,7 +240,7 @@ class DeviceMediaPlayRecordServiceTest {
             when(valueOperations.get(anyString())).thenReturn(null);
             
             // 设置RPC调用返回素材ID
-            lenient().when(mainServerRpcPort.getMediaIdByMd5(anyString())).thenReturn(0);
+            lenient().when(mainServerRpcPort.getMediaInfoByMd5(anyString())).thenReturn(null);
 
             // When - 执行业务方法
             deviceMediaPlayRecordService.handleMediaPlayRecordReport(deviceId, reports);
@@ -360,7 +364,7 @@ class DeviceMediaPlayRecordServiceTest {
             when(valueOperations.get(anyString())).thenReturn(null);
             
             // 设置RPC调用返回素材ID
-            lenient().when(mainServerRpcPort.getMediaIdByMd5(anyString())).thenReturn(0);
+            lenient().when(mainServerRpcPort.getMediaInfoByMd5(anyString())).thenReturn(null);
 
             // When - 执行业务方法
             deviceMediaPlayRecordService.handleMediaPlayRecordReport(deviceId, reports);
