@@ -6,6 +6,7 @@ import com.colorlight.terminal.application.port.outbound.repository.GpsRecordRep
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceGpsHandlePort;
 import com.colorlight.terminal.infrastructure.config.properties.TerminalStatsConfigProperties;
 import com.colorlight.terminal.infrastructure.event.AsyncBufferFlushEvent;
+import com.colorlight.terminal.infrastructure.event.MileageAggEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 /**
  * 异步处理GPS记录的服务类，实现了DeviceGpsHandlePort接口。该服务主要用于接收GPS报告并将其存储到数据库中。
@@ -109,7 +111,10 @@ public class AsyncGpsRecordService implements DeviceGpsHandlePort {
             
             // 批量存储
             gpsRepository.batchSaveGpsRecord(batchData);
-            
+
+            batchData.stream().collect(Collectors.groupingBy(GpsReport::getDeviceId))
+                            .forEach((deviceId, reports) -> eventPublisher.publishEvent(new MileageAggEvent(deviceId, reports)));
+
             log.info("GpsService - GPS数据批量刷新成功: size={}, 剩余队列大小: {}", 
                     drainedCount, dataBuffer.size());
 
