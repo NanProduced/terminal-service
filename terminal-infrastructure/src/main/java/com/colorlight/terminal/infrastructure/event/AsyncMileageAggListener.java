@@ -135,6 +135,7 @@ public class AsyncMileageAggListener {
                 prevPoint = currPoint;
                 index++;
             }
+            doc.setLastGpsPoint(prevPoint);
             doc.setTotalMileage(doc.getTotalMileage() + distance);
             doc.setGpsPointCount(doc.getGpsPointCount() + windowReports.size());
         }
