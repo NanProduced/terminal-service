@@ -512,15 +512,21 @@ public class TerminalStatusReport {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class InputMode {
 
-        String inputmode;
-
-        String inputmodeactive;
+        private Force force;
 
         /**
          * 上报时间戳
          */
         @JsonProperty("_report_time")
         private long reportTime;
+
+        @Data
+        public static class Force {
+
+            String inputmode;
+
+            String inputmodeactive;
+        }
     }
 
     /**
