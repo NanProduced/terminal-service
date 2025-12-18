@@ -18,6 +18,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.www.BasicAuthenticationEntryPoint;
+import org.springframework.security.web.firewall.HttpFirewall;
+import org.springframework.security.web.firewall.StrictHttpFirewall;
 
 
 /**
@@ -67,8 +69,6 @@ public class SecurityConfig {
                     .requestMatchers("/rpc/**").permitAll()
                     // 终端Http请求需要认证
                     .requestMatchers("/wp-json/**").authenticated()
-                    // todo:测试接口，记得关闭
-                    .requestMatchers("/test/**").permitAll()
                     .anyRequest().authenticated()
             )
             // 使用自定义Basic Auth认证过滤
@@ -91,6 +91,14 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(4);
+    }
+
+    @Bean
+    public HttpFirewall allowUrlEncodedSlashHttpFirewall() {
+        StrictHttpFirewall firewall = new StrictHttpFirewall();
+        // 允许 URL 中包含双斜杠 //
+        firewall.setAllowUrlEncodedDoubleSlash(true);
+        return firewall;
     }
 
     /**
