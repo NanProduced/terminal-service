@@ -151,10 +151,42 @@ public class TerminalStatusReport {
     private ScreenOrientation screen_orientation;
 
     /**
+     * 终端名称常显状态
+     */
+    private Integer showterminal;
+
+    /**
+     * 节目分辨率自适应
+     */
+    private Integer porgramautoscale;
+
+    /**
      * 4G网络信息
      */
     @JsonProperty("4ginfo")
     private Map<String, Object> _4ginfo;
+
+    private List<Relay> relay;
+
+    @JsonProperty("board_relay")
+    private List<Relay> boardRelay;
+
+    /**
+     * 继电器
+     */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Relay {
+
+        private Integer relay;
+
+        private Integer delay;
+
+        private Integer status;
+    }
 
     /**
      * 终端基本信息
