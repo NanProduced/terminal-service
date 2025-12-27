@@ -52,7 +52,7 @@ public class V10ProtocolMessageProcessor implements ProtocolMessageProcessor {
                      context.getDeviceId(), context.getRawMessage());
 
             // 心跳
-            if (StringUtils.isBlank(context.getRawMessage())) {
+            if (StringUtils.isBlank(context.getRawMessage()) || "{}".equals(context.getRawMessage())) {
                 return handleHeartbeat(context);
             }
 
