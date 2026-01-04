@@ -158,7 +158,7 @@ public class TerminalStatusReport {
     /**
      * 节目分辨率自适应
      */
-    private Integer porgramautoscale;
+    private Integer programautoscale;
 
     /**
      * 4G网络信息
