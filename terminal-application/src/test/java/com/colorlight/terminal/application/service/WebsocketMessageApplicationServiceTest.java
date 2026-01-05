@@ -6,6 +6,7 @@ import com.colorlight.terminal.application.domain.connection.TerminalConnection;
 import com.colorlight.terminal.application.domain.connection.WebSocketSession;
 import com.colorlight.terminal.application.domain.status.ReportSource;
 import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
+import com.colorlight.terminal.application.port.outbound.cache.WebsocketConnectedDeviceSetPort;
 import com.colorlight.terminal.application.port.outbound.connection.ConnectionManagerPort;
 import com.colorlight.terminal.application.port.outbound.websocket.ProtocolMessageProcessor;
 import com.colorlight.terminal.application.port.outbound.websocket.ProtocolProcessorPort;
@@ -56,6 +57,9 @@ class WebsocketMessageApplicationServiceTest extends BaseApplicationServiceTest 
     
     @Mock
     private ProtocolProcessorPort protocolProcessorPort;
+
+    @Mock
+    private WebsocketConnectedDeviceSetPort websocketConnectedDeviceSetPort;
     
     @InjectMocks
     private WebsocketMessageApplicationService service;
@@ -284,6 +288,7 @@ class WebsocketMessageApplicationServiceTest extends BaseApplicationServiceTest 
             assertThat(result.getProtocolVersion()).isEqualTo(ProtocolVersion.V1_0);
             
             verify(connectionManagerPort).addConnection(eq(TEST_DEVICE_ID), any(TerminalConnection.class));
+            verify(websocketConnectedDeviceSetPort).add(TEST_DEVICE_ID);
             verify(deviceOnlineStatusUseCase).updateLastReportTime(TEST_DEVICE_ID, ReportSource.WEBSOCKET, TEST_CLIENT_IP);
             verify(connectionManagerPort).getConnectionCount();
         }
@@ -303,6 +308,7 @@ class WebsocketMessageApplicationServiceTest extends BaseApplicationServiceTest 
             assertThat(result).isNull();
             
             verify(connectionManagerPort).addConnection(eq(TEST_DEVICE_ID), any(TerminalConnection.class));
+            verify(websocketConnectedDeviceSetPort, never()).add(any());
             verify(deviceOnlineStatusUseCase, never()).updateLastReportTime(any(), any(), any());
         }
 
@@ -321,6 +327,7 @@ class WebsocketMessageApplicationServiceTest extends BaseApplicationServiceTest 
             assertThat(result).isNull();
             
             verify(connectionManagerPort).addConnection(eq(TEST_DEVICE_ID), any(TerminalConnection.class));
+            verify(websocketConnectedDeviceSetPort, never()).add(any());
             verify(deviceOnlineStatusUseCase, never()).updateLastReportTime(any(), any(), any());
         }
 
@@ -416,6 +423,7 @@ class WebsocketMessageApplicationServiceTest extends BaseApplicationServiceTest 
             service.handleConnectionClosed(TEST_DEVICE_ID);
             
             // Then - 验证连接关闭
+            verify(websocketConnectedDeviceSetPort).remove(TEST_DEVICE_ID);
             verify(connectionManagerPort).removeConnection(TEST_DEVICE_ID);
             verify(connectionManagerPort).getConnectionCount();
         }
@@ -430,6 +438,7 @@ class WebsocketMessageApplicationServiceTest extends BaseApplicationServiceTest 
             service.handleConnectionClosed(TEST_DEVICE_ID);
             
             // Then - 验证处理流程
+            verify(websocketConnectedDeviceSetPort).remove(TEST_DEVICE_ID);
             verify(connectionManagerPort).removeConnection(TEST_DEVICE_ID);
             verify(connectionManagerPort, never()).getConnectionCount();
         }
@@ -445,6 +454,7 @@ class WebsocketMessageApplicationServiceTest extends BaseApplicationServiceTest 
             service.handleConnectionClosed(TEST_DEVICE_ID);
             
             // Then - 验证异常处理（不应该抛出异常）
+            verify(websocketConnectedDeviceSetPort).remove(TEST_DEVICE_ID);
             verify(connectionManagerPort).removeConnection(TEST_DEVICE_ID);
         }
     }
@@ -986,4 +996,3 @@ class WebsocketMessageApplicationServiceTest extends BaseApplicationServiceTest 
         }
     }
 }
-

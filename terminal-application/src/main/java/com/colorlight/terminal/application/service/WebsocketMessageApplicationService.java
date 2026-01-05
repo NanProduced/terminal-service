@@ -6,6 +6,7 @@ import com.colorlight.terminal.application.domain.connection.TerminalConnection;
 import com.colorlight.terminal.application.domain.connection.WebSocketSession;
 import com.colorlight.terminal.application.domain.status.ReportSource;
 import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
+import com.colorlight.terminal.application.port.outbound.cache.WebsocketConnectedDeviceSetPort;
 import com.colorlight.terminal.application.port.inbound.websocket.WebsocketMessageUseCase;
 import com.colorlight.terminal.application.port.outbound.connection.ConnectionManagerPort;
 import com.colorlight.terminal.application.port.outbound.websocket.ProtocolMessageProcessor;
@@ -41,6 +42,7 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
     private final ConnectionManagerPort connectionManagerPort;
     private final DeviceOnlineStatusUseCase deviceOnlineStatusUseCase;
     private final ProtocolProcessorPort protocolProcessorPort;
+    private final WebsocketConnectedDeviceSetPort websocketConnectedDeviceSetPort;
 
     /**
      * 处理文本消息 - 协议感知版本，支持多协议文本消息处理
@@ -85,6 +87,14 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
                 return null;
             }
 
+            // 维护 Redis WebSocket 在线设备集合（失败不影响主流程）
+            try {
+                websocketConnectedDeviceSetPort.add(deviceId);
+            } catch (Exception e) {
+                log.warn("ApplicationService - ws - 写入 WebSocket 在线集合失败（忽略，不影响连接建立）: deviceId={}",
+                        deviceId, e);
+            }
+
             // 更新设备在线状态
             updateDeviceOnlineStatus(connection);
             log.info("ApplicationService - ws - 设备连接建立成功: deviceId={}, 总连接数={}",
@@ -110,17 +120,25 @@ public class WebsocketMessageApplicationService implements WebsocketMessageUseCa
     public void handleConnectionClosed(Long deviceId) {
         try {
             log.debug("ApplicationService - ws - 处理设备连接断开: deviceId={}", deviceId);
-            
+
+            // 维护 Redis WebSocket 在线设备集合（SREM 幂等，连接不存在也应移除）
+            try {
+                websocketConnectedDeviceSetPort.remove(deviceId);
+            } catch (Exception e) {
+                log.warn("ApplicationService - ws - 移除 WebSocket 在线集合失败（忽略，不影响连接清理）: deviceId={}",
+                        deviceId, e);
+            }
+
             // 从连接管理器移除
             Object removed = connectionManagerPort.removeConnection(deviceId);
-            
+
             if (removed != null) {
                 log.info("ApplicationService - ws - 设备连接断开成功: deviceId={}, 剩余连接数={}",
                         deviceId, connectionManagerPort.getConnectionCount());
             } else {
                 log.warn("ApplicationService - ws - 设备连接移除失败: deviceId={}", deviceId);
             }
-            
+
         } catch (Exception e) {
             log.error("ApplicationService - ws - 处理设备连接断开失败: deviceId={}", deviceId, e);
         }

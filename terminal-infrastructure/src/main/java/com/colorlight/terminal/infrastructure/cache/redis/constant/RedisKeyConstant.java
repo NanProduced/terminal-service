@@ -51,6 +51,14 @@ public class RedisKeyConstant {
      * 存储当前在线设备总数
      */
     public static final String ONLINE_DEVICE_COUNT_KEY = "device:online:count";
+
+    /*===================  WebSocket 连接设备集合 ====================== */
+
+    /**
+     * WebSocket 已连接设备集合 - Set
+     * 记录所有已建立 WebSocket 连接的设备ID（成员存 deviceId 字符串）
+     */
+    public static final String DEVICE_WEBSOCKET_SET_KEY = "device:websocket:set";
     
     /*=================== 设备开机时间 ===================*/
 
