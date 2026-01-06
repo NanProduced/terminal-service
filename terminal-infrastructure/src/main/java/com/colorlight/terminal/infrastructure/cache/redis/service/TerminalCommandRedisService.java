@@ -54,15 +54,18 @@ public class TerminalCommandRedisService implements CommandCachePort {
         // 特殊处理，如果authorUrl为null，使用空字符串代替，避免后续hash操作失败
         String indexAuthorUrl = StringUtils.defaultIfBlank(command.getAuthorUrl(), "");
 
-        // 1. 检查是否存在相同类型的指令(去重逻辑)
-        Object existingCommandIdObj = redisTemplate.opsForHash().get(indexKey, indexAuthorUrl);
-        if (existingCommandIdObj != null) {
-            Integer existingCommandId = Integer.valueOf(existingCommandIdObj.toString());
-            log.debug("TerminalCommandCache - 发现重复指令类型，执行覆盖操作, authorUrl: {}, oldCommandId: {}",
-                    command.getAuthorUrl(), existingCommandId);
+        // 空authorUrl指令不去重 例如 schedule指令、dirty指令
+        if (!indexAuthorUrl.isEmpty()) {
+            // 1. 检查是否存在相同类型的指令(去重逻辑)
+            Object existingCommandIdObj = redisTemplate.opsForHash().get(indexKey, indexAuthorUrl);
+            if (existingCommandIdObj != null) {
+                Integer existingCommandId = Integer.valueOf(existingCommandIdObj.toString());
+                log.debug("TerminalCommandCache - 发现重复指令类型，执行覆盖操作, authorUrl: {}, oldCommandId: {}",
+                        command.getAuthorUrl(), existingCommandId);
 
-            // 删除旧指令
-            removeOldCommand(command.getDeviceId(), existingCommandId);
+                // 删除旧指令
+                removeOldCommand(command.getDeviceId(), existingCommandId);
+            }
         }
 
         Long ttlHours = commandConfigPort.getCacheTtlHours();
