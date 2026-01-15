@@ -9,6 +9,7 @@ import com.colorlight.terminal.application.port.inbound.program.TerminalProgramU
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.boot.converter.CommandConverter;
 import com.colorlight.terminal.boot.converter.TerminalLogConverter;
+import com.colorlight.terminal.boot.utils.HttpUtils;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.device.DeviceResponseException;
 import com.colorlight.terminal.commons.utils.JsonUtils;
@@ -70,7 +71,7 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     public ResponseEntity<Void> reportTerminalStatus(String report) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.debug("DeviceReport - 收到上报消息: deviceId={}, report={}", principal.getDeviceId(), report);
-        terminalReportUseCase.asyncSaveStatusReport(principal.getDeviceId(), report);
+        terminalReportUseCase.asyncSaveStatusReport(principal.getDeviceId(), report, HttpUtils.getClientIp());
         return ResponseEntity.status(HttpStatus.OK).build();
     }
 

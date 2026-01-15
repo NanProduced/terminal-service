@@ -63,6 +63,7 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
     public static final AttributeKey<TerminalPrincipal> TERMINAL_PRINCIPAL = AttributeKey.valueOf("terminalPrincipal");
     public static final AttributeKey<String> DEVICE_ID = AttributeKey.valueOf("deviceId");
     public static final AttributeKey<ProtocolVersion> PROTOCOL_VERSION = AttributeKey.valueOf("protocolVersion");
+    public static final AttributeKey<String> CLIENT_IP = AttributeKey.valueOf("clientIp");
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -190,6 +191,7 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
                         authResult.getDeviceId(), TerminalAccountStatus.ENABLE);
                 context.channel().attr(TERMINAL_PRINCIPAL).set(terminalPrincipal);
                 context.channel().attr(DEVICE_ID).set(terminalPrincipal.getDeviceId().toString());
+                context.channel().attr(CLIENT_IP).set(resolveClientIp(request, context));
                 log.debug("NettyWebsocketAuthHandler - Websocket 认证成功: deviceId={}",
                         terminalPrincipal.getDeviceId());
                 return true;
@@ -222,6 +224,54 @@ public class NettyWebsocketAuthHandler extends ChannelInboundHandlerAdapter {
                 .filter(version -> version.getPath().equals(connectPath))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private String resolveClientIp(FullHttpRequest request, ChannelHandlerContext ctx) {
+        String[] headers = {
+                "X-Forwarded-For",
+                "X-Real-IP",
+                "Proxy-Client-IP",
+                "WL-Proxy-Client-IP",
+                "HTTP_CLIENT_IP",
+                "HTTP_X_FORWARDED_FOR"
+        };
+
+        for (String header : headers) {
+            String ip = request.headers().get(header);
+            if (StringUtils.hasText(ip) && !"unknown".equalsIgnoreCase(ip)) {
+                return extractFirstValidIp(ip);
+            }
+        }
+
+        return getRemoteAddress(ctx);
+    }
+
+    private String extractFirstValidIp(String ipList) {
+        String[] parts = ipList.split(",");
+        for (String part : parts) {
+            String ip = part.trim();
+            if (!ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
+                return ip;
+            }
+        }
+        return ipList.trim();
+    }
+
+    private String getRemoteAddress(ChannelHandlerContext ctx) {
+        try {
+            String remoteAddress = ctx.channel().remoteAddress().toString();
+            if (remoteAddress.startsWith("/")) {
+                remoteAddress = remoteAddress.substring(1);
+            }
+            int colonIndex = remoteAddress.indexOf(':');
+            if (colonIndex != -1) {
+                remoteAddress = remoteAddress.substring(0, colonIndex);
+            }
+            return remoteAddress;
+        } catch (Exception e) {
+            log.warn("NettyWebsocketAuthHandler - 获取客户端IP失败", e);
+            return "unknown";
+        }
     }
 
     private void sendUnsupportedProtocolResponse(ChannelHandlerContext ctx) {

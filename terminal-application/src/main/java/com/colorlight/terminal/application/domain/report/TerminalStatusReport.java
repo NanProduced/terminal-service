@@ -35,6 +35,11 @@ public class TerminalStatusReport {
     private WebsocketStatus websocketStatus;
 
     /**
+     * 客户端IP地址
+     */
+    private String clientIp;
+
+    /**
      * 电源状态信息
      */
     private PowerStatus powerstatus;

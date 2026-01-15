@@ -18,6 +18,7 @@ import com.colorlight.terminal.infrastructure.websocket.processor.v11.converter.
 import com.colorlight.terminal.infrastructure.websocket.processor.v11.dto.CommandResponse;
 import com.colorlight.terminal.infrastructure.websocket.processor.v11.dto.TerminalLogDTO;
 import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebsocketSession;
+import com.colorlight.terminal.infrastructure.websocket.utils.WsIpUtils;
 import io.netty.channel.Channel;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -384,7 +385,8 @@ public class V11OperationHandleRouter {
      */
     private void handleLedStatusReport(MessageProcessingContext context, V11WebsocketMessage message) {
         String dataStr = Objects.isNull(message.getData()) ? EMPTY_JSON : JsonUtils.toJson(message.getData());
-        terminalReportUseCase.asyncSaveStatusReport(context.getDeviceId(), dataStr);
+        String clientIp = context.getConnection().getClientIp();
+        terminalReportUseCase.asyncSaveStatusReport(context.getDeviceId(), dataStr, clientIp);
         log.info("V11Router -ws- #STATUS_REPORT#【上报终端状态】deviceId:{}", context.getDeviceId());
         context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.STATUS_REPORT.getId(), message.getMessageId()));
     }

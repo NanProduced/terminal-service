@@ -9,12 +9,14 @@ import com.colorlight.terminal.infrastructure.security.authentication.TerminalPr
 import com.colorlight.terminal.infrastructure.websocket.auth.NettyWebsocketAuthHandler;
 import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebsocketSession;
 import com.colorlight.terminal.application.handler.WebsocketMsgMetricsHelper;
+import com.colorlight.terminal.infrastructure.websocket.utils.WsIpUtils;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.websocketx.*;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
+import io.netty.util.Attribute;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -176,7 +178,7 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
                     .sessionId(ctx.channel().id().asShortText())
                     .deviceId(deviceId)
                     .nettyChannel(ctx.channel())
-                    .clientIp(getClientIp(ctx))
+                    .clientIp(WsIpUtils.getClientIp(ctx))
                     .connectTime(System.currentTimeMillis())
                     // 心跳时间管理已迁移到TerminalConnection层
                     .build();
@@ -266,28 +268,6 @@ public class NettyWebsocketFrameHandler extends SimpleChannelInboundHandler<WebS
             return StringUtils.isNotBlank(deviceIdStr) ? Long.parseLong(deviceIdStr) : null;
         } catch (Exception e) {
             return null;
-        }
-    }
-
-    /**
-     * 获取客户端IP - 统一格式与HTTP保持一致
-     */
-    private String getClientIp(ChannelHandlerContext ctx) {
-        try {
-            String remoteAddress = ctx.channel().remoteAddress().toString();
-            // 格式: "/192.168.0.163:35188" -> "192.168.0.163"
-            // 移除前缀斜杠和端口号，保持与HTTP格式一致
-            if (remoteAddress.startsWith("/")) {
-                remoteAddress = remoteAddress.substring(1);
-            }
-            int colonIndex = remoteAddress.indexOf(':');
-            if (colonIndex != -1) {
-                remoteAddress = remoteAddress.substring(0, colonIndex);
-            }
-            return remoteAddress;
-        } catch (Exception e) {
-            log.warn("NettyWebsocketFrameHandler - 获取客户端IP失败", e);
-            return "unknown";
         }
     }
 

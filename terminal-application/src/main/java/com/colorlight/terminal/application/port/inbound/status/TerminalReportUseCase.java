@@ -19,8 +19,9 @@ public interface TerminalReportUseCase {
      * 处理/status接口的上报
      * @param deviceId 设备Id
      * @param reportStr 上报信息
+     * @param clientIp 客户端Ip
      */
-    void asyncSaveStatusReport(Long deviceId, String reportStr);
+    void asyncSaveStatusReport(Long deviceId, String reportStr, String clientIp);
 
     /**
      * 异步保存led_status上报数据

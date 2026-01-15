@@ -55,7 +55,7 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
      */
     @Override
     @Async("deviceStatusExecutor")
-    public void asyncSaveStatusReport(Long deviceId, String reportStr) {
+    public void asyncSaveStatusReport(Long deviceId, String reportStr, String clientIp) {
         try {
             // 通知主服务led_status
             mainServerRpcPort.notifyLedStatus(deviceId, reportStr);
@@ -63,6 +63,7 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
             TerminalStatusReport terminalStatusReport = JsonUtils.fromJson(reportStr, TerminalStatusReport.class);
             // 自动填充reportTime
             ReportTimePopulator.populateReportTime(terminalStatusReport, System.currentTimeMillis() / 1000);
+            terminalStatusReport.setClientIp(clientIp);
             // 反序列化成功则异步持久化
             saveLedStatus(deviceId, terminalStatusReport);
             // 处理开机时间戳记录

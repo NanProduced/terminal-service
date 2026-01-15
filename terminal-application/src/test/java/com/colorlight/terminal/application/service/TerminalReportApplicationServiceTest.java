@@ -100,6 +100,7 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
     private static final String TEST_PROGRAM_REPORT_STR = "[{\"programId\":1}]";
     private static final String TEST_SENSOR_REPORT_STR = "[{\"sensorType\":\"gps\"}]";
     private static final String TEST_DOWNLOADING_REPORT_STR = "{\"what\":\"program\"}";
+    private static final String TEST_CLIENT_IP = "192.168.1.100";
     private static final LocalDateTime TEST_REPORT_TIME = LocalDateTime.of(2023, 1, 1, 12, 0);
     private static final byte[] TEST_SCREENSHOT_DATA = "test-screenshot-data".getBytes();
 
@@ -298,12 +299,13 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
                          .thenReturn(expectedReport);
             
             // When - 执行异步保存
-            service.asyncSaveStatusReport(TEST_DEVICE_ID, TEST_REPORT_STR);
+            service.asyncSaveStatusReport(TEST_DEVICE_ID, TEST_REPORT_STR, TEST_CLIENT_IP);
             
             // Then - 验证调用流程
             verify(mainServerRpcPort).notifyLedStatus(TEST_DEVICE_ID, TEST_REPORT_STR);
             jsonUtilsMock.verify(() -> JsonUtils.fromJson(eq(TEST_REPORT_STR), eq(TerminalStatusReport.class)));
             reportTimePopulatorMock.verify(() -> ReportTimePopulator.populateReportTime(eq(expectedReport), anyLong()));
+            assertThat(expectedReport.getClientIp()).isEqualTo(TEST_CLIENT_IP);
             verify(terminalStatusReportRepository).saveTerminalStatusReport(TEST_DEVICE_ID, expectedReport);
         }
         
@@ -316,7 +318,7 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
                          .thenReturn(reportWithInfo);
             
             // When - 执行异步保存
-            service.asyncSaveStatusReport(TEST_DEVICE_ID, TEST_REPORT_STR);
+            service.asyncSaveStatusReport(TEST_DEVICE_ID, TEST_REPORT_STR, TEST_CLIENT_IP);
             
             // Then - 验证开机记录处理
             verify(deviceSwitchRecordPort).asyncHandlerSwitchOnRecord(TEST_DEVICE_ID, reportWithInfo.getInfo());
@@ -330,7 +332,7 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
                          .thenThrow(new RuntimeException("JSON解析失败"));
             
             // When - 执行异步保存（不应抛出异常）
-            service.asyncSaveStatusReport(TEST_DEVICE_ID, TEST_REPORT_STR);
+            service.asyncSaveStatusReport(TEST_DEVICE_ID, TEST_REPORT_STR, TEST_CLIENT_IP);
             
             // Then - 验证主服务通知仍被调用，但异常被捕获
             verify(mainServerRpcPort).notifyLedStatus(TEST_DEVICE_ID, TEST_REPORT_STR);

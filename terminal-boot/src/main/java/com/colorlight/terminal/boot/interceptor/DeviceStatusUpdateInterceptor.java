@@ -2,6 +2,7 @@ package com.colorlight.terminal.boot.interceptor;
 
 import com.colorlight.terminal.application.domain.status.ReportSource;
 import com.colorlight.terminal.application.port.inbound.status.DeviceOnlineStatusUseCase;
+import com.colorlight.terminal.boot.utils.HttpUtils;
 import com.colorlight.terminal.infrastructure.security.authentication.TerminalPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -36,7 +37,7 @@ public class DeviceStatusUpdateInterceptor implements HandlerInterceptor {
             
             if (principal instanceof TerminalPrincipal terminalPrincipal) {
                 Long deviceId = terminalPrincipal.getDeviceId();
-                String clientIp = getClientIp(request);
+                String clientIp = HttpUtils.getClientIp(request);
                 
                 // 更新设备最后上报时间
                 deviceOnlineStatusUseCase.updateLastReportTime(deviceId, ReportSource.HTTP, clientIp);
@@ -51,31 +52,5 @@ public class DeviceStatusUpdateInterceptor implements HandlerInterceptor {
         }
         
         return true;
-    }
-    
-    /**
-     * 获取客户端真实IP地址
-     */
-    private String getClientIp(HttpServletRequest request) {
-        // 依次检查各种代理头
-        String[] headers = {
-            "X-Forwarded-For",
-            "X-Real-IP", 
-            "Proxy-Client-IP",
-            "WL-Proxy-Client-IP",
-            "HTTP_CLIENT_IP",
-            "HTTP_X_FORWARDED_FOR"
-        };
-        
-        for (String header : headers) {
-            String ip = request.getHeader(header);
-            if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
-                // 取第一个IP（可能是逗号分隔的多个IP）
-                return ip.split(",")[0].trim();
-            }
-        }
-        
-        // 最后使用 RemoteAddr
-        return request.getRemoteAddr();
     }
 }
