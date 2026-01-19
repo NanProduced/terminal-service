@@ -285,6 +285,9 @@ public class TerminalStatusReport {
          */
         private String model;
 
+        @JsonProperty("deviceModel")
+        private String deviceModel;
+
         /**
          * 运行时间（秒）
          */
