@@ -74,4 +74,13 @@ public interface MainServerRpcPort {
      */
     MediaInfo getMediaInfoByMd5(String mediaMd5);
 
+    /**
+     * 通知用户服务设备日志上传完成
+     * @param size 文件大小
+     * @param fileName 文件名
+     * @param deviceId 设备Id
+     * @param objectName 存储路径
+     */
+    void notifyDeviceLogUpload(Long size, String fileName, Long deviceId, String objectName);
+
 }

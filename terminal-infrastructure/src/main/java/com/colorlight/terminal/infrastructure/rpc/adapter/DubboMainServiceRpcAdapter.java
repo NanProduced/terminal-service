@@ -8,6 +8,8 @@ import com.colorlight.ccloud.command.dto.entity.DeviceGpsRequest;
 import com.colorlight.ccloud.command.interfaces.CommandFinishFacade;
 import com.colorlight.ccloud.command.interfaces.DeviceReportRpcService;
 import com.colorlight.ccloud.common.command.enums.CommandStatusEnum;
+import com.colorlight.ccloud.log.dto.DeviceLogFileSaveDTO;
+import com.colorlight.ccloud.log.interfaces.DeviceLogFileSaveRpcService;
 import com.colorlight.ccloud.program.interfaces.TerminalProgramRpcService;
 import com.colorlight.ccloud.program.vo.RpcTerminalProgramVO;
 import com.colorlight.ccloud.schedule.interfaces.TerminalScheduleRpcService;
@@ -65,6 +67,10 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
     @DubboReference(version = "1.0.0", group = "terminal", check = false, timeout = 5000, retries = 0,
                    connections = 5, actives = 10, loadbalance = "leastactive")
     private TerminalProgramRpcService terminalProgramRpcService;
+
+    @DubboReference(version = "1.0.0", group = "terminal", check = false, timeout = 5000, retries = 0,
+                    connections = 5, actives = 10, loadbalance = "leastactive")
+    private DeviceLogFileSaveRpcService deviceLogFileSaveRpcService;
 
     /**
      * 通知主服务指令确认状态
@@ -324,5 +330,29 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
             return null;
         }
 
+    }
+
+    @Override
+    public void notifyDeviceLogUpload(Long size, String fileName, Long deviceId, String objectName) {
+        long startTime = System.currentTimeMillis();
+        try {
+            DeviceLogFileSaveDTO dto = new DeviceLogFileSaveDTO();
+            dto.setTerminalId(deviceId);
+            dto.setSize(size);
+            dto.setFileName(fileName);
+            dto.setObjectName(objectName);
+            deviceLogFileSaveRpcService.saveDeviceLog(dto);
+            long duration = System.currentTimeMillis() - startTime;
+            log.debug("RpcAdapter - 通知日志上传成功: 耗时={} ms, deviceId={}, fileName={}",
+                    duration, deviceId, fileName);
+        } catch (RpcException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.warn("RpcAdapter - 通知日志上传失败: duration={}, deviceId={}, fileName={}",
+                     duration, deviceId, fileName, e);
+        } catch (Exception e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.error("RpcAdapter - 通知日志上传发生未预期异常: duration={}, deviceId={}, fileName={}",
+                    duration, deviceId, fileName, e);
+        }
     }
 }

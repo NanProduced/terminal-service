@@ -33,6 +33,7 @@ public class MinioConfig {
                 .credentials(minioProperties.getAccessKey(), minioProperties.getSecretKey())
                 .build();
 
+        // 截图桶
         boolean exists = client.bucketExists(BucketExistsArgs.builder()
                         .bucket(minioProperties.getBucket())
                         .build());
@@ -40,6 +41,19 @@ public class MinioConfig {
             client.makeBucket(MakeBucketArgs.builder()
                     .bucket(minioProperties.getBucket())
                     .build());
+        }
+
+        // 日志桶
+        String logBucket = minioProperties.getLogBucket();
+        if (logBucket != null && !logBucket.isBlank()) {
+            boolean logBucketExists = client.bucketExists(BucketExistsArgs.builder()
+                    .bucket(logBucket)
+                    .build());
+            if (!logBucketExists) {
+                client.makeBucket(MakeBucketArgs.builder()
+                        .bucket(logBucket)
+                        .build());
+            }
         }
 
         setBucketPublicReadPolicy(client);

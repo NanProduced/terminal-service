@@ -3,6 +3,7 @@ package com.colorlight.terminal.application.service;
 import com.colorlight.terminal.application.domain.report.*;
 import com.colorlight.terminal.application.domain.sensor.GpsReport;
 import com.colorlight.terminal.application.domain.sensor.SensorReport;
+import com.colorlight.terminal.application.dto.record.LogFileUploadRecord;
 import com.colorlight.terminal.application.dto.record.ScreenshotUploadRecord;
 import com.colorlight.terminal.application.handler.ReportTimePopulator;
 import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
@@ -15,6 +16,7 @@ import com.colorlight.terminal.application.port.outbound.statistics.DeviceMediaP
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceProgramPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceDownloadingPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceSwitchRecordPort;
+import com.colorlight.terminal.application.port.outbound.storage.LogFileStoragePort;
 import com.colorlight.terminal.application.port.outbound.storage.ScreenshotStoragePort;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.business.BusinessException;
@@ -46,6 +48,7 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     private final DeviceDownloadingPort deviceDownloadingPort;
     private final DownloadingRepository downloadingRepository;
     private final MainServerRpcPort mainServerRpcPort;
+    private final LogFileStoragePort logFileStoragePort;
 
     /**
      * 保存LED状态报告。
@@ -253,6 +256,41 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
         } catch (Exception e) {
             log.error("ApplicationService - 异步保存设备本地日志列表失败: deviceId={}, reportStr={}", deviceId, files);
             throw new BusinessException(CommonErrorCode.OPERATION_FAILED, "设备本地日志列表保存失败", e);
+        }
+    }
+
+    @Override
+    public void uploadHistoryLogFile(LogFileUploadRecord uploadRecord) {
+        if (uploadRecord == null) {
+            throw new BusinessException(CommonErrorCode.PARAMETER_MISSING, "日志文件不能为空");
+        }
+        Long deviceId = uploadRecord.getDeviceId();
+        Long contentLength = uploadRecord.getContentLength();
+
+        try {
+            if (uploadRecord.getOriginalFilename() == null || !uploadRecord.getOriginalFilename().endsWith(".zip")) {
+                throw new BusinessException(CommonErrorCode.INVALID_PARAMETER, "日志文件后缀必须是.zip");
+            }
+            if (uploadRecord.getInputStream() == null) {
+                throw new BusinessException(CommonErrorCode.PARAMETER_MISSING, "日志文件流不能为空");
+            }
+            if (contentLength == null || contentLength <= 0) {
+                throw new BusinessException(CommonErrorCode.PARAMETER_MISSING, "日志文件不能为空");
+            }
+
+            logFileStoragePort.uploadHistoryLogFile(deviceId,
+                    uploadRecord.getOriginalFilename(),
+                    uploadRecord.getInputStream(),
+                    contentLength,
+                    uploadRecord.getContentType());
+
+            log.info("ApplicationService -historyLog- 设备{}历史日志上传完成，大小: {}字节", deviceId, contentLength);
+        } catch (BusinessException e) {
+            log.error("ApplicationService -historyLog- 设备{}日志文件上传业务异常: {}", deviceId, e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("ApplicationService -historyLog- 设备{}日志文件上传异常", deviceId, e);
+            throw new BusinessException(CommonErrorCode.OPERATION_FAILED, "日志文件上传失败: " + e.getMessage(), e);
         }
 
     }

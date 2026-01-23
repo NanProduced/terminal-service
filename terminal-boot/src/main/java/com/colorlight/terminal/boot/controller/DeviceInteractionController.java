@@ -3,6 +3,7 @@ package com.colorlight.terminal.boot.controller;
 import com.colorlight.terminal.api.DeviceInteractionApi;
 import com.colorlight.terminal.application.domain.command.TerminalCommand;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
+import com.colorlight.terminal.application.dto.record.LogFileUploadRecord;
 import com.colorlight.terminal.application.dto.record.ScreenshotUploadRecord;
 import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
 import com.colorlight.terminal.application.port.inbound.program.TerminalProgramUseCase;
@@ -391,8 +392,43 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         return ResponseEntity.status(HttpStatus.OK).build();
     }
 
+    @Operation(
+            summary = "设备本地日志文件上传",
+            description = "终端上传本地日志文件",
+            tags = {"日志"}
+    )
     @Override
     public ResponseEntity<Void> uploadHistoryLogFile(MultipartFile file) {
-        return null;
+        TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Long deviceId = principal.getDeviceId();
+
+        if (file == null || file.isEmpty()) {
+            log.warn("HistoryLogFile - 设备{}上传日志文件为空", deviceId);
+            throw new DeviceResponseException(CommonErrorCode.PARAMETER_MISSING);
+        }
+
+        try (InputStream inputStream = file.getInputStream()) {
+            LogFileUploadRecord uploadRecord = new LogFileUploadRecord(
+                    deviceId,
+                    file.getOriginalFilename(),
+                    file.getContentType(),
+                    file.getSize(),
+                    inputStream
+            );
+
+            terminalReportUseCase.uploadHistoryLogFile(uploadRecord);
+            log.info("HistoryLog - 设备{}日志文件上传完成: name={}, size={}字节",
+                    deviceId, file.getOriginalFilename(), file.getSize());
+            return ResponseEntity.status(HttpStatus.OK).build();
+
+        } catch (IOException e) {
+            log.error("HistoryLog - 设备{}日志文件读取异常", deviceId, e);
+            throw new DeviceResponseException(CommonErrorCode.SYSTEM_ERROR);
+        } catch (DeviceResponseException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("HistoryLog - 设备{}日志文件上传异常", deviceId, e);
+            throw new DeviceResponseException(CommonErrorCode.SYSTEM_ERROR);
+        }
     }
 }

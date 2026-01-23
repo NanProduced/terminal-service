@@ -28,4 +28,9 @@ public class MinioProperties {
      * 截图桶名 = device-screenshots
      */
     private String bucket = "device-screenshots";
+
+    /**
+     * 日志桶名 = device-logs
+     */
+    private String logBucket = "device-logs";
 }

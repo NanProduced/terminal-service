@@ -4,6 +4,7 @@ import com.colorlight.terminal.application.domain.report.HistoryLogFileList;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
 import com.colorlight.terminal.application.domain.sensor.SensorReport;
+import com.colorlight.terminal.application.dto.record.LogFileUploadRecord;
 import com.colorlight.terminal.application.dto.record.ScreenshotUploadRecord;
 
 import java.time.LocalDateTime;
@@ -79,5 +80,11 @@ public interface TerminalReportUseCase {
      * @param files 文件列表
      */
     void asyncSaveHistoryLogFileList(Long deviceId, String files);
+
+    /**
+     * 上传设备历史日志文件（同步）
+     * @param uploadRecord 日志文件上传记录
+     */
+    void uploadHistoryLogFile(LogFileUploadRecord uploadRecord);
 
 }

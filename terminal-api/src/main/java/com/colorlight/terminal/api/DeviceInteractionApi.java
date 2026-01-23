@@ -121,11 +121,16 @@ public interface DeviceInteractionApi {
     /**
      * 设备上报本地日志文件列表
      * @param report 上报
-     * @return 200 Ok - 进度上报成功
+     * @return 200 Ok - 上报成功
      */
     @PostMapping("/wp-json/log/device/logs/report")
     ResponseEntity<Void> reportHistoryLogFileList(@RequestBody String report);
 
+    /**
+     * 设备上传本地日志文件
+     * @param file 日志文件
+     * @return 200 Ok - 上传成功
+     */
     @PostMapping("/wp-json/log/upload")
     ResponseEntity<Void> uploadHistoryLogFile(@RequestParam("file")MultipartFile file);
 }
