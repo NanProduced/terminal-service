@@ -38,6 +38,7 @@ import java.util.List;
 
 import com.colorlight.terminal.application.domain.sensor.SensorReport;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 设备交互控制器 - 实现设备二次开发文档中的必须接口
@@ -372,5 +373,26 @@ public class DeviceInteractionController implements DeviceInteractionApi {
         }
         terminalReportUseCase.asyncSaveDownloadingReport(principal.getDeviceId(), report);
         return ResponseEntity.status(HttpStatus.OK).build();
+    }
+
+    @Operation(
+            summary = "设备本地日志文件列表上报",
+            description = "终端上报本地日志文件列表",
+            tags = {"日志"}
+    )
+    @Override
+    public ResponseEntity<Void> reportHistoryLogFileList(String report) {
+        TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        log.debug("HistoryLogFile - 终端 {} 上报本地日志列表: {}", principal.getDeviceId(), report);
+        if (StringUtils.isBlank(report)) {
+            throw new DeviceResponseException(CommonErrorCode.PARAMETER_MISSING);
+        }
+        terminalReportUseCase.asyncSaveHistoryLogFileList(principal.getDeviceId(), report);
+        return ResponseEntity.status(HttpStatus.OK).build();
+    }
+
+    @Override
+    public ResponseEntity<Void> uploadHistoryLogFile(MultipartFile file) {
+        return null;
     }
 }

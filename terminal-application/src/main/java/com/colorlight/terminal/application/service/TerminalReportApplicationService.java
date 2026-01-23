@@ -26,6 +26,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.lang.reflect.Type;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -236,6 +237,24 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
                     deviceId, reportStr != null ? reportStr.substring(0, Math.min(100, reportStr.length())) : "null", e);
             throw new BusinessException(CommonErrorCode.OPERATION_FAILED, "下载进度保存失败", e);
         }
+    }
+
+    @Override
+    @Async("defaultAsyncExecutor")
+    public void asyncSaveHistoryLogFileList(Long deviceId, String files) {
+        try {
+
+            HistoryLogFileList fileList = JsonUtils.fromJson(files, new TypeReference<HistoryLogFileList>() {});
+
+            terminalLogRepository.saveHistoryLogFileList(deviceId, fileList.getFiles());
+
+            log.info("ApplicationService - 异步保存设备本地日志列表成功: deviceId={}", deviceId);
+
+        } catch (Exception e) {
+            log.error("ApplicationService - 异步保存设备本地日志列表失败: deviceId={}, reportStr={}", deviceId, files);
+            throw new BusinessException(CommonErrorCode.OPERATION_FAILED, "设备本地日志列表保存失败", e);
+        }
+
     }
 
     /*==================== 传感器上报数据私有辅助方法 ====================*/

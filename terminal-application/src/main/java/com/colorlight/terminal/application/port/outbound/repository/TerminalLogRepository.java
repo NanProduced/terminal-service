@@ -1,5 +1,6 @@
 package com.colorlight.terminal.application.port.outbound.repository;
 
+import com.colorlight.terminal.application.domain.report.HistoryLogFileList;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
 
 import java.util.List;
@@ -18,5 +19,9 @@ public interface TerminalLogRepository {
     void saveTerminalLog(TerminalLog terminalLog);
 
     void batchSaveTerminalLog(List<TerminalLog> terminalLogs);
+
+    void saveHistoryLogFileList(Long deviceId, List<HistoryLogFileList.HistoryLogFile> files);
+
+
 
 }

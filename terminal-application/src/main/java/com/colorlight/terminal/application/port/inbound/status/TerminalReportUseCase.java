@@ -1,5 +1,6 @@
 package com.colorlight.terminal.application.port.inbound.status;
 
+import com.colorlight.terminal.application.domain.report.HistoryLogFileList;
 import com.colorlight.terminal.application.domain.report.TerminalLog;
 import com.colorlight.terminal.application.domain.report.TerminalStatusReport;
 import com.colorlight.terminal.application.domain.sensor.SensorReport;
@@ -72,4 +73,11 @@ public interface TerminalReportUseCase {
      * @param reportStr 上报数据
      */
     void asyncSaveDownloadingReport(Long deviceId, String reportStr);
+
+    /**
+     * 异步保存设备上报文件列表
+     * @param files 文件列表
+     */
+    void asyncSaveHistoryLogFileList(Long deviceId, String files);
+
 }

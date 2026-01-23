@@ -8,6 +8,7 @@ import com.colorlight.terminal.dto.program.DeviceApiProgram;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -116,4 +117,15 @@ public interface DeviceInteractionApi {
      */
     @PostMapping("/wp-json/screen/v1/info")
     ResponseEntity<Void> reportDownloading(@RequestBody String report);
+
+    /**
+     * 设备上报本地日志文件列表
+     * @param report 上报
+     * @return 200 Ok - 进度上报成功
+     */
+    @PostMapping("/wp-json/log/device/logs/report")
+    ResponseEntity<Void> reportHistoryLogFileList(@RequestBody String report);
+
+    @PostMapping("/wp-json/log/upload")
+    ResponseEntity<Void> uploadHistoryLogFile(@RequestParam("file")MultipartFile file);
 }
