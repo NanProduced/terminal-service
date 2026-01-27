@@ -63,9 +63,10 @@ public interface MainServerRpcPort {
     /**
      * 获取素材信息
      * @param programId 节目Id
+     * @param deviceId 设备Id
      * @return 素材JSON
      */
-    String getMediaByProgramId(Integer programId);
+    String getMediaByProgramId(Integer programId, Long deviceId);
 
     /**
      * 获取素材信息（包含素材Id和素材名称）

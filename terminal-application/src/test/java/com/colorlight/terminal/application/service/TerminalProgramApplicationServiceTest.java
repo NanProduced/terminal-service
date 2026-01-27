@@ -68,10 +68,10 @@ class TerminalProgramApplicationServiceTest extends BaseApplicationServiceTest {
     @DisplayName("应该通过RPC端口获取节目素材信息")
     void should_get_media_through_rpc_port() {
         // Given
-        when(mainServerRpcPort.getMediaByProgramId(TEST_PROGRAM_ID)).thenReturn(TEST_MEDIA);
+        when(mainServerRpcPort.getMediaByProgramId(TEST_PROGRAM_ID, TEST_DEVICE_ID)).thenReturn(TEST_MEDIA);
         
         // When
-        String media = service.getMedia(TEST_PROGRAM_ID);
+        String media = service.getMedia(TEST_PROGRAM_ID, TEST_DEVICE_ID);
         
         // Then
         assertThat(media).isEqualTo(TEST_MEDIA);

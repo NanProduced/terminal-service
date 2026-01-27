@@ -187,7 +187,7 @@ public class DeviceInteractionController implements DeviceInteractionApi {
     public List<DeviceApiMedia> getMedia(Integer parent) {
         TerminalPrincipal principal = (TerminalPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.info("DeviceMedia - 终端 {} 获取素材", principal.getDeviceId());
-        String media = terminalProgramUseCase.getMedia(parent);
+        String media = terminalProgramUseCase.getMedia(parent, principal.getDeviceId());
         if (StringUtils.isNotBlank(media)) {
             return JsonUtils.fromJson(media, new TypeReference<List<DeviceApiMedia>>() {});
         }

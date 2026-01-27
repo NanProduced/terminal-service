@@ -24,7 +24,7 @@ public class TerminalProgramApplicationService implements TerminalProgramUseCase
     }
 
     @Override
-    public String getMedia(Integer programId) {
-        return mainServerRpcPort.getMediaByProgramId(programId);
+    public String getMedia(Integer programId, Long deviceId) {
+        return mainServerRpcPort.getMediaByProgramId(programId, deviceId);
     }
 }

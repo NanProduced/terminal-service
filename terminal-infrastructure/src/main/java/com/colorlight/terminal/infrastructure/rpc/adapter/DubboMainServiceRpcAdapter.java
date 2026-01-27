@@ -269,10 +269,10 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
      * @return 素材JSON
      */
     @Override
-    public String getMediaByProgramId(Integer programId) {
+    public String getMediaByProgramId(Integer programId, Long deviceId) {
         long startTime = System.currentTimeMillis();
         try {
-            final List<RpcTerminalAttachmentVO> medias = terminalAttachmentRpcService.getTerminalAttachments(programId);
+            final List<RpcTerminalAttachmentVO> medias = terminalAttachmentRpcService.getTerminalAttachments(programId, deviceId);
             long duration = System.currentTimeMillis() - startTime;
             log.debug("RpcAdapter - 获取节目素材成功: 耗时={} ms, {}", duration, medias);
             if (CollectionUtils.isNotEmpty(medias)) {

@@ -11,5 +11,5 @@ public interface TerminalProgramUseCase {
 
     String getProgram(Long deviceId);
 
-    String getMedia(Integer programId);
+    String getMedia(Integer programId, Long deviceId);
 }
