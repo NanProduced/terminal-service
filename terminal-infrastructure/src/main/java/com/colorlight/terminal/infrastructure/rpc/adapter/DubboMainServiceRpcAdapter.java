@@ -111,7 +111,7 @@ public class DubboMainServiceRpcAdapter implements MainServerRpcPort {
         CommandFinishDto dto = new CommandFinishDto();
         dto.setDeviceId(deviceId);
         dto.setCommandId(commandId.toString());
-        dto.setStatus(CommandStatusEnum.TIMEOUT);
+        dto.setStatus(CommandStatusEnum.FAILED);
         try {
             commandFinishFacade.commandFinish(dto);
             log.debug("RpcAdapter - 指令过期通知RPC调用成功: dto={}", dto);
