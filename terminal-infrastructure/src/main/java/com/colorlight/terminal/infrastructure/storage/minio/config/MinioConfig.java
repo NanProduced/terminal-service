@@ -19,13 +19,6 @@ public class MinioConfig {
 
     private final MinioProperties minioProperties;
 
-    /**
-     * 初始化并配置Minio客户端。此方法首先使用从`minioProperties`中获取的配置信息（包括服务地址、访问密钥和秘密密钥）来构建一个MinioClient实例。
-     * 然后，它检查指定的存储桶是否已经存在；如果不存在，则创建该存储桶。
-     *
-     * @return 配置完成的MinioClient实例，用于与MinIO服务器进行交互。
-     * @throws Exception 如果在创建或配置MinioClient过程中发生错误。
-     */
     @Bean
     public MinioClient minioClient() throws Exception {
         MinioClient client = MinioClient.builder()
@@ -33,65 +26,61 @@ public class MinioConfig {
                 .credentials(minioProperties.getAccessKey(), minioProperties.getSecretKey())
                 .build();
 
-        // 截图桶
-        boolean exists = client.bucketExists(BucketExistsArgs.builder()
-                        .bucket(minioProperties.getBucket())
-                        .build());
-        if (!exists) {
-            client.makeBucket(MakeBucketArgs.builder()
-                    .bucket(minioProperties.getBucket())
-                    .build());
-        }
+        // 1. 处理截图桶
+        String mainBucket = minioProperties.getBucket();
+        ensureBucketExistsAndSetPublic(client, mainBucket);
 
-        // 日志桶
+        // 2. 处理日志桶
         String logBucket = minioProperties.getLogBucket();
         if (logBucket != null && !logBucket.isBlank()) {
-            boolean logBucketExists = client.bucketExists(BucketExistsArgs.builder()
-                    .bucket(logBucket)
-                    .build());
-            if (!logBucketExists) {
-                client.makeBucket(MakeBucketArgs.builder()
-                        .bucket(logBucket)
-                        .build());
-            }
+            ensureBucketExistsAndSetPublic(client, logBucket);
         }
-
-        setBucketPublicReadPolicy(client);
 
         return client;
     }
 
     /**
-     * 设置bucket为公共读取策略，允许所有人读取bucket中的对象
-     * 
-     * @param client MinIO客户端
-     * @throws Exception 设置策略失败时抛出异常
+     * 确保桶存在并设置公共读取策略
      */
-    private void setBucketPublicReadPolicy(MinioClient client) throws Exception {
-        String bucketName = minioProperties.getBucket();
-        
+    private void ensureBucketExistsAndSetPublic(MinioClient client, String bucketName) throws Exception {
+        // 检查是否存在，不存在则创建
+        boolean exists = client.bucketExists(BucketExistsArgs.builder()
+                .bucket(bucketName)
+                .build());
+        if (!exists) {
+            client.makeBucket(MakeBucketArgs.builder()
+                    .bucket(bucketName)
+                    .build());
+        }
+
+        // 设置公共读取权限
+        setBucketPublicReadPolicy(client, bucketName);
+    }
+
+    /**
+     * 通用的策略设置方法
+     */
+    private void setBucketPublicReadPolicy(MinioClient client, String bucketName) throws Exception {
         // 定义公共读取策略JSON
         String policy = String.format(
-            "{"
-            + "\"Version\": \"2012-10-17\","
-            + "\"Statement\": ["
-            + "{"
-            + "\"Effect\": \"Allow\","
-            + "\"Principal\": \"*\","
-            + "\"Action\": [\"s3:GetObject\"],"
-            + "\"Resource\": \"arn:aws:s3:::%s/*\""
-            + "}"
-            + "]"
-            + "}", bucketName);
-        
-        // 应用策略到bucket
-        client.setBucketPolicy(
-            SetBucketPolicyArgs.builder()
-                .bucket(bucketName)
-                .config(policy)
-                .build()
-        );
+                "{"
+                        + "\"Version\": \"2012-10-17\","
+                        + "\"Statement\": ["
+                        + "{"
+                        + "\"Effect\": \"Allow\","
+                        + "\"Principal\": \"*\","
+                        + "\"Action\": [\"s3:GetObject\"],"
+                        + "\"Resource\": \"arn:aws:s3:::%s/*\""
+                        + "}"
+                        + "]"
+                        + "}", bucketName);
 
+        client.setBucketPolicy(
+                SetBucketPolicyArgs.builder()
+                        .bucket(bucketName)
+                        .config(policy)
+                        .build()
+        );
     }
 
 }
