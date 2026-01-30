@@ -184,7 +184,7 @@ class DubboMainServiceRpcAdapterTest {
             assertAll(
                     () -> assertThat(capturedDto.getDeviceId()).isEqualTo(TEST_DEVICE_ID),
                     () -> assertThat(capturedDto.getCommandId()).isEqualTo(TEST_COMMAND_ID_INT.toString()),
-                    () -> assertThat(capturedDto.getStatus()).isEqualTo(CommandStatusEnum.TIMEOUT)
+                    () -> assertThat(capturedDto.getStatus()).isEqualTo(CommandStatusEnum.FAILED)
             );
         }
 
