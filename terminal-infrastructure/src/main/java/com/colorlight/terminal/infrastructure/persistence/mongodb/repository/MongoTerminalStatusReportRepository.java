@@ -17,6 +17,9 @@ import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -33,6 +36,10 @@ import static com.colorlight.terminal.application.domain.CommonConstant.Device.D
 public class MongoTerminalStatusReportRepository implements TerminalStatusReportRepository {
 
     private final MongoTemplate mongoTemplate;
+    /**
+     * JSON字段名与Java字段名不一致的遗留映射（仅处理已知差异，避免复杂反射）
+     */
+    private static final Map<String, String> JSON_SEGMENT_TO_MONGO_SEGMENT = buildSegmentMapping();
 
     /**
      * 保存或更新led_status上报数据
@@ -119,14 +126,16 @@ public class MongoTerminalStatusReportRepository implements TerminalStatusReport
             if (valueNode == null || valueNode.isMissingNode()) {
                 continue;
             }
-            update.set("terminalStatusReport." + path, mapper.convertValue(valueNode, Object.class));
+            String mongoPath = mapMongoPath(path);
+            update.set("terminalStatusReport." + mongoPath, mapper.convertValue(valueNode, Object.class));
         }
 
         for (String objectPath : pathSummary.getObjectPaths()) {
             String reportTimePath = objectPath + "._report_time";
             JsonNode reportTimeNode = JsonUtils.getNodeByPath(reportNode, reportTimePath);
             if (reportTimeNode != null && !reportTimeNode.isMissingNode()) {
-                update.set("terminalStatusReport." + reportTimePath, mapper.convertValue(reportTimeNode, Object.class));
+                String mongoReportTimePath = mapMongoPath(reportTimePath);
+                update.set("terminalStatusReport." + mongoReportTimePath, mapper.convertValue(reportTimeNode, Object.class));
             }
         }
 
@@ -136,6 +145,36 @@ public class MongoTerminalStatusReportRepository implements TerminalStatusReport
         update.set("updateTime", now);
         update.setOnInsert(DEVICE_ID, deviceId);
         return update;
+    }
+
+    private static Map<String, String> buildSegmentMapping() {
+        Map<String, String> mapping = new HashMap<>();
+        mapping.put("WebSocketStatus", "websocketStatus");
+        mapping.put("ifstatus", "ifStatus");
+        mapping.put("4ginfo", "_4ginfo");
+        mapping.put("board_relay", "boardRelay");
+        mapping.put("_report_time", "reportTime");
+        return Collections.unmodifiableMap(mapping);
+    }
+
+    private String mapMongoPath(String jsonPath) {
+        if (StringUtils.isBlank(jsonPath)) {
+            return jsonPath;
+        }
+        String[] segments = StringUtils.split(jsonPath, '.');
+        if (segments == null || segments.length == 0) {
+            return jsonPath;
+        }
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < segments.length; i++) {
+            String segment = segments[i];
+            String mapped = JSON_SEGMENT_TO_MONGO_SEGMENT.getOrDefault(segment, segment);
+            if (i > 0) {
+                builder.append('.');
+            }
+            builder.append(mapped);
+        }
+        return builder.toString();
     }
 
 }

@@ -117,7 +117,7 @@ class MongoTerminalStatusReportRepositoryTest {
             assertNotNull(setDoc);
             assertEquals(120, setDoc.get("terminalStatusReport.brightnessandcolortemp.brightness"));
             assertEquals(6500, setDoc.get("terminalStatusReport.brightnessandcolortemp.colortemperature"));
-            assertEquals(111L, setDoc.get("terminalStatusReport.brightnessandcolortemp._report_time"));
+            assertEquals(111L, setDoc.get("terminalStatusReport.brightnessandcolortemp.reportTime"));
             assertEquals("127.0.0.1", setDoc.get("terminalStatusReport.clientIp"));
             assertNotNull(setDoc.get("updateTime"));
             assertEquals(deviceId, setOnInsertDoc.get("deviceId"));
