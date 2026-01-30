@@ -26,13 +26,6 @@ public interface TerminalReportUseCase {
     void asyncSaveStatusReport(Long deviceId, String reportStr, String clientIp);
 
     /**
-     * 异步保存led_status上报数据
-     * @param deviceId 设备Id
-     * @param report 上报信息
-     */
-    void saveLedStatus(Long deviceId, TerminalStatusReport report);
-
-    /**
      * 异步保存终端日志
      * @param deviceId 设备Id
      * @param logs 日志

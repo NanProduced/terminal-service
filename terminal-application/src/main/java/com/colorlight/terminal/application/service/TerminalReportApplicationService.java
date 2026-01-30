@@ -69,7 +69,7 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
             ReportTimePopulator.populateReportTime(terminalStatusReport, System.currentTimeMillis() / 1000);
             terminalStatusReport.setClientIp(clientIp);
             // 反序列化成功则异步持久化
-            saveLedStatus(deviceId, terminalStatusReport);
+            saveLedStatusInternal(deviceId, terminalStatusReport, reportStr);
             // 处理开机时间戳记录
             if (Objects.nonNull(terminalStatusReport.getInfo())) {
                 deviceSwitchRecordPort.asyncHandlerSwitchOnRecord(deviceId, terminalStatusReport.getInfo());
@@ -81,17 +81,9 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
         }
     }
 
-    /**
-     * 异步保存终端状态报告。
-     * 该方法接收一个设备ID和一个终端状态报告对象，将状态报告异步保存到数据库中。如果保存成功，则记录一条信息日志；若过程中发生异常，则抛出业务异常。
-     *
-     * @param deviceId 设备ID
-     * @param report 终端状态报告对象
-     */
-    @Override
-    public void saveLedStatus(Long deviceId, TerminalStatusReport report) {
+    private void saveLedStatusInternal(Long deviceId, TerminalStatusReport report, String rawReportJson) {
         try {
-            terminalStatusReportRepository.saveTerminalStatusReport(deviceId, report);
+            terminalStatusReportRepository.saveTerminalStatusReport(deviceId, report, rawReportJson);
 
             log.info("ApplicationService - 异步保存终端led_status成功: deviceId={}", deviceId);
         } catch (Exception e) {

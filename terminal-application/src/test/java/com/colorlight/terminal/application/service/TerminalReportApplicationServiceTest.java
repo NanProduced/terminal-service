@@ -306,7 +306,7 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
             jsonUtilsMock.verify(() -> JsonUtils.fromJson(eq(TEST_REPORT_STR), eq(TerminalStatusReport.class)));
             reportTimePopulatorMock.verify(() -> ReportTimePopulator.populateReportTime(eq(expectedReport), anyLong()));
             assertThat(expectedReport.getClientIp()).isEqualTo(TEST_CLIENT_IP);
-            verify(terminalStatusReportRepository).saveTerminalStatusReport(TEST_DEVICE_ID, expectedReport);
+            verify(terminalStatusReportRepository).saveTerminalStatusReport(TEST_DEVICE_ID, expectedReport, TEST_REPORT_STR);
         }
         
         @Test
@@ -336,35 +336,7 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
             
             // Then - 验证主服务通知仍被调用，但异常被捕获
             verify(mainServerRpcPort).notifyLedStatus(TEST_DEVICE_ID, TEST_REPORT_STR);
-            verify(terminalStatusReportRepository, never()).saveTerminalStatusReport(any(), any());
-        }
-        
-        @Test
-        @DisplayName("应该成功保存LED状态")
-        void should_save_led_status_successfully() {
-            // Given - 终端状态报告
-            TerminalStatusReport report = TestDataBuilder.createSimpleStatusReport();
-            
-            // When - 保存LED状态
-            service.saveLedStatus(TEST_DEVICE_ID, report);
-            
-            // Then - 验证保存操作
-            verify(terminalStatusReportRepository).saveTerminalStatusReport(TEST_DEVICE_ID, report);
-        }
-        
-        @Test
-        @DisplayName("应该在保存LED状态失败时抛出业务异常")
-        void should_throw_business_exception_when_save_led_status_fails() {
-            // Given - 保存操作失败
-            TerminalStatusReport report = TestDataBuilder.createSimpleStatusReport();
-            doThrow(new RuntimeException("数据库保存失败"))
-                    .when(terminalStatusReportRepository).saveTerminalStatusReport(TEST_DEVICE_ID, report);
-            
-            // When & Then - 验证抛出业务异常
-            assertThatThrownBy(() -> service.saveLedStatus(TEST_DEVICE_ID, report))
-                    .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("errorCode", "TM0004")
-                    .hasCauseInstanceOf(RuntimeException.class);
+            verify(terminalStatusReportRepository, never()).saveTerminalStatusReport(any(), any(), any());
         }
     }
     

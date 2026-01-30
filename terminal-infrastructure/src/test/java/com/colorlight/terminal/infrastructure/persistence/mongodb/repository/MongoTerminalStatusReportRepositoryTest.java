@@ -7,11 +7,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -26,8 +29,8 @@ import static org.mockito.BDDMockito.*;
  * <p>
  * 业务逻辑分析：
  * 1. 核心功能：保存和查询终端状态上报数据
- * 2. 保存逻辑：如果设备已存在记录则更新，否则创建新记录
- * 3. 数据合并：使用BeanUtils.copyNonNullProperties进行非空属性复制
+ * 2. 保存逻辑：支持基于原始JSON字段的增量upsert
+ * 3. 数据合并：原始JSON缺失时回退到兼容保存逻辑
  * 4. 时间管理：自动设置updateTime为当前时间
  * 5. 查询功能：根据设备ID查询最新状态报告
  * 6. 异常处理：查询异常时返回空Optional并记录日志
@@ -86,28 +89,46 @@ class MongoTerminalStatusReportRepositoryTest {
     class SaveTerminalStatusReportTest {
 
         @Test
-        @DisplayName("应该成功保存新的终端状态报告")
-        void should_save_new_terminal_status_report_successfully() {
+        @DisplayName("应该按原始JSON字段进行增量upsert")
+        void should_upsert_with_raw_json_fields() {
             // Given
-            given(mongoTemplate.findOne(any(Query.class), eq(TerminalStatusReportDocument.class)))
-                    .willReturn(null);
+            TerminalStatusReport.BrightnessAndColorTemp bright = new TerminalStatusReport.BrightnessAndColorTemp();
+            bright.setBrightness(120);
+            bright.setColortemperature(6500);
+            bright.setReportTime(111L);
+
+            TerminalStatusReport partialReport = new TerminalStatusReport();
+            partialReport.setBrightnessandcolortemp(bright);
+            partialReport.setClientIp("127.0.0.1");
+
+            String rawJson = "{\"brightnessandcolortemp\":{\"brightness\":120,\"colortemperature\":6500}}";
 
             // When
-            repository.saveTerminalStatusReport(deviceId, report);
+            repository.saveTerminalStatusReport(deviceId, partialReport, rawJson);
 
             // Then
-            then(mongoTemplate).should().findOne(any(Query.class), eq(TerminalStatusReportDocument.class));
-            then(mongoTemplate).should().save(argThat(doc -> {
-                TerminalStatusReportDocument document = (TerminalStatusReportDocument) doc;
-                return document.getDeviceId().equals(deviceId) &&
-                       document.getTerminalStatusReport().equals(report) &&
-                       document.getUpdateTime() != null;
-            }));
+            ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
+            then(mongoTemplate).should().upsert(any(Query.class), updateCaptor.capture(), eq(TerminalStatusReportDocument.class));
+
+            Document updateObject = updateCaptor.getValue().getUpdateObject();
+            Document setDoc = (Document) updateObject.get("$set");
+            Document setOnInsertDoc = (Document) updateObject.get("$setOnInsert");
+
+            assertNotNull(setDoc);
+            assertEquals(120, setDoc.get("terminalStatusReport.brightnessandcolortemp.brightness"));
+            assertEquals(6500, setDoc.get("terminalStatusReport.brightnessandcolortemp.colortemperature"));
+            assertEquals(111L, setDoc.get("terminalStatusReport.brightnessandcolortemp._report_time"));
+            assertEquals("127.0.0.1", setDoc.get("terminalStatusReport.clientIp"));
+            assertNotNull(setDoc.get("updateTime"));
+            assertEquals(deviceId, setOnInsertDoc.get("deviceId"));
+
+            assertFalse(setDoc.containsKey("terminalStatusReport.powerstatus"));
+            then(mongoTemplate).should(never()).save(any());
         }
 
         @Test
-        @DisplayName("应该成功更新现有的终端状态报告")
-        void should_update_existing_terminal_status_report_successfully() {
+        @DisplayName("当原始JSON缺失时应回退到兼容保存逻辑")
+        void should_fallback_to_legacy_save_when_raw_json_missing() {
             // Given
             TerminalStatusReport existingReport = new TerminalStatusReport();
             // 设置现有报告的一些属性
@@ -122,7 +143,7 @@ class MongoTerminalStatusReportRepositoryTest {
                     .willReturn(existingDocument);
 
             // When
-            repository.saveTerminalStatusReport(deviceId, report);
+            repository.saveTerminalStatusReport(deviceId, report, null);
 
             // Then
             then(mongoTemplate).should().findOne(any(Query.class), eq(TerminalStatusReportDocument.class));
@@ -147,7 +168,7 @@ class MongoTerminalStatusReportRepositoryTest {
                     .willReturn(null);
 
             // When
-            repository.saveTerminalStatusReport(deviceId, null);
+            repository.saveTerminalStatusReport(deviceId, null, null);
 
             // Then
             then(mongoTemplate).should().findOne(any(Query.class), eq(TerminalStatusReportDocument.class));
@@ -241,7 +262,7 @@ class MongoTerminalStatusReportRepositoryTest {
 
             // When & Then
             assertDoesNotThrow(() -> {
-                repository.saveTerminalStatusReport(negativeDeviceId, report);
+                repository.saveTerminalStatusReport(negativeDeviceId, report, null);
                 repository.getReportData(negativeDeviceId);
             });
         }

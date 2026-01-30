@@ -8,13 +8,17 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.Module;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * 全局通用的 Jackson JSON 处理器工具类。
@@ -287,6 +291,42 @@ public class JsonUtils {
     // ========================================
     // JSON 路径访问 API (新增功能)
     // ========================================
+
+    /**
+     * 根据路径从JsonNode中获取子节点。
+     * 支持点号与数组索引访问（格式与字符串版本一致）。
+     *
+     * @param rootNode 根节点
+     * @param path 路径表达式
+     * @return 目标节点，不存在时返回MissingNode
+     */
+    public static JsonNode getNodeByPath(JsonNode rootNode, String path) {
+        if (rootNode == null || rootNode.isMissingNode()) {
+            return MissingNode.getInstance();
+        }
+        if (StringUtils.isBlank(path)) {
+            return MissingNode.getInstance();
+        }
+        if (".".equals(path) || "root".equals(path)) {
+            return rootNode;
+        }
+        JsonNode node = navigateNode(rootNode, path);
+        return node == null ? MissingNode.getInstance() : node;
+    }
+
+    /**
+     * 收集JsonNode中出现的字段路径。
+     * 规则与Mongo增量更新一致：对象节点记录为objectPaths，数组视为叶子节点。
+     *
+     * @param rootNode 根节点
+     * @return 路径集合摘要
+     */
+    public static JsonPathSummary collectPaths(JsonNode rootNode) {
+        Set<String> leafPaths = new LinkedHashSet<>();
+        Set<String> objectPaths = new LinkedHashSet<>();
+        collectPathsInternal(rootNode, "", leafPaths, objectPaths);
+        return new JsonPathSummary(leafPaths, objectPaths);
+    }
 
     /**
      * 根据路径从JSON字符串中提取字符串值。
@@ -655,6 +695,58 @@ public class JsonUtils {
             return nextNode;
         } else {
             return navigateNode(nextNode, restPath);
+        }
+    }
+
+    private static void collectPathsInternal(JsonNode node,
+                                             String prefix,
+                                             Set<String> leafPaths,
+                                             Set<String> objectPaths) {
+        if (node == null || node.isNull()) {
+            if (!prefix.isEmpty()) {
+                leafPaths.add(prefix);
+            }
+            return;
+        }
+        if (node.isObject()) {
+            if (!prefix.isEmpty()) {
+                objectPaths.add(prefix);
+            }
+            node.fields().forEachRemaining(entry -> {
+                String nextPrefix = prefix.isEmpty() ? entry.getKey() : prefix + "." + entry.getKey();
+                collectPathsInternal(entry.getValue(), nextPrefix, leafPaths, objectPaths);
+            });
+            return;
+        }
+        if (node.isArray()) {
+            if (!prefix.isEmpty()) {
+                leafPaths.add(prefix);
+            }
+            return;
+        }
+        if (!prefix.isEmpty()) {
+            leafPaths.add(prefix);
+        }
+    }
+
+    /**
+     * Json路径收集结果
+     */
+    public static class JsonPathSummary {
+        private final Set<String> leafPaths;
+        private final Set<String> objectPaths;
+
+        private JsonPathSummary(Set<String> leafPaths, Set<String> objectPaths) {
+            this.leafPaths = Collections.unmodifiableSet(new LinkedHashSet<>(leafPaths));
+            this.objectPaths = Collections.unmodifiableSet(new LinkedHashSet<>(objectPaths));
+        }
+
+        public Set<String> getLeafPaths() {
+            return leafPaths;
+        }
+
+        public Set<String> getObjectPaths() {
+            return objectPaths;
         }
     }
 
