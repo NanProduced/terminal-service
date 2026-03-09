@@ -163,7 +163,7 @@ public class TerminalStatusReport {
     /**
      * 节目分辨率自适应
      */
-    private Integer programautoscale;
+    private ProgramAutoScale programautoscale;
 
     /**
      * 4G网络信息
@@ -1309,6 +1309,21 @@ public class TerminalStatusReport {
              */
             private String whitebalance;
         }
+    }
+
+    /**
+     * 节目自动缩放配置
+     */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ProgramAutoScale {
+        /**
+         * 自动缩放开关
+         */
+        private Integer programautoscale;
     }
 
     /**
