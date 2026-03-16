@@ -1,5 +1,7 @@
 package com.colorlight.terminal.infrastructure.rpc.service;
 
+import com.colorlight.ccloud.common.utils.JsonUtils;
+import com.colorlight.terminal.application.domain.command.TerminalCommand;
 import com.colorlight.terminal.application.dto.request.SendCommandRequest;
 import com.colorlight.terminal.application.dto.result.CommandSendResult;
 import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
@@ -14,6 +16,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -61,6 +64,24 @@ public class TerminalCommandRpcServiceImpl implements TerminalCommandRpcService 
             
             return RpcResult.success(rpcResult);
             
+        } catch (IllegalArgumentException e) {
+            log.warn("RPC - 指令下发参数错误: {}", e.getMessage());
+            return RpcResult.error(CommonErrorCode.INVALID_PARAMETER.getCode(), CommonErrorCode.INVALID_PARAMETER.getMessage());
+        } catch (Exception e) {
+            log.error("RPC - 指令下发异常", e);
+            return RpcResult.error(CommonErrorCode.SYSTEM_ERROR.getCode(), CommonErrorCode.SYSTEM_ERROR.getMessage());
+        }
+    }
+
+    @Override
+    public RpcResult<String> getCommands(Long deviceId) {
+
+        try {
+            final List<TerminalCommand> pendingCommands = terminalCommandUseCase.getPendingCommands(deviceId);
+            final String json = JsonUtils.toJson(pendingCommands);
+            log.info("RPC - 指令获取成功, deviceId:{}, commands:{}", deviceId, json);
+            return RpcResult.success(json);
+
         } catch (IllegalArgumentException e) {
             log.warn("RPC - 指令下发参数错误: {}", e.getMessage());
             return RpcResult.error(CommonErrorCode.INVALID_PARAMETER.getCode(), CommonErrorCode.INVALID_PARAMETER.getMessage());

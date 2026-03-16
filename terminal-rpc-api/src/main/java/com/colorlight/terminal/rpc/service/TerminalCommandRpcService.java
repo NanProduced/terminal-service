@@ -19,4 +19,11 @@ public interface TerminalCommandRpcService {
      * @return
      */
     RpcResult<SingleCommandSendResultDTO> sendCommand(SingleCommandRequestDTO commandRequest);
+
+    /**
+     * 获取待执行指令
+     * @param deviceId
+     * @return
+     */
+    RpcResult<String> getCommands(Long deviceId);
 }
