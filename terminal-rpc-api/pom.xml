@@ -13,7 +13,7 @@
     <modelVersion>4.0.0</modelVersion>
     <artifactId>terminal-rpc-api</artifactId>
     <!-- RPC包独立版本号 -->
-    <version>1.0.3</version>
+    <version>1.0.6</version>
     <name>terminal-rpc-api</name>
     <packaging>jar</packaging>
 
