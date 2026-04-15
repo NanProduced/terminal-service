@@ -3,14 +3,13 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <parent>
-        <groupId>com.colorlight.ccloud</groupId>
-        <artifactId>colorlight-car</artifactId>
-        <version>interlayer-master-0.0.9</version>
-    </parent>
-    <packaging>jar</packaging>
+    <groupId>com.colorlight.ccloud</groupId>
     <artifactId>colorlight-common</artifactId>
-    <version>${this.version}</version>
+    <version>master-master-0.0.9</version>
+    <packaging>jar</packaging>
+    <name>colorlight-common</name>
+    <description>Colorlight Common Library</description>
+
     <properties>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
@@ -19,28 +18,27 @@
         <commons-pool2.version>2.11.1</commons-pool2.version>
         <redisson.version>3.17.6</redisson.version>
         <thumbnailator.version>0.4.19</thumbnailator.version>
-        <this.version>${common.version}</this.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-boot-starter</artifactId>
+            <version>3.5.3.1</version>
         </dependency>
 
-        <!--邮箱相关包-->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
+            <version>3.1.5</version>
         </dependency>
 
-        <!--        start redis -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
+            <version>3.1.5</version>
         </dependency>
 
-        <!--    redisson-->
         <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-boot-starter</artifactId>
@@ -50,6 +48,7 @@
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
+            <version>3.13.0</version>
         </dependency>
 
         <dependency>
@@ -67,6 +66,7 @@
         <dependency>
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
+            <version>8.5.7</version>
             <exclusions>
                 <exclusion>
                     <groupId>com.fasterxml.jackson.core</groupId>
@@ -82,14 +82,17 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+            <version>3.1.5</version>
         </dependency>
         <dependency>
             <groupId>com.aliyun.oss</groupId>
             <artifactId>aliyun-sdk-oss</artifactId>
+            <version>3.17.1</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+            <version>3.1.5</version>
         </dependency>
         <dependency>
             <groupId>commons-io</groupId>
