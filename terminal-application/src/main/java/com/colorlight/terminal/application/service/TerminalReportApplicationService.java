@@ -76,7 +76,7 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
             }
 
         } catch (Exception e) {
-            log.debug("ApplicationService - 保存led_status失败，可能是其他的上报: deviceId={}, report={}", deviceId, reportStr);
+            log.warn("ApplicationService - 保存led_status失败: deviceId={}, error={}", deviceId, e.getMessage(), e);
             // TODO: 实现其他的上报数据处理
         }
     }
