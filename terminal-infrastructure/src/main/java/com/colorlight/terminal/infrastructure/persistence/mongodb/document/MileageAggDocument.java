@@ -39,5 +39,9 @@ public class MileageAggDocument {
         private Double longitude;
 
         private LocalDateTime reportTime;
+
+        private Double speed;
+
+        private Double accuracy;
     }
 }

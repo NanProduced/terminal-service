@@ -92,6 +92,41 @@ public class TerminalStatsConfigProperties {
          */
         private int flushInterval = 5000;
 
+        /**
+         * 里程计算配置
+         */
+        private Mileage mileage = new Mileage();
+
+    }
+
+    @Data
+    public static class Mileage {
+
+        /**
+         * 最小有效距离阈值（公里）
+         * 两点间距离小于此值时视为GPS漂移，不计入里程
+         * 默认0.020km（20米），可过滤绝大多数GPS漂移（通常5~15米级别）
+         */
+        private double minDistanceThresholdKm = 0.020;
+
+        /**
+         * 静止速度阈值（米/秒）
+         * 速度低于此值时认为设备处于静止状态
+         * 默认0.1m/s（约0.36km/h），正常步行速度约1.2~1.5m/s
+         */
+        private double staticSpeedThreshold = 0.1;
+
+        /**
+         * 是否启用速度过滤
+         * 启用后，当连续两个GPS点的速度均低于静止阈值时，该段距离不计入里程
+         */
+        private boolean speedFilterEnabled = true;
+
+        /**
+         * 是否启用精度过滤
+         * 启用后，当两点间距离小于两者定位精度之和时，视为GPS噪声，不计入里程
+         */
+        private boolean accuracyFilterEnabled = false;
 
     }
 }
