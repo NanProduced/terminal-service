@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>colorlight-car</artifactId>
+        <groupId>com.colorlight.ccloud</groupId>
+        <version>interlayer-master-0.0.9</version>
+    </parent>
+    <dependencies>
+        <dependency>
+            <groupId>com.colorlight.ccloud</groupId>
+            <artifactId>colorlight-common</artifactId>
+            <version>${this.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.colorlight.terminal</groupId>
+            <artifactId>terminal-rpc-api</artifactId>
+        </dependency>
+    </dependencies>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>colorlight-car-rpc-interface</artifactId>
+    <packaging>jar</packaging>
+    <version>${this.version}</version>
+
+    <description>RPC接口</description>
+    <properties>
+        <this.version>${common.version}</this.version>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+</project>

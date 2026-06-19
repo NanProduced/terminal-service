@@ -1,79 +1,54 @@
 package com.colorlight.terminal.infrastructure.websocket.processor.v11;
 
-import com.colorlight.ccloud.program.vo.RpcTerminalProgramVO;
-import com.colorlight.terminal.application.domain.command.TerminalCommand;
 import com.colorlight.terminal.application.domain.connection.MessageProcessingContext;
-import com.colorlight.terminal.application.domain.report.TerminalLog;
-import com.colorlight.terminal.application.domain.sensor.SensorReport;
-import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketErrorEnum;
 import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketMessage;
 import com.colorlight.terminal.application.dto.websocket.v11.V11WebsocketMessageTypeEnum;
-import com.colorlight.terminal.application.port.inbound.command.TerminalCommandUseCase;
-import com.colorlight.terminal.application.port.inbound.program.TerminalProgramUseCase;
-import com.colorlight.terminal.application.port.inbound.status.TerminalReportUseCase;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
 import com.colorlight.terminal.commons.exception.business.BusinessException;
-import com.colorlight.terminal.commons.utils.JsonUtils;
-import com.colorlight.terminal.infrastructure.websocket.processor.v11.converter.V11WebsocketDtoConverter;
-import com.colorlight.terminal.infrastructure.websocket.processor.v11.dto.CommandResponse;
-import com.colorlight.terminal.infrastructure.websocket.processor.v11.dto.TerminalLogDTO;
-import com.colorlight.terminal.infrastructure.websocket.connection.TerminalWebsocketSession;
-import com.colorlight.terminal.infrastructure.websocket.utils.WsIpUtils;
-import io.netty.channel.Channel;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.V11MessageHandler;
+import com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.V11MessageHandlerFactory;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 
 /**
  * v11协议 - 操作分发路由
+ * <p>
+ * 重构说明：
+ * - 原实现使用 switch-case 进行消息路由，违反开闭原则
+ * - 重构后采用策略模式 + 工厂模式，将每种消息类型的处理逻辑拆分到独立的处理器类中
+ * - 本类现在作为门面（Facade），负责路由消息到对应的处理器
+ * </p>
  *
  * @author Nan
+ * @author Codex (重构)
  */
 @Slf4j
 @Component
 public class V11OperationHandleRouter {
 
-    private final TerminalCommandUseCase terminalCommandUseCase;
-    private final TerminalReportUseCase terminalReportUseCase;
-    private final TerminalProgramUseCase terminalProgramUseCase;
-    private final V11WebsocketDtoConverter dtoConverter;
+    private final V11MessageHandlerFactory handlerFactory;
 
     /**
-     * WebSocket业务处理专用线程池
-     * 用于异步处理耗时的业务操作（Redis查询、数据库操作等），避免阻塞EventLoop
+     * 构造函数，注入消息处理器工厂
+     *
+     * @param handlerFactory 消息处理器工厂
      */
-    private final Executor websocketBusinessExecutor;
-
-    /**
-     * 构造函数，注入WebSocket业务处理专用线程池
-     */
-    public V11OperationHandleRouter(
-            TerminalCommandUseCase terminalCommandUseCase,
-            TerminalReportUseCase terminalReportUseCase,
-            TerminalProgramUseCase terminalProgramUseCase,
-            V11WebsocketDtoConverter dtoConverter,
-            @Qualifier("websocketBusinessExecutor") Executor websocketBusinessExecutor) {
-        this.terminalCommandUseCase = terminalCommandUseCase;
-        this.terminalReportUseCase = terminalReportUseCase;
-        this.terminalProgramUseCase = terminalProgramUseCase;
-        this.dtoConverter = dtoConverter;
-        this.websocketBusinessExecutor = websocketBusinessExecutor;
+    public V11OperationHandleRouter(V11MessageHandlerFactory handlerFactory) {
+        this.handlerFactory = handlerFactory;
     }
 
     /**
-     * 空JSON结构体
+     * 根据消息类型路由处理
+     * <p>
+     * 重构说明：
+     * - 原实现使用 switch-case 硬编码路由逻辑
+     * - 重构后通过工厂获取对应的处理器，实现开闭原则
+     * - 新增消息类型只需添加新的处理器实现类，无需修改本类
+     * </p>
+     *
+     * @param context 消息处理上下文
+     * @param message WebSocket消息
      */
-    private static final String EMPTY_JSON = "{}";
-
     public void handleMessageByType(MessageProcessingContext context, V11WebsocketMessage message) {
 
         V11WebsocketMessageTypeEnum messageType = V11WebsocketMessageTypeEnum.fromId(message.getType());
@@ -81,433 +56,120 @@ public class V11OperationHandleRouter {
             throw new BusinessException(CommonErrorCode.WS_INVALID_MESSAGE_TYPE);
         }
 
-        switch (messageType) {
-
-            // 已弃用
-            case HEARTBEAT -> context.sendMessage("");
-
-            // 指令获取
-            case COMMAND -> handleGetCommand(context, message.getMessageId());
-
-            // 排程获取
-            case SCHEDULE -> handleGetSchedule(context, message.getMessageId());
-
-            // 节目获取
-            case PROGRAMS -> handleGetProgram(context, message.getMessageId());
-
-            // 指令确认
-            case CONFIRM_COMMAND -> handleConfirmCommand(context, message);
-
-            // led_status上报
-            case STATUS_REPORT -> handleLedStatusReport(context, message);
-
-            // 下载进度上报
-            case DOWNLOAD_STATUS -> handleDownloadingReport(context, message);
-
-            // 素材播放记录上报
-            case MEDIA_RECORD -> handleMediaPlayRecordReport(context, message);
-
-            // 传感器数据上报
-            case MONITOR_REPORT -> handleSensorDataReport(context, message);
-
-            // 终端日志上报
-            case LOG_REPORT -> handleTerminalLogReport(context, message);
-
-            // 节目播放记录上报
-            case PROGRAM_RECORD -> handleProgramPlayRecordReport(context, message);
-
-            default -> throw new BusinessException(CommonErrorCode.WS_INVALID_MESSAGE_TYPE);
-
-        }
+        V11MessageHandler handler = handlerFactory.getHandler(messageType);
+        handler.handle(context, message);
     }
-
-    /* =================== 指令类型对应的处理方法 =================== */
 
     /**
      * 主动推送指令给设备（连接建立时调用）
-     * 异步化处理：避免Redis查询阻塞EventLoop线程
+     * <p>
+     * 重构说明：
+     * - 原实现包含完整的异步处理逻辑
+     * - 重构后委托给 CommandGetHandler 处理
+     * - 保持方法签名不变，确保向后兼容性
+     * </p>
      *
-     * <p>与handleGetCommand的区别：</p>
-     * <ul>
-     *   <li>handleGetCommand：响应设备的主动请求，receiptId = messageId</li>
-     *   <li>pushCommandsOnConnection：服务器主动推送，receiptId = null</li>
-     * </ul>
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
+     * @param context 消息处理上下文
      */
     public void pushCommandsOnConnection(MessageProcessingContext context) {
-        Long deviceId = context.getDeviceId();
-
-        // 异步执行Redis查询操作，避免阻塞EventLoop线程
-        // getPendingCommands可能涉及多次Redis操作：List查询 + 批量Get操作
-        CompletableFuture
-                .supplyAsync(() -> {
-                    try {
-                        // 执行可能耗时的Redis查询操作
-                        List<TerminalCommand> pendingCommands = terminalCommandUseCase.getPendingCommands(deviceId);
-                        return dtoConverter.convertToCommandResponses(pendingCommands);
-                    } catch (Exception e) {
-                        log.error("V11Router -ws- #PUSH_COMMAND#【连接建立推送指令异常】deviceId:{}", deviceId, e);
-                        throw e; // 重新抛出异常，由whenComplete处理
-                    }
-                }, websocketBusinessExecutor)
-                .whenComplete((commandResponses, throwable) -> {
-                    // 回调必须在EventLoop线程中执行，确保sendMessage的线程安全
-                    TerminalWebsocketSession session = (TerminalWebsocketSession) context.getConnection().getSession();
-                    Channel channel = session.getNettyChannel();
-                    channel.eventLoop().execute(() -> {
-                        try {
-                            if (throwable == null) {
-                                // 成功获取指令，发送响应
-                                // receiptId为null，表示服务器主动推送（区别于设备请求的响应）
-                                context.sendMessage(new V11WebsocketMessage(
-                                        V11WebsocketMessageTypeEnum.COMMAND.getId(), null, commandResponses));
-                                log.info("V11Router -ws- #PUSH_COMMAND#【连接建立推送指令成功】deviceId:{}, commandIds:{}",
-                                        deviceId, commandResponses.stream().map(CommandResponse::getId).toList());
-                            } else {
-                                // 处理异常，记录错误但不发送错误响应（避免干扰正常流程）
-                                log.error("V11Router -ws- #PUSH_COMMAND#【连接建立推送指令失败】deviceId:{}", deviceId, throwable);
-                            }
-                        } catch (Exception e) {
-                            log.error("V11Router -ws- #PUSH_COMMAND#【发送推送消息异常】deviceId:{}", deviceId, e);
-                        }
-                    });
-                });
+        handlerFactory.getCommandGetHandler().pushCommandsOnConnection(context);
     }
 
+    /* =================== 以下方法已迁移到独立处理器类，保留注释供参考 =================== */
+
     /**
-     * 处理获取指令的命令。
-     * 异步化处理：避免Redis查询阻塞EventLoop线程
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
-     * @param messageId 消息ID，用于响应时关联请求
+     * 处理获取指令的命令 - 已迁移到 {@link com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.CommandGetHandler}
      */
+    @Deprecated
     private void handleGetCommand(MessageProcessingContext context, Integer messageId) {
-        Long deviceId = context.getDeviceId();
-
-        // 异步执行Redis查询操作，避免阻塞EventLoop线程
-        // getPendingCommands可能涉及多次Redis操作：List查询 + 批量Get操作
-        CompletableFuture
-                .supplyAsync(() -> {
-                    try {
-                        // 执行可能耗时的Redis查询操作
-                        List<TerminalCommand> pendingCommands = terminalCommandUseCase.getPendingCommands(deviceId);
-                        return dtoConverter.convertToCommandResponses(pendingCommands);
-                    } catch (Exception e) {
-                        log.error("V11Router -ws- #GET_COMMENT#【获取指令异常】deviceId:{}", deviceId, e);
-                        throw e; // 重新抛出异常，由whenComplete处理
-                    }
-                }, websocketBusinessExecutor)
-                .whenComplete((commandResponses, throwable) -> {
-                    // 回调必须在EventLoop线程中执行，确保sendMessage的线程安全
-                    TerminalWebsocketSession session = (TerminalWebsocketSession) context.getConnection().getSession();
-                    Channel channel = session.getNettyChannel();
-                    channel.eventLoop().execute(() -> {
-                        try {
-                            if (throwable == null) {
-                                // 成功获取指令，发送响应
-                                context.sendMessage(new V11WebsocketMessage(
-                                        V11WebsocketMessageTypeEnum.COMMAND.getId(), messageId, commandResponses));
-                                log.info("V11Router -ws- #GET_COMMENT#【获取指令成功】deviceId:{}, commandIds:{}",
-                                        deviceId, commandResponses.stream().map(CommandResponse::getId).toList());
-                            } else {
-                                // 处理异常，发送错误响应
-                                log.error("V11Router -ws- #GET_COMMENT#【获取指令失败】deviceId:{}", deviceId, throwable);
-                                context.sendMessage(V11WebsocketMessage.generateErrorContent(
-                                        V11WebsocketErrorEnum.SERVER_ERROR, messageId, "获取指令失败"));
-                            }
-                        } catch (Exception e) {
-                            log.error("V11Router -ws- #GET_COMMENT#【发送响应异常】deviceId:{}", deviceId, e);
-                        }
-                    });
-                });
+        // 已迁移到 CommandGetHandler
     }
 
     /**
-     * 处理获取排程指令
-     * 异步化处理：避免RPC调用阻塞EventLoop线程
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
-     * @param messageId   消息ID，用于响应时关联请求
+     * 处理获取排程指令 - 已迁移到 {@link com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.ScheduleGetHandler}
      */
+    @Deprecated
     private void handleGetSchedule(MessageProcessingContext context, Integer messageId) {
-        Long deviceId = context.getDeviceId();
-        CompletableFuture
-                .supplyAsync(() -> {
-                    try {
-                        String schedule = terminalProgramUseCase.getSchedule(deviceId);
-                        return StringUtils.isBlank(schedule)
-                                ? JsonUtils.fromJson(EMPTY_JSON)
-                                : JsonUtils.fromJson(schedule);
-                    } catch (Exception e) {
-                        log.error("V11Router -ws- #GET_SCHEDULE#【获取排程异常】deviceId:{}", deviceId, e);
-                        throw e;
-                    }
-                }, websocketBusinessExecutor)
-                .whenComplete((schedulePayload, throwable) -> {
-                    TerminalWebsocketSession session = (TerminalWebsocketSession) context.getConnection().getSession();
-                    Channel channel = session.getNettyChannel();
-                    channel.eventLoop().execute(() -> {
-                        try {
-                            if (throwable == null) {
-                                context.sendMessage(new V11WebsocketMessage(
-                                        V11WebsocketMessageTypeEnum.SCHEDULE.getId(), messageId, schedulePayload));
-                                log.info("V11Router -ws- #GET_SCHEDULE#【获取排程成功】deviceId:{}", deviceId);
-                            } else {
-                                log.error("V11Router -ws- #GET_SCHEDULE#【获取排程失败】deviceId:{}", deviceId, throwable);
-                                context.sendMessage(V11WebsocketMessage.generateErrorContent(
-                                        V11WebsocketErrorEnum.SERVER_ERROR, messageId, "获取排程失败"));
-                            }
-                        } catch (Exception e) {
-                            log.error("V11Router -ws- #GET_SCHEDULE#【发送排程响应异常】deviceId:{}", deviceId, e);
-                        }
-                    });
-                });
+        // 已迁移到 ScheduleGetHandler
     }
 
     /**
-     * 处理获取节目指令
-     * 异步化处理：避免RPC调用阻塞EventLoop线程
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
-     * @param messageId   消息ID，用于响应时关联请求
+     * 处理获取节目指令 - 已迁移到 {@link com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.ProgramGetHandler}
      */
+    @Deprecated
     private void handleGetProgram(MessageProcessingContext context, Integer messageId) {
-        Long deviceId = context.getDeviceId();
-        CompletableFuture
-                .supplyAsync(() -> {
-                    try {
-                        String programStr = terminalProgramUseCase.getProgram(deviceId);
-                        if (StringUtils.isBlank(programStr)) {
-                            return List.<RpcTerminalProgramVO>of();
-                        }
-                        List<RpcTerminalProgramVO> programs = JsonUtils.fromJson(
-                                programStr, new TypeReference<List<RpcTerminalProgramVO>>() {});
-                        return programs == null ? List.of() : programs;
-                    } catch (Exception e) {
-                        log.error("V11Router -ws- #GET_PROGRAMS#【获取节目异常】deviceId:{}", deviceId, e);
-                        throw e;
-                    }
-                }, websocketBusinessExecutor)
-                .whenComplete((programs, throwable) -> {
-                    TerminalWebsocketSession session = (TerminalWebsocketSession) context.getConnection().getSession();
-                    Channel channel = session.getNettyChannel();
-                    channel.eventLoop().execute(() -> {
-                        try {
-                            if (throwable == null) {
-                                context.sendMessage(new V11WebsocketMessage(
-                                        V11WebsocketMessageTypeEnum.PROGRAMS.getId(), messageId, programs));
-                                log.info("V11Router -ws- #GET_PROGRAMS#【获取节目成功】deviceId:{}", deviceId);
-                            } else {
-                                log.error("V11Router -ws- #GET_PROGRAMS#【获取节目失败】deviceId:{}", deviceId, throwable);
-                                context.sendMessage(V11WebsocketMessage.generateErrorContent(
-                                        V11WebsocketErrorEnum.SERVER_ERROR, messageId, "获取节目失败"));
-                            }
-                        } catch (Exception e) {
-                            log.error("V11Router -ws- #GET_PROGRAMS#【发送节目响应异常】deviceId:{}", deviceId, e);
-                        }
-                    });
-                });
+        // 已迁移到 ProgramGetHandler
     }
 
     /**
-     * 处理指令确认消息
-     * 异步化处理：避免Redis删除操作和事件发布阻塞EventLoop线程
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
-     * @param message 接收到的WebSocket消息对象
+     * 处理指令确认消息 - 已迁移到 {@link com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.CommandConfirmHandler}
      */
+    @Deprecated
     private void handleConfirmCommand(MessageProcessingContext context, V11WebsocketMessage message) {
-        // 快速参数验证，在EventLoop线程中完成
-        if (Objects.isNull(message.getData())) {
-            throw new BusinessException(CommonErrorCode.WS_INVALID_MESSAGE_DATA);
-        }
-
-        String dataStr = JsonUtils.toJson(message.getData());
-        int commandId = JsonUtils.getIntValue(dataStr, "parent", 0);
-        String content = JsonUtils.getStringValue(dataStr, "content", "");
-
-        if (commandId <= 0) {
-            throw new BusinessException(CommonErrorCode.WS_INVALID_MESSAGE_DATA);
-        }
-
-        Long deviceId = context.getDeviceId();
-        Integer messageId = message.getMessageId();
-
-        // 异步执行指令确认操作，避免阻塞EventLoop线程
-        // confirmCommandExecution涉及：Redis删除操作 + 事件发布
-        CompletableFuture
-                .runAsync(() -> {
-                    try {
-                        // 执行可能耗时的Redis删除和事件发布操作
-                        terminalCommandUseCase.confirmCommandExecution(deviceId, commandId, content);
-                        log.info("V11Router -ws- #CONFIRM_COMMENT#【确认指令业务处理成功】deviceId:{}, commandId:{}",
-                                deviceId, commandId);
-                    } catch (Exception e) {
-                        log.error("V11Router -ws- #CONFIRM_COMMENT#【确认指令业务处理失败】deviceId:{}, commandId:{}",
-                                deviceId, commandId, e);
-                        throw e; // 重新抛出异常，由whenComplete处理
-                    }
-                }, websocketBusinessExecutor)
-                .whenComplete((result, throwable) -> {
-                    // 回调必须在EventLoop线程中执行，确保sendMessage的线程安全
-                    TerminalWebsocketSession session = (TerminalWebsocketSession) context.getConnection().getSession();
-                    Channel channel = session.getNettyChannel();
-                    channel.eventLoop().execute(() -> {
-                        try {
-                            if (throwable == null) {
-                                // 确认成功，发送成功响应
-                                context.sendMessage(new V11WebsocketMessage(
-                                        V11WebsocketMessageTypeEnum.CONFIRM_COMMAND.getId(), messageId));
-                                log.info("V11Router -ws- #CONFIRM_COMMENT#【确认指令成功】deviceId:{}, commandId:{}",
-                                        deviceId, commandId);
-                            } else {
-                                // 确认失败，发送错误响应
-                                log.error("V11Router -ws- #CONFIRM_COMMENT#【确认指令失败】deviceId:{}, commandId:{}",
-                                        deviceId, commandId, throwable);
-                                context.sendMessage(V11WebsocketMessage.generateErrorContent(
-                                        V11WebsocketErrorEnum.INVALID_COMMENT_ID, messageId,
-                                        "confirm command failed: " + commandId));
-                            }
-                        } catch (Exception e) {
-                            log.error("V11Router -ws- #CONFIRM_COMMENT#【发送确认响应异常】deviceId:{}, commandId:{}",
-                                    deviceId, commandId, e);
-                        }
-                    });
-                });
+        // 已迁移到 CommandConfirmHandler
     }
 
     /**
-     * 处理led_status上报的命令。
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
-     * @param message 接收到的WebSocket消息对象
+     * 处理led_status上报的命令 - 已迁移到 {@link com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.LedStatusReportHandler}
      */
+    @Deprecated
     private void handleLedStatusReport(MessageProcessingContext context, V11WebsocketMessage message) {
-        String dataStr = Objects.isNull(message.getData()) ? EMPTY_JSON : JsonUtils.toJson(message.getData());
-        String clientIp = context.getConnection().getClientIp();
-        terminalReportUseCase.asyncSaveStatusReport(context.getDeviceId(), dataStr, clientIp);
-        log.info("V11Router -ws- #STATUS_REPORT#【上报终端状态】deviceId:{}", context.getDeviceId());
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.STATUS_REPORT.getId(), message.getMessageId()));
+        // 已迁移到 LedStatusReportHandler
     }
 
     /**
-     * 处理上报下载状态的命令。
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
-     * @param message 接收到的WebSocket消息对象
+     * 处理上报下载状态的命令 - 已迁移到 {@link com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.DownloadStatusReportHandler}
      */
+    @Deprecated
     private void handleDownloadingReport(MessageProcessingContext context, V11WebsocketMessage message) {
-        String dataStr = Objects.isNull(message.getData()) ? EMPTY_JSON : JsonUtils.toJson(message.getData());
-        terminalReportUseCase.asyncSaveDownloadingReport(context.getDeviceId(), dataStr);
-
-        log.info("V11Router -ws- #DOWNLOADING_REPORT#【上报下载状态】 deviceId:{}", context.getDeviceId());
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.DOWNLOAD_STATUS.getId(), message.getMessageId()));
+        // 已迁移到 DownloadStatusReportHandler
     }
 
     /**
-     * 处理素材播放记录报告的命令。
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
-     * @param message 接收到的WebSocket消息对象
+     * 处理素材播放记录报告的命令 - 已迁移到 {@link com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.MediaPlayRecordReportHandler}
      */
+    @Deprecated
     private void handleMediaPlayRecordReport(MessageProcessingContext context, V11WebsocketMessage message) {
-        String dataStr = Objects.isNull(message.getData()) ? EMPTY_JSON : JsonUtils.toJson(message.getData());
-        terminalReportUseCase.asyncHandleMediaPlayRecordReport(context.getDeviceId(), dataStr);
-        log.info("V11Router -ws- #MEDIA_PLAY_RECORD_REPORT#【上报素材播放记录】 deviceId:{}", context.getDeviceId());
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.MEDIA_RECORD.getId(), message.getMessageId()));
+        // 已迁移到 MediaPlayRecordReportHandler
     }
 
     /**
-     * 处理节目播放记录报告的命令。
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
-     * @param message 接收到的WebSocket消息对象
+     * 处理节目播放记录报告的命令 - 已迁移到 {@link com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.ProgramPlayRecordReportHandler}
      */
+    @Deprecated
     private void handleProgramPlayRecordReport(MessageProcessingContext context, V11WebsocketMessage message) {
-        String dataStr = Objects.isNull(message.getData()) ? EMPTY_JSON : JsonUtils.toJson(message.getData());
-        terminalReportUseCase.asyncHandleProgramPlayRecordReport(context.getDeviceId(), dataStr);
-        log.info("V11Router -ws- #PROGRAM_PLAY_RECORD_REPORT#【上报节目播放记录】 deviceId:{}", context.getDeviceId());
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.PROGRAM_RECORD.getId(), message.getMessageId()));
+        // 已迁移到 ProgramPlayRecordReportHandler
     }
 
     /**
-     * 处理传感器数据报告的命令。
-     * V11协议：data字段为List<SensorReport>格式
-     *
-     * <p>注意：由于V11WebsocketMessage.data是Object类型，JSON反序列化后会产生ArrayList<LinkedHashMap>
-     * 而不是ArrayList<SensorReport>，因此需要使用JsonUtils.convertValue()进行类型转换</p>
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
-     * @param message 接收到的WebSocket消息对象
+     * 处理传感器数据报告的命令 - 已迁移到 {@link com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.SensorDataReportHandler}
      */
+    @Deprecated
     private void handleSensorDataReport(MessageProcessingContext context, V11WebsocketMessage message) {
-        LocalDateTime now = LocalDateTime.now();
-
-        // 由JSON反序列化得到的data是ArrayList<LinkedHashMap>，需要转换为List<SensorReport>
-        List<SensorReport> reports;
-        if (Objects.isNull(message.getData())) {
-            reports = List.of();
-        } else {
-            try {
-                reports = JsonUtils.convertValue(message.getData(), new TypeReference<List<SensorReport>>() {});
-                if (reports == null) {
-                    reports = List.of();
-                }
-            } catch (Exception e) {
-                log.error("V11Router -ws- #MONITOR_REPORT#【传感器数据转换失败】deviceId:{}, data:{}",
-                        context.getDeviceId(), message.getData(), e);
-                reports = List.of();
-            }
-        }
-
-        terminalReportUseCase.asyncHandleSensorReport(context.getDeviceId(), now, reports);
-        log.info("V11Router -ws- #MONITOR_REPORT#【上报监控数据】 deviceId:{}", context.getDeviceId());
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.MONITOR_REPORT.getId(), message.getMessageId()));
+        // 已迁移到 SensorDataReportHandler
     }
 
-
     /**
-     * 处理终端日志报告的命令。
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
-     * @param message 接收到的WebSocket消息对象
+     * 处理终端日志报告的命令 - 已迁移到 {@link com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.TerminalLogReportHandler}
      */
+    @Deprecated
     private void handleTerminalLogReport(MessageProcessingContext context, V11WebsocketMessage message) {
-        if (Objects.isNull(message.getData())) throw new BusinessException(CommonErrorCode.WS_INVALID_MESSAGE_DATA);
-        List<TerminalLogDTO> terminalLogDTOS = JsonUtils.fromJson(message.getData().toString(), new TypeReference<List<TerminalLogDTO>>() {});
-        List<TerminalLog> terminalLogs = dtoConverter.convertToTerminalLogs(terminalLogDTOS);
-        terminalReportUseCase.asyncSaveTerminalLog(context.getDeviceId(), terminalLogs);
-        log.info("V11Router -ws- #LOG_REPORT#【上报终端日志】 deviceId:{}", context.getDeviceId());
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.LOG_REPORT.getId(), message.getMessageId()));
+        // 已迁移到 TerminalLogReportHandler
     }
 
     /**
-     * 处理数据使用警告消息。
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
-     * @param message 接收到的WebSocket消息对象
+     * 处理数据使用警告消息 - 已迁移到 {@link com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.DataUsageAlertHandler}
      */
+    @Deprecated
     private void handleDataUsageAlert(MessageProcessingContext context, V11WebsocketMessage message) {
-        // todo: 待实现业务逻辑
-        log.info("V11Router -ws- #DATA_USAGE_ALERT#【流量报警】 deviceId:{}", context.getDeviceId());
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.DATA_USAGE_ALERT.getId(), message.getMessageId()));
+        // 已迁移到 DataUsageAlertHandler
     }
 
     /**
-     * 处理围栏状态报告的命令。
-     *
-     * @param context 消息处理上下文，包含设备ID等信息
-     * @param message 接收到的WebSocket消息对象
+     * 处理围栏状态报告的命令 - 已迁移到 {@link com.colorlight.terminal.infrastructure.websocket.processor.v11.handler.FenceStatusReportHandler}
      */
+    @Deprecated
     private void handleFenceStatusReport(MessageProcessingContext context, V11WebsocketMessage message) {
-        // todo: 待实现业务逻辑
-        log.info("V11Router -ws- #FENCE_STATUS#【围栏状态】 deviceId:{}", context.getDeviceId());
-        context.sendMessage(new V11WebsocketMessage(V11WebsocketMessageTypeEnum.FENCE_STATUS_REPORT.getId(), message.getMessageId()));
+        // 已迁移到 FenceStatusReportHandler
     }
-
 }
-
-
-
-
