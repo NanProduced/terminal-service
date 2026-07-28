@@ -28,12 +28,11 @@ public class DeviceSwitchOnRecordService implements DeviceSwitchRecordPort {
     private final RedisTemplate<String, String> stringRedisTemplate;
 
 
-    // 与最近一次开机时间相差两分钟内不记录
-    // 不清楚原因，和原逻辑保持一致
-    private static final long scopeOfDuplicateRecord = 60L * 2;
+    // 与最近一次开机时间相差20秒内不记录
+    private static final long scopeOfDuplicateRecord = 20L;
 
     /**
-     * 通过盒子上报的初始化状态计算盒子的开机时间戳，并保存到数据库，与最近一条开机时间记录相差两分钟内不保存
+     * 通过盒子上报的初始化状态计算盒子的开机时间戳，并保存到数据库，与最近一条开机时间记录相差20秒内不保存
      * <P>与原逻辑保持一致/仅取消Mysql分表</P>
      *
      * @param deviceId 设备Id
