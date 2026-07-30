@@ -536,6 +536,11 @@ public class TerminalStatusReport {
         private int musicvolume;
 
         /**
+         * 最大音量（0-100）
+         */
+        private int maxVolume;
+
+        /**
          * 上报时间戳
          */
         @JsonProperty("_report_time")
