@@ -1184,6 +1184,21 @@ public class TerminalStatusReport {
          * 多功能卡传感器源（0-禁用，1-启用）
          */
         private int sensorSourceMultifunctionCard;
+
+        /**
+         * M2传感器源（0-禁用，1-启用）
+         */
+        private int sensorSourceM2;
+
+        /**
+         * 光探头传感器源（0-禁用，1-启用）
+         */
+        private int sensorSourceLight;
+
+        /**
+         * ColorLight转换器传感器源（0-禁用，1-启用）
+         */
+        private int sensorSourceColorLightConverter;
     }
 
     /**
