@@ -80,6 +80,12 @@ public class DeviceMediaPlayRecordService implements DeviceMediaPlayRecordPort {
             return;
         }
         Duration deviation = deviceTimeZone.getDeviation();
+        // 兜底上限保护:deviation绝对值超过阈值视为脏缓存,跳过校准避免批量污染记录
+        long deviationMaxSeconds = statsConfigProperties.getTimeCalibration().getDeviationMaxSeconds();
+        if (deviation.abs().toSeconds() > deviationMaxSeconds) {
+            log.warn("MediaStats - 设备 {} deviation={} 超过合理上限 {}s, 疑似脏缓存, 跳过校准", deviceId, deviation, deviationMaxSeconds);
+            return;
+        }
         log.debug("MediaStats - 设备 {} 存在时间偏差: {}, 开始校准", deviceId, deviation);
         reports.forEach(e -> e.setAdjustStartTime(e.getStartUtcTime().plus(deviation)));
 

@@ -16,6 +16,7 @@ import com.colorlight.terminal.application.port.outbound.statistics.DeviceMediaP
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceProgramPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceDownloadingPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceSwitchRecordPort;
+import com.colorlight.terminal.application.port.outbound.status.DeviceTimeZonePort;
 import com.colorlight.terminal.application.port.outbound.storage.LogFileStoragePort;
 import com.colorlight.terminal.application.port.outbound.storage.ScreenshotStoragePort;
 import com.colorlight.terminal.commons.exception.CommonErrorCode;
@@ -49,6 +50,7 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
     private final DownloadingRepository downloadingRepository;
     private final MainServerRpcPort mainServerRpcPort;
     private final LogFileStoragePort logFileStoragePort;
+    private final DeviceTimeZonePort deviceTimeZonePort;
 
     /**
      * 保存LED状态报告。
@@ -96,6 +98,16 @@ public class TerminalReportApplicationService implements TerminalReportUseCase {
             log.info("ApplicationService - 异步保存终端led_status成功: deviceId={}", deviceId);
         } catch (Exception e) {
             throw new BusinessException(CommonErrorCode.OPERATION_FAILED, e);
+        }
+
+        // 设备时钟(newrtc)上报事件驱动刷新时区缓存
+        // newrtc 仅在设备时间变化时上报,频率远低于mediaPlayRecord,在此时刷新可保证deviation及时跟进设备时钟变化,且对服务器负载影响最小
+        if (Objects.nonNull(report.getNewrtc())) {
+            try {
+                deviceTimeZonePort.RefreshDeviceTimeZoneCache(deviceId);
+            } catch (Exception e) {
+                log.warn("ApplicationService - 刷新设备时区缓存失败,下次newrtc上报会重试: deviceId={}", deviceId, e);
+            }
         }
     }
 

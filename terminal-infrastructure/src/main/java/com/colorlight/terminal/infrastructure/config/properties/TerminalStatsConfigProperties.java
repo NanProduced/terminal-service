@@ -50,6 +50,13 @@ public class TerminalStatsConfigProperties {
          * 默认24小时
          */
         private long timeZoneCacheTtlHours = 24L;
+
+        /**
+         * 时间偏差合理上限(秒)
+         * 当deviation绝对值超过此值时，视为脏缓存（如设备开机未NTP同步的瞬态偏差或缓存未及时刷新的脏值），跳过校准避免批量污染记录
+         * 默认3600秒（1小时），可按需调整
+         */
+        private long deviationMaxSeconds = 3600L;
     }
     
     /**

@@ -22,6 +22,8 @@ CLAUDE.md
 # Codex配置
 .codex/
 
+.trae/
+
 AGENTS.md
 
 # Serena配置

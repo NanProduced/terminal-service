@@ -69,6 +69,9 @@ class DeviceMediaPlayRecordServiceTest {
     private TerminalStatsConfigProperties.MediaPlayRecord mediaPlayRecordConfig;
 
     @Mock
+    private TerminalStatsConfigProperties.TimeCalibration timeCalibrationConfig;
+
+    @Mock
     private MainServerRpcPort mainServerRpcPort;
 
     @Mock
@@ -92,6 +95,8 @@ class DeviceMediaPlayRecordServiceTest {
         // 使用lenient()避免严格模式报错，某些测试可能不会调用所有mock方法
         lenient().when(statsConfigProperties.getMediaPlayRecord()).thenReturn(mediaPlayRecordConfig);
         lenient().when(mediaPlayRecordConfig.isTimeCalibrationEnabled()).thenReturn(true);
+        lenient().when(statsConfigProperties.getTimeCalibration()).thenReturn(timeCalibrationConfig);
+        lenient().when(timeCalibrationConfig.getDeviationMaxSeconds()).thenReturn(3600L);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
         MediaInfo info1 = new MediaInfo(1001, "素材1");
@@ -206,7 +211,7 @@ class DeviceMediaPlayRecordServiceTest {
             
             when(mediaPlayRecordConfig.isTimeCalibrationEnabled()).thenReturn(true);
             
-            Duration deviation = Duration.ofHours(-2); // 负偏差
+            Duration deviation = Duration.ofMinutes(-30); // 负偏差(在合理上限内)
             DeviceTimeZoneCache deviceTimeZone = createDeviceTimeZoneCache(deviceId, deviation);
             when(deviceTimeZonePort.getDeviceTimeZone(deviceId)).thenReturn(deviceTimeZone);
 
@@ -375,8 +380,33 @@ class DeviceMediaPlayRecordServiceTest {
                 LocalDateTime expectedAdjustedTime = originalTime.plus(deviation);
                 assertThat(report.getAdjustStartTime()).isEqualTo(expectedAdjustedTime);
             }
-            
+
             verify(mediaPlayRecordRepository).saveMediaPlayRecords(eq(deviceId), eq(reports), anyMap());
+        }
+
+        @Test
+        @DisplayName("应该在偏差超过合理上限时跳过校准避免脏缓存污染")
+        void should_skip_calibration_when_deviation_exceeds_max_limit() {
+            // Given - 准备测试数据
+            Long deviceId = 12345L;
+            List<MediaPlayRecordReport> reports = createTestMediaPlayRecords();
+
+            when(mediaPlayRecordConfig.isTimeCalibrationEnabled()).thenReturn(true);
+
+            // 设置一个超过合理上限(3600s)的偏差,模拟脏缓存(如设备开机未NTP同步的瞬态偏差)
+            Duration excessiveDeviation = Duration.ofHours(2); // 7200s > 3600s
+            DeviceTimeZoneCache deviceTimeZone = createDeviceTimeZoneCache(deviceId, excessiveDeviation);
+            when(deviceTimeZonePort.getDeviceTimeZone(deviceId)).thenReturn(deviceTimeZone);
+
+            // When - 执行业务方法
+            deviceMediaPlayRecordService.handleMediaPlayRecordReport(deviceId, reports);
+
+            // Then - 验证跳过校准(adjustStartTime保持null),但仍存储记录
+            verify(deviceTimeZonePort).getDeviceTimeZone(deviceId);
+            verify(mediaPlayRecordRepository).saveMediaPlayRecords(eq(deviceId), eq(reports), anyMap());
+
+            // 验证时间未被校准
+            assertThat(reports.get(0).getAdjustStartTime()).isNull();
         }
     }
 
@@ -393,8 +423,8 @@ class DeviceMediaPlayRecordServiceTest {
             
             when(mediaPlayRecordConfig.isTimeCalibrationEnabled()).thenReturn(true);
             
-            // 设置大偏差（12小时）
-            Duration largeDeviation = Duration.ofHours(12);
+            // 设置大偏差（45分钟,在合理上限3600s内但远超5s阈值）
+            Duration largeDeviation = Duration.ofMinutes(45);
             DeviceTimeZoneCache deviceTimeZone = createDeviceTimeZoneCache(deviceId, largeDeviation);
             when(deviceTimeZonePort.getDeviceTimeZone(deviceId)).thenReturn(deviceTimeZone);
 

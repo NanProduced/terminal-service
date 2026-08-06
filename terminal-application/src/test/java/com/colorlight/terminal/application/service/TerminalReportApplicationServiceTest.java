@@ -15,6 +15,8 @@ import com.colorlight.terminal.application.port.outbound.statistics.DeviceMediaP
 import com.colorlight.terminal.application.port.outbound.statistics.DeviceProgramPlayRecordPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceDownloadingPort;
 import com.colorlight.terminal.application.port.outbound.status.DeviceSwitchRecordPort;
+import com.colorlight.terminal.application.port.outbound.status.DeviceTimeZonePort;
+import com.colorlight.terminal.application.port.outbound.storage.LogFileStoragePort;
 import com.colorlight.terminal.application.port.outbound.storage.ScreenshotStoragePort;
 import com.colorlight.terminal.commons.exception.business.BusinessException;
 import com.colorlight.terminal.commons.utils.JsonUtils;
@@ -80,7 +82,13 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
     
     @Mock
     private MainServerRpcPort mainServerRpcPort;
-    
+
+    @Mock
+    private LogFileStoragePort logFileStoragePort;
+
+    @Mock
+    private DeviceTimeZonePort deviceTimeZonePort;
+
     @InjectMocks
     private TerminalReportApplicationService service;
 
@@ -359,12 +367,48 @@ class TerminalReportApplicationServiceTest extends BaseApplicationServiceTest {
             TerminalStatusReport report = TestDataBuilder.createSimpleStatusReport();
             doThrow(new RuntimeException("数据库保存失败"))
                     .when(terminalStatusReportRepository).saveTerminalStatusReport(TEST_DEVICE_ID, report);
-            
+
             // When & Then - 验证抛出业务异常
             assertThatThrownBy(() -> service.saveLedStatus(TEST_DEVICE_ID, report))
                     .isInstanceOf(BusinessException.class)
                     .hasFieldOrPropertyWithValue("errorCode", "TM0004")
                     .hasCauseInstanceOf(RuntimeException.class);
+        }
+
+        @Test
+        @DisplayName("应该在newrtc上报时刷新设备时区缓存")
+        void should_refresh_device_timezone_cache_when_newrtc_present() {
+            // Given - 包含newrtc的状态报告
+            TerminalStatusReport report = TerminalStatusReport.builder()
+                    .newrtc(TerminalStatusReport.NewRtc.builder()
+                            .time("2026-08-06 15:38:42")
+                            .timezoneId("Asia/Shanghai")
+                            .timezone(8.0)
+                            .isautotime(1)
+                            .reportTime(1786001922L)
+                            .build())
+                    .build();
+
+            // When - 保存LED状态
+            service.saveLedStatus(TEST_DEVICE_ID, report);
+
+            // Then - 验证调用了时区缓存刷新
+            verify(terminalStatusReportRepository).saveTerminalStatusReport(TEST_DEVICE_ID, report);
+            verify(deviceTimeZonePort).RefreshDeviceTimeZoneCache(TEST_DEVICE_ID);
+        }
+
+        @Test
+        @DisplayName("应该在newrtc为空时不刷新设备时区缓存")
+        void should_not_refresh_device_timezone_cache_when_newrtc_absent() {
+            // Given - 不包含newrtc的状态报告
+            TerminalStatusReport report = TestDataBuilder.createSimpleStatusReport();
+
+            // When - 保存LED状态
+            service.saveLedStatus(TEST_DEVICE_ID, report);
+
+            // Then - 验证未调用时区缓存刷新
+            verify(terminalStatusReportRepository).saveTerminalStatusReport(TEST_DEVICE_ID, report);
+            verify(deviceTimeZonePort, never()).RefreshDeviceTimeZoneCache(any());
         }
     }
     
